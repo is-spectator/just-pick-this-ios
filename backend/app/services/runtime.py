@@ -202,13 +202,19 @@ def serialize_image(image: ImageAsset | None) -> dict[str, Any] | None:
     return {
         "id": str(image.id),
         "url": image.url,
+        "source_url": image.source_url,
+        "source_domain": image.source_domain,
+        "caption": "引用图",
         "alt_text": image.alt_text,
-        "verified": image.verified and image.verification_status == "verified",
+        "verified": image.verified and image.verification_status == "verified" and image.displayable,
         "is_ai_generated": image.is_ai_generated,
+        "source_type": image.source_type,
+        "license_note": image.license_note,
         "metadata": {
             "place_key": image.place_key,
             "item_key": image.item_key,
             "credit": image.credit,
+            "ai_generated_risk": image.ai_generated_risk,
         },
     }
 
@@ -224,6 +230,8 @@ def serialize_card(card: RecommendationCard) -> dict[str, Any]:
         "followups": card.payload_json.get("followups", ["为什么选这个?", "有没有别的选择?", "问真人"]),
         "status": card.status,
         "image": serialize_image(card.image_asset),
+        "image_status": card.image_status,
+        "image_required": card.image_required,
         "metadata": {
             "question_id": str(card.question_id),
             "confidence": card.confidence,

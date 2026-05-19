@@ -89,7 +89,7 @@ class DeterministicPipiModelAdapter:
                     "user_turn_id": state["user_turn_id"],
                     "retrieval_hit_ids": [hit.get("source_id") for hit in hits if hit.get("source_id")],
                 },
-                "reason": "Datong/Xijindao has verified non-AI image evidence in curated data.",
+                "reason": "Datong/Xijindao has enough answer evidence; image is optional.",
             }
 
         if self._has_card_ready_evidence(hits):
@@ -100,7 +100,7 @@ class DeterministicPipiModelAdapter:
                     "user_turn_id": state["user_turn_id"],
                     "retrieval_hit_ids": [hit.get("source_id") for hit in hits if hit.get("source_id")],
                 },
-                "reason": "Verified non-AI image evidence and confidence are sufficient for a card.",
+                "reason": "Answer evidence and confidence are sufficient for a card.",
             }
 
         if any(keyword in normalized for keyword in HELP_KEYWORDS + RECOMMEND_KEYWORDS):
@@ -111,7 +111,7 @@ class DeterministicPipiModelAdapter:
                     "user_turn_id": state["user_turn_id"],
                     "question": message,
                 },
-                "reason": "Evidence, image verification, or confidence is insufficient; ask humans.",
+                "reason": "Answer evidence or confidence is insufficient; ask humans.",
             }
 
         return "respond", None
@@ -139,7 +139,10 @@ class DeterministicPipiModelAdapter:
     def _has_card_ready_evidence(self, hits: list[RetrievalHit]) -> bool:
         return any(
             hit.get("score", 0.0) >= self.min_recommendation_score
-            and bool(hit.get("payload", {}).get("has_verified_non_ai_image"))
+            and bool(
+                hit.get("payload", {}).get("has_answer_evidence")
+                or hit.get("payload", {}).get("intent_answer_id")
+            )
             for hit in hits
         )
 

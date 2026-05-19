@@ -23,8 +23,12 @@ async def create_recommendation_card(
         question_id=input_data.question_id,
     )
     try:
-        await _assert_verified_non_ai_image_asset(db, input_data.image_asset_id)
+        if input_data.image_required and not input_data.image_asset_id:
+            raise ToolValidationError("Recommendation card image is required but no image_asset_id was provided.")
+        if input_data.image_asset_id is not None:
+            await _assert_displayable_non_ai_image_asset(db, input_data.image_asset_id)
         question = await _get_question_context(db, input_data.question_id)
+        image_status = "attached" if input_data.image_asset_id else "missing"
 
         result = await execute(
             db,
@@ -36,6 +40,8 @@ async def create_recommendation_card(
                 agent_run_id,
                 tool_call_id,
                 image_asset_id,
+                image_required,
+                image_status,
                 source,
                 title,
                 subtitle,
@@ -55,6 +61,8 @@ async def create_recommendation_card(
                 :agent_run_id,
                 :tool_call_id,
                 :image_asset_id,
+                :image_required,
+                :image_status,
                 :source,
                 :title,
                 :subtitle,
@@ -82,6 +90,8 @@ async def create_recommendation_card(
                 "bullets": json.dumps(input_data.bullets, ensure_ascii=False),
                 "warning": input_data.warning,
                 "image_asset_id": input_data.image_asset_id,
+                "image_required": input_data.image_required,
+                "image_status": image_status,
                 "confidence": input_data.confidence,
                 "status": input_data.status,
                 "payload_json": json.dumps(
@@ -115,6 +125,8 @@ async def create_recommendation_card(
             reason=input_data.reason,
             bullets=input_data.bullets,
             image_asset_id=input_data.image_asset_id,
+            image_required=input_data.image_required,
+            image_status=image_status,
             evidence_ids=input_data.evidence_ids,
             confidence=input_data.confidence,
             status=input_data.status,
@@ -137,15 +149,15 @@ async def create_recommendation_card(
         raise
 
 
-async def _assert_verified_non_ai_image_asset(db: SessionLike, image_asset_id: str) -> None:
+async def _assert_displayable_non_ai_image_asset(db: SessionLike, image_asset_id: str) -> None:
     result = await execute(
         db,
         """
         SELECT id
         FROM image_assets
         WHERE id = :image_asset_id
-          AND verified = TRUE
           AND verification_status = 'verified'
+          AND displayable = TRUE
           AND is_ai_generated = FALSE
         LIMIT 1
         """,
@@ -153,11 +165,13 @@ async def _assert_verified_non_ai_image_asset(db: SessionLike, image_asset_id: s
     )
     if first_mapping(result) is None:
         raise ToolValidationError(
-            "Recommendation cards require a verified, non-AI image_asset."
+            "Recommendation card image_asset must be displayable, verified, and non-AI."
         )
 
 
-async def _get_question_context(db: SessionLike, question_id: str) -> dict:
+async def _get_question_context(db: SessionLike, question_id: str | None) -> dict:
+    if question_id is None:
+        raise ToolValidationError("Question is required before creating a recommendation card.")
     result = await execute(
         db,
         """

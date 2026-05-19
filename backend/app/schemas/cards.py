@@ -17,9 +17,14 @@ class ApiModel(BaseModel):
 class ImageAsset(ApiModel):
     id: str
     url: str
+    source_url: str | None = None
+    source_domain: str | None = None
+    caption: str | None = None
     alt_text: str | None = None
     verified: bool
     is_ai_generated: bool
+    source_type: str | None = None
+    license_note: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -33,6 +38,8 @@ class CardSummary(ApiModel):
     followups: list[str] = Field(default_factory=list)
     status: str | None = None
     image: ImageAsset | None = None
+    image_status: Literal["attached", "missing", "candidate_rejected"] | str = "missing"
+    image_required: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

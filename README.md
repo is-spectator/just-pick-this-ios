@@ -24,7 +24,7 @@ iOS-first 的旅行决策 App。用户不想查攻略、不想比较多个选项
 - Agent：皮皮，V0 默认 deterministic adapter，可选 DeepSeek 对数据库参考答案做二次加工。
 - 主入口：`POST /v1/chat/turn`。
 - 状态：conversation、turn、agent run、tool call、retrieval、intent answer、card、help card、answer、light event 都落库。
-- 图片：推荐卡必须绑定数据库里 verified 且 `is_ai_generated=false` 的 `image_assets`。
+- 图片：推荐卡优先绑定 verified、displayable 且 `is_ai_generated=false` 的 `image_assets`；没有可信图时仍可返回 `image=null`。
 - 旧版 Node 后端：保留在 `backend-node-legacy/`，仅作参考。
 
 ## 产品说明书
@@ -51,7 +51,7 @@ POST /v1/chat/turn
 
 ### 2. Top 1 推荐卡
 
-当皮皮能确定答案，并且找到可用图片资产时，调用工具：
+当皮皮能确定答案时，调用工具：
 
 ```text
 create_recommendation_card
@@ -64,7 +64,8 @@ create_recommendation_card
 - 理由：短解释，不做长攻略。
 - 要点：最多几条能帮助用户放心采纳的信息。
 - 避雷：明确什么情况下别选。
-- 图片：只引用数据库 `ImageAsset.id`，不让模型编 URL。
+- 图片：优先引用数据库 `ImageAsset.id`；如果库里没有合适图，可用 Tavily 找真实网页引用图候选。
+- 无图：如果没有可信引用图，推荐卡仍然生成，返回 `image=null`。
 
 用户可以：
 
@@ -189,8 +190,10 @@ flowchart TD
 - 模型不能绕过工具直接吐卡片 JSON。
 - 数据库里的 `intent_answers` 是可信参考，不是最终文案。
 - DeepSeek / web search 只能作为加工和补充证据层。
-- 图片只能来自数据库 `image_assets`。
+- 图片不是强制字段；有可信引用图就挂卡，没有就 `image=null`。
+- 图片可以来自库内 curated 资产，也可以来自 Tavily 检索后落库的真实网页引用图候选。
 - 不允许 AI 生成图。
+- 不允许模型自己编图片 URL。
 - 不做登录，V0 用 `device_uid` 表示一个手机。
 - 不做底部 Tab、社区首页、信息流、设置页、Top 3。
 
@@ -264,10 +267,20 @@ DEEPSEEK_MODEL=deepseek-reasoner
 
 ```sh
 WEB_SEARCH_PROVIDER=tavily
-TAVILY_API_KEY=...
+TAVILY_API_KEY=tvly-YOUR_API_KEY
+TAVILY_SEARCH_MAX_RESULTS=5
+TAVILY_IMAGE_MAX_RESULTS=8
+TAVILY_TIMEOUT_SECONDS=8
 ```
 
-无论是否启用 AI 或 web search，最终卡片仍必须通过 tool call 创建，并绑定 verified 非 AI 图片资产。
+Tavily 的用途：
+
+- 给皮皮补充网页事实和引用来源。
+- 用 `include_images` 找真实网页引用图候选。
+- 所有图片候选先落库，默认 `verification_status=candidate`。
+- 只有 verified、displayable、非 AI 的图片才能挂到推荐卡。
+
+无论是否启用 AI 或 web search，最终卡片仍必须通过 tool call 创建。图片不是强制字段；无可信图时卡片返回 `image=null`。
 
 ## iOS 运行
 

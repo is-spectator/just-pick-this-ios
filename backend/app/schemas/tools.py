@@ -8,6 +8,8 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 ToolName = Literal[
     "search_knowledge",
+    "search_web_assets",
+    "select_reference_image",
     "create_recommendation_card",
     "draft_help_card",
     "publish_help_card",
@@ -16,7 +18,7 @@ ToolName = Literal[
 ]
 
 ToolCallStatus = Literal["running", "succeeded", "failed"]
-KnowledgeHitType = Literal["image_asset", "help_answer", "knowledge_fact"]
+KnowledgeHitType = Literal["image_asset", "help_answer", "knowledge_fact", "intent_answer", "web_result"]
 
 
 class ToolSchema(BaseModel):
@@ -54,6 +56,8 @@ class SearchKnowledgeInput(ToolSchema):
     question_id: str | None = None
     user_id: str | None = None
     limit: int = Field(default=8, ge=1, le=20)
+    allow_web: bool = True
+    allow_images: bool = True
 
 
 class SearchKnowledgeOutput(ToolSchema):
@@ -63,13 +67,15 @@ class SearchKnowledgeOutput(ToolSchema):
 
 
 class CreateRecommendationCardInput(ToolSchema):
-    question_id: str = Field(min_length=1)
+    question_id: str | None = Field(default=None, min_length=1)
     user_id: str = Field(min_length=1)
+    intent_answer_id: str | None = None
     title: str = Field(min_length=1, max_length=120)
     subtitle: str = Field(min_length=1, max_length=160)
     reason: str = Field(min_length=1, max_length=1200)
     bullets: list[str] = Field(min_length=1, max_length=4)
-    image_asset_id: str = Field(min_length=1)
+    image_asset_id: str | None = Field(default=None, min_length=1)
+    image_required: bool = False
     evidence_ids: list[str] = Field(min_length=1)
     confidence: float = Field(ge=0.7, le=1)
     warning: str | None = Field(default=None, max_length=400)
@@ -92,7 +98,9 @@ class RecommendationCardOutput(ToolSchema):
     subtitle: str
     reason: str
     bullets: list[str]
-    image_asset_id: str
+    image_asset_id: str | None = None
+    image_required: bool = False
+    image_status: str
     evidence_ids: list[str]
     confidence: float
     status: str

@@ -21,9 +21,10 @@ This backend is the Python “皮皮 Agent Runtime” for `就选这个`.
 5. “来一句” is human evidence, not the final answer.
 6. `PipiFinalizeGraph` produces the final recommendation card after enough help answers.
 7. Persist conversation, turn, agent_run, tool_call, retrieval_run, retrieval_hit, intent_answer, recommendation_card, help_card, help_answer, and light_event.
-8. Recommendation cards must bind a verified `image_asset` where `is_ai_generated=false`.
-9. Database `intent_answers` are reference evidence, not final card copy.
-10. Pipi may compose card copy with a deterministic adapter or an approved model provider, but the recommendation card must still be created through the tool path.
+8. Recommendation card images are preferred but optional; no trusted image should return `image=null`.
+9. Displayed images must bind a verified, displayable `image_asset` where `is_ai_generated=false`.
+10. Database `intent_answers` are reference evidence, not final card copy.
+11. Pipi may compose card copy with a deterministic adapter or an approved model provider, but the recommendation card must still be created through the tool path.
 
 ## Prohibited
 

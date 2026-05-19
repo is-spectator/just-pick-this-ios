@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     deepseek_timeout_seconds: float = Field(default=20.0, validation_alias="DEEPSEEK_TIMEOUT_SECONDS")
     web_search_provider: WebSearchProvider = Field(default="disabled", validation_alias="WEB_SEARCH_PROVIDER")
     tavily_api_key: SecretStr | None = Field(default=None, validation_alias="TAVILY_API_KEY")
+    tavily_search_max_results: int = Field(default=5, validation_alias="TAVILY_SEARCH_MAX_RESULTS")
+    tavily_image_max_results: int = Field(default=8, validation_alias="TAVILY_IMAGE_MAX_RESULTS")
+    tavily_timeout_seconds: float = Field(default=8.0, validation_alias="TAVILY_TIMEOUT_SECONDS")
     web_search_timeout_seconds: float = Field(default=8.0, validation_alias="WEB_SEARCH_TIMEOUT_SECONDS")
 
     model_config = SettingsConfigDict(

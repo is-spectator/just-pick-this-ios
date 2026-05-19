@@ -70,10 +70,27 @@ DEEPSEEK_MODEL=deepseek-reasoner
 
 ```sh
 WEB_SEARCH_PROVIDER=tavily
-TAVILY_API_KEY=...
+TAVILY_API_KEY=tvly-YOUR_API_KEY
+TAVILY_SEARCH_MAX_RESULTS=5
+TAVILY_IMAGE_MAX_RESULTS=8
+TAVILY_TIMEOUT_SECONDS=8
 ```
 
-无论是否使用 DeepSeek 或 web search，推荐卡图片只能绑定数据库中 verified 且 `is_ai_generated=false` 的 `image_assets`。
+Tavily 用途：
+
+- 皮皮总结时可检索网页事实。
+- 可通过 `include_images` 找真实网页引用图候选。
+- 所有图片候选都会先写入 `image_assets`。
+- 候选默认不是可展示图片，只有通过规则过滤后才会 `displayable=true`。
+
+图片规则：
+
+- 图片优先，但不是强制。
+- 有可信引用图就挂卡。
+- 无可信图就返回 `image=null`，不因此强制进入“求一个”。
+- 模型不能编图片 URL。
+- 不使用 AI 生成图。
+- 可展示图片必须是 verified、displayable 且 `is_ai_generated=false` 的 `image_assets`。
 
 ## Run
 
@@ -121,4 +138,5 @@ The acceptance tests cover the chat-first loop: bootstrap, Datong Top 1, Korea h
 - All runtime state is persisted in PostgreSQL.
 - `intent_answers` 是参考证据，不是最终答案；皮皮会按当前问题重新组织卡片文案。
 - DeepSeek / web search 是可选加工层；生成卡片仍必须走 tool call。
-- 不使用 AI 生成图片；图片只来自 verified 非 AI `image_assets`。
+- 不使用 AI 生成图片；模型不能编图片 URL。
+- 图片不是强制字段；有图时只能来自 verified、displayable、非 AI 的 `image_assets`。

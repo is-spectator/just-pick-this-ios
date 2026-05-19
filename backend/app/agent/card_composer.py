@@ -50,7 +50,7 @@ def compose_card_draft(
     primary_hit: dict[str, Any],
     all_hits: list[dict[str, Any]],
     intent_answer: IntentAnswer | None,
-    image_asset: ImageAsset,
+    image_asset: ImageAsset | None,
 ) -> CardDraft:
     """Compose a user-facing Top 1 card from retrieved reference evidence."""
 
@@ -62,7 +62,7 @@ def compose_card_draft(
         intent_answer=intent_answer,
         image_asset=image_asset,
     )
-    web_hits = _web_search(user_message) if settings.web_search_provider != "disabled" else []
+    web_hits: list[dict[str, str]] = []
 
     if settings.pipi_card_composer == "deepseek" and settings.deepseek_api_key is not None:
         try:
@@ -81,7 +81,7 @@ def _reference_snapshot(
     primary_hit: dict[str, Any],
     all_hits: list[dict[str, Any]],
     intent_answer: IntentAnswer | None,
-    image_asset: ImageAsset,
+    image_asset: ImageAsset | None,
 ) -> dict[str, Any]:
     payload = dict(primary_hit.get("payload") or {})
     return {
@@ -106,11 +106,15 @@ def _reference_snapshot(
             "evidence": intent_answer.evidence_json if intent_answer else {},
         },
         "image_asset": {
-            "id": str(image_asset.id),
-            "place_key": image_asset.place_key,
-            "item_key": image_asset.item_key,
-            "verified": image_asset.verified and image_asset.verification_status == "verified",
-            "is_ai_generated": image_asset.is_ai_generated,
+            "id": str(image_asset.id) if image_asset else None,
+            "place_key": image_asset.place_key if image_asset else payload.get("place_key"),
+            "item_key": image_asset.item_key if image_asset else payload.get("item_key"),
+            "verified": (
+                image_asset.verified and image_asset.verification_status == "verified"
+                if image_asset
+                else False
+            ),
+            "is_ai_generated": image_asset.is_ai_generated if image_asset else False,
         },
     }
 
@@ -159,7 +163,7 @@ def _compose_deterministically(reference: dict[str, Any], web_hits: list[dict[st
         title = str(fallback_title)[:40]
         subtitle = "皮皮按数据库参考和你这句话，先收敛成一个低后悔选择。"
         reason = str(reference["reference_answer"].get("text") or "已有参考答案，但还需要结合当前问题表达。")
-        bullets = ["使用数据库参考作为证据", "只输出一个选择", "图片仍来自 verified 非 AI 资产"]
+        bullets = ["使用数据库参考作为证据", "只输出一个选择", "有可信引用图才展示图片"]
         warning = "如果你的偏好和这条参考相反，就别选。"
         followups = ["为什么选这个?", "有没有别的选择?"]
 

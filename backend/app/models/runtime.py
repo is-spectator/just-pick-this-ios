@@ -258,6 +258,9 @@ class ImageAsset(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_image_assets_verified_is_ai_generated", "verified", "is_ai_generated"),
         Index("ix_image_assets_verification_status_is_ai_generated", "verification_status", "is_ai_generated"),
+        Index("ix_image_assets_displayable_verified_non_ai", "displayable", "verification_status", "is_ai_generated"),
+        Index("ix_image_assets_source_domain", "source_domain"),
+        Index("ix_image_assets_web_search_run_id", "web_search_run_id"),
         Index("ix_image_assets_place_key_item_key", "place_key", "item_key"),
         Index("ix_image_assets_metadata_json", "metadata_json", postgresql_using="gin"),
     )
@@ -267,17 +270,27 @@ class ImageAsset(TimestampMixin, Base):
     url: Mapped[str] = mapped_column(Text, nullable=False)
     thumbnail_url: Mapped[str | None] = mapped_column(Text)
     source_url: Mapped[str | None] = mapped_column(Text)
+    source_domain: Mapped[str | None] = mapped_column(String(255))
     credit: Mapped[str | None] = mapped_column(Text)
     verified: Mapped[bool] = mapped_column(default=False, nullable=False)
     verification_status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
     is_ai_generated: Mapped[bool] = mapped_column(default=False, nullable=False)
+    ai_generated_risk: Mapped[str | None] = mapped_column(String(50))
+    displayable: Mapped[bool] = mapped_column(default=False, nullable=False)
     place_key: Mapped[str | None] = mapped_column(String(255))
     item_key: Mapped[str | None] = mapped_column(String(255))
+    query_text: Mapped[str | None] = mapped_column(Text)
+    tavily_result_id: Mapped[str | None] = mapped_column(String(255))
+    web_search_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("web_search_runs.id", ondelete="SET NULL"),
+    )
+    license_note: Mapped[str | None] = mapped_column(Text)
     alt_text: Mapped[str | None] = mapped_column(Text)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
     intent_answers: Mapped[list[IntentAnswer]] = relationship(back_populates="image_asset")
     recommendation_cards: Mapped[list[RecommendationCard]] = relationship(back_populates="image_asset")
+    web_search_run: Mapped[WebSearchRun | None] = relationship(back_populates="image_assets")
 
 
 class IntentAnswer(TimestampMixin, Base):
@@ -390,10 +403,11 @@ class RecommendationCard(TimestampMixin, Base):
     tool_call_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tool_calls.id", ondelete="SET NULL"),
     )
-    image_asset_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("image_assets.id", ondelete="RESTRICT"),
-        nullable=False,
+    image_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("image_assets.id", ondelete="SET NULL"),
     )
+    image_required: Mapped[bool] = mapped_column(default=False, nullable=False)
+    image_status: Mapped[str] = mapped_column(String(50), default="missing", nullable=False)
     source: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text)
@@ -411,7 +425,51 @@ class RecommendationCard(TimestampMixin, Base):
     )
     user: Mapped[User] = relationship(back_populates="recommendation_cards")
     agent_run: Mapped[AgentRun | None] = relationship(back_populates="recommendation_cards")
-    image_asset: Mapped[ImageAsset] = relationship(back_populates="recommendation_cards")
+    image_asset: Mapped[ImageAsset | None] = relationship(back_populates="recommendation_cards")
+
+
+class WebSearchRun(CreatedAtMixin, Base):
+    __tablename__ = "web_search_runs"
+    __table_args__ = (
+        Index("ix_web_search_runs_provider_created_at", "provider", "created_at"),
+        Index("ix_web_search_runs_query_text", "query_text"),
+        Index("ix_web_search_runs_response_json", "response_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)
+    search_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    results: Mapped[list[WebSearchResult]] = relationship(back_populates="web_search_run")
+    image_assets: Mapped[list[ImageAsset]] = relationship(back_populates="web_search_run")
+
+
+class WebSearchResult(CreatedAtMixin, Base):
+    __tablename__ = "web_search_results"
+    __table_args__ = (
+        Index("ix_web_search_results_web_search_run_id", "web_search_run_id"),
+        Index("ix_web_search_results_domain", "domain"),
+        Index("ix_web_search_results_raw_json", "raw_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    web_search_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("web_search_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    domain: Mapped[str | None] = mapped_column(String(255))
+    content: Mapped[str | None] = mapped_column(Text)
+    score: Mapped[float | None] = mapped_column(Float)
+    raw_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
+    web_search_run: Mapped[WebSearchRun] = relationship(back_populates="results")
 
 
 class HelpCard(TimestampMixin, Base):

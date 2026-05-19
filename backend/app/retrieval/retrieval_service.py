@@ -4,6 +4,7 @@ from app.schemas.tools import KnowledgeHit, SearchKnowledgeInput, SearchKnowledg
 from app.tools.session import SessionLike, all_mappings, commit, execute, rollback
 
 from .retrieval_logger import RetrievalLogger
+from .tavily_service import TavilyService
 
 
 class RetrievalService:
@@ -76,6 +77,7 @@ class RetrievalService:
             FROM image_assets
             WHERE verified = TRUE
               AND verification_status = 'verified'
+              AND displayable = TRUE
               AND is_ai_generated = FALSE
               AND LOWER(
                 COALESCE(place_key, '') || ' ' || COALESCE(item_key, '') || ' ' || COALESCE(credit, '')
@@ -142,4 +144,58 @@ class RetrievalService:
                 )
             )
 
+        if input_data.allow_web and len(hits) < input_data.limit:
+            hits.extend(await self._search_web_hits(input_data, remaining=input_data.limit - len(hits)))
+
         return hits[: input_data.limit]
+
+    async def _search_web_hits(self, input_data: SearchKnowledgeInput, *, remaining: int) -> list[KnowledgeHit]:
+        if remaining <= 0:
+            return []
+
+        tavily = TavilyService(self.db)  # type: ignore[arg-type]
+        hits: list[KnowledgeHit] = []
+        text_result = await tavily.search_text(input_data.query, max_results=min(remaining, 5))
+        for result in text_result.results[:remaining]:
+            hits.append(
+                KnowledgeHit(
+                    id=f"web_result:{result['id']}",
+                    hit_type="web_result",
+                    title=result.get("title") or result.get("domain") or "Web result",
+                    text=result.get("content") or result.get("url") or "",
+                    score=min(max(float(result.get("score") or 0.62), 0.0), 1.0),
+                    source_id=result["id"],
+                    metadata={
+                        "url": result.get("url"),
+                        "domain": result.get("domain"),
+                        "web_search_run_id": text_result.run_id,
+                    },
+                )
+            )
+
+        if input_data.allow_images and len(hits) < remaining:
+            image_result = await tavily.search_images(
+                input_data.query,
+                max_results=min(remaining - len(hits), 8),
+            )
+            for image in image_result.images:
+                hits.append(
+                    KnowledgeHit(
+                        id=f"image_asset:{image.id}",
+                        hit_type="image_asset",
+                        title=image.alt_text or image.source_domain or "Image candidate",
+                        text=image.alt_text or image.source_url or image.url,
+                        score=0.68 if image.displayable else 0.42,
+                        source_id=str(image.id),
+                        image_asset_id=str(image.id),
+                        metadata={
+                            "url": image.url,
+                            "source_url": image.source_url,
+                            "source_domain": image.source_domain,
+                            "displayable": image.displayable,
+                            "verification_status": image.verification_status,
+                            "web_search_run_id": image_result.run_id,
+                        },
+                    )
+                )
+        return hits

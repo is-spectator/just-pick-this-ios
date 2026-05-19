@@ -42,6 +42,7 @@ from app.services.runtime import (
     session_scope,
     utcnow,
 )
+from app.services.image_selection_service import ImageSelectionService
 
 
 def bootstrap(payload: dict[str, Any]) -> dict[str, Any]:
@@ -194,9 +195,12 @@ class DbKnowledgeRetriever:
                 snippet=answer.answer_text,
                 score=0.93,
                 payload={
+                    "has_answer_evidence": True,
                     "has_verified_non_ai_image": True,
                     "image_asset_id": str(image.id),
                     "intent_answer_id": str(answer.id),
+                    "place_key": "datong-xijindao",
+                    "item_key": "knife-cut-noodles-meatball",
                     "title": "喜晋道 · 招牌刀削面",
                 },
             )
@@ -214,6 +218,7 @@ class DbKnowledgeRetriever:
                 snippet=answer.answer_text,
                 score=0.88,
                 payload={
+                    "has_answer_evidence": True,
                     "has_verified_non_ai_image": True,
                     "image_asset_id": str(image.id),
                     "intent_answer_id": str(answer.id),
@@ -322,7 +327,8 @@ class DbToolExecutor:
             raise ValueError("question required")
         primary_hit = self._card_ready_hit(state)
         if primary_hit:
-            image, answer = self._assets_from_payload(dict(primary_hit.get("payload") or {}))
+            answer = self._answer_from_payload(dict(primary_hit.get("payload") or {}))
+            image = self._select_card_image(state, primary_hit)
             draft = compose_card_draft(
                 user_message=state["user_message"],
                 primary_hit=primary_hit,
@@ -341,14 +347,18 @@ class DbToolExecutor:
                 image_asset=image,
             )
 
-        self._assert_card_image(image)
+        if image is not None:
+            self._assert_card_image(image)
+        image_status = "attached" if image is not None else "missing"
         card = RecommendationCard(
             question_id=self.question.id,
             conversation_id=self.question.conversation_id,
             user_id=self.user_id,
             agent_run_id=self.agent_run.id,
             tool_call_id=tool_call.id,
-            image_asset_id=image.id,
+            image_asset_id=image.id if image is not None else None,
+            image_required=False,
+            image_status=image_status,
             source="pipi_chat_graph",
             title=draft.title,
             subtitle=draft.subtitle,
@@ -376,29 +386,43 @@ class DbToolExecutor:
         self.cards.append(card)
         self.intent_answer = answer
         self.ui_events.append(build_card_ui_event(card))
-        return {"card_id": str(card.id), "ui_event": "show_recommendation_card"}
+        return {
+            "card_id": str(card.id),
+            "ui_event": "show_recommendation_card",
+            "image_status": image_status,
+        }
 
     def _card_ready_hit(self, state: dict[str, Any]) -> dict[str, Any] | None:
         for hit in state.get("retrieval_hits", []):
             payload = dict(hit.get("payload") or {})
-            if not payload.get("has_verified_non_ai_image") or not payload.get("image_asset_id"):
+            if not (payload.get("has_answer_evidence") or payload.get("intent_answer_id")):
                 continue
             return hit
         return None
 
-    def _assets_from_payload(self, payload: dict[str, Any]) -> tuple[ImageAsset, IntentAnswer | None]:
-        image = self.session.get(ImageAsset, uuid.UUID(str(payload["image_asset_id"])))
-        if image is None:
-            raise ValueError("recommendation image asset missing")
-
+    def _answer_from_payload(self, payload: dict[str, Any]) -> IntentAnswer | None:
         answer: IntentAnswer | None = None
         if payload.get("intent_answer_id"):
             answer = self.session.get(IntentAnswer, uuid.UUID(str(payload["intent_answer_id"])))
-        return image, answer
+        return answer
+
+    def _select_card_image(self, state: dict[str, Any], primary_hit: dict[str, Any]) -> ImageAsset | None:
+        payload = dict(primary_hit.get("payload") or {})
+        selector = ImageSelectionService(self.session)
+        return selector.find_best_card_image_sync(
+            query=state["user_message"],
+            place_key=payload.get("place_key"),
+            item_key=payload.get("item_key"),
+            allow_tavily=True,
+        )
 
     def _assert_card_image(self, image: ImageAsset) -> None:
-        if not image.verified or image.verification_status != "verified" or image.is_ai_generated:
-            raise ValueError("recommendation cards require verified non-AI image assets")
+        if (
+            not image.displayable
+            or image.verification_status != "verified"
+            or image.is_ai_generated
+        ):
+            raise ValueError("recommendation card images must be displayable, verified, and non-AI")
 
     def _fallback_hit(self, image: ImageAsset, answer: IntentAnswer) -> dict[str, Any]:
         return {
@@ -407,8 +431,11 @@ class DbToolExecutor:
             "score": 0.92,
             "payload": {
                 "has_verified_non_ai_image": True,
+                "has_answer_evidence": True,
                 "image_asset_id": str(image.id),
                 "intent_answer_id": str(answer.id),
+                "place_key": image.place_key,
+                "item_key": image.item_key,
             },
         }
 
@@ -500,6 +527,8 @@ def finalize_help_card_now(
         agent_run_id=agent_run.id if agent_run else None,
         tool_call_id=tool_call.id if tool_call else None,
         image_asset_id=image.id,
+        image_required=False,
+        image_status="attached",
         source="pipi_finalized_from_help",
         title="去圣水",
         subtitle="别去明洞当背景板了，这次去圣水更适合你。",

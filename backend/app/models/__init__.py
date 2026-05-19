@@ -15,6 +15,8 @@ from app.models.runtime import (
     ToolCall,
     Turn,
     User,
+    WebSearchResult,
+    WebSearchRun,
 )
 
 __all__ = [
@@ -34,4 +36,6 @@ __all__ = [
     "ToolCall",
     "Turn",
     "User",
+    "WebSearchResult",
+    "WebSearchRun",
 ]
