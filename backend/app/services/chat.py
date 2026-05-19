@@ -43,6 +43,7 @@ from app.services.runtime import (
     utcnow,
 )
 from app.services.image_selection_service import ImageSelectionService
+from app.retrieval.tavily_service import TavilyService
 
 
 def bootstrap(payload: dict[str, Any]) -> dict[str, Any]:
@@ -232,6 +233,9 @@ class DbKnowledgeRetriever:
             )
             hits.append(hit)
 
+        if not hits:
+            hits.extend(self._retrieve_web_reference(run, query=query, limit=3))
+
         return {
             "id": str(run.id),
             "query": query,
@@ -268,6 +272,36 @@ class DbKnowledgeRetriever:
             "score": score,
             "payload": {**payload, "retrieval_hit_id": str(hit.id)},
         }
+
+    def _retrieve_web_reference(self, run: RetrievalRun, *, query: str, limit: int) -> list[dict[str, Any]]:
+        tavily = TavilyService(self.session)
+        text_result = tavily.search_text_sync(query, max_results=limit)
+        hits: list[dict[str, Any]] = []
+        for result in text_result.results[:limit]:
+            score = float(result.get("score") or 0.0)
+            if score < 0.68:
+                continue
+            title = str(result.get("title") or result.get("domain") or "网页参考")
+            snippet = str(result.get("content") or result.get("url") or "")
+            hits.append(
+                self._add_hit(
+                    run,
+                    source_type="web_result",
+                    source_id=str(result["id"]),
+                    title=title,
+                    snippet=snippet,
+                    score=min(max(score, 0.0), 0.86),
+                    payload={
+                        "has_answer_evidence": True,
+                        "reference_answer": snippet,
+                        "source_url": result.get("url"),
+                        "source_domain": result.get("domain"),
+                        "web_search_run_id": text_result.run_id,
+                        "title": title,
+                    },
+                )
+            )
+        return hits
 
 
 class DbToolExecutor:

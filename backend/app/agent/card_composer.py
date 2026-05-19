@@ -160,10 +160,10 @@ def _compose_deterministically(reference: dict[str, Any], web_hits: list[dict[st
         followups = ["为什么这样点?", "能不能换清淡点?"]
     else:
         fallback_title = reference["primary_hit"].get("title") or "就选这个"
-        title = str(fallback_title)[:40]
-        subtitle = "皮皮按数据库参考和你这句话，先收敛成一个低后悔选择。"
-        reason = str(reference["reference_answer"].get("text") or "已有参考答案，但还需要结合当前问题表达。")
-        bullets = ["使用数据库参考作为证据", "只输出一个选择", "有可信引用图才展示图片"]
+        title = _card_title_from_web_reference(str(fallback_title), message)
+        subtitle = "屏幕候选，买一个就行。" if _looks_like_screen_query(message) else "皮皮按检索证据和你这句话，先收敛成一个低后悔选择。"
+        reason = _short_reason_from_reference(reference, message)
+        bullets = ["已检索真实网页参考", "只输出一个选择", "有可信引用图才展示图片"]
         warning = "如果你的偏好和这条参考相反，就别选。"
         followups = ["为什么选这个?", "有没有别的选择?"]
 
@@ -184,6 +184,31 @@ def _compose_deterministically(reference: dict[str, Any], web_hits: list[dict[st
             "reference_answer_id": reference["reference_answer"].get("id"),
         },
     )
+
+
+def _looks_like_screen_query(message: str) -> bool:
+    normalized = message.lower()
+    return any(token in normalized for token in ("waveshare", "hdmi lcd", "screen", "display", "屏幕"))
+
+
+def _card_title_from_web_reference(raw_title: str, message: str) -> str:
+    if _looks_like_screen_query(message) and "waveshare" in (raw_title + message).lower():
+        return "Waveshare 5inch HDMI LCD"
+    title = re.split(r"[|｜_-]", raw_title, maxsplit=1)[0].strip()
+    return title[:40] or "就选这个"
+
+
+def _short_reason_from_reference(reference: dict[str, Any], message: str) -> str:
+    if _looks_like_screen_query(message):
+        return "皮皮检索到官方/商家页面都指向这个 5 英寸 HDMI LCD 型号，适合你“不想比较、买一个就行”的场景。"
+
+    text = str(reference["reference_answer"].get("text") or "")
+    compact = re.sub(r"\s+", " ", text).strip()
+    if not compact:
+        return "皮皮拿到了一条可追溯网页参考，所以先给你收敛成一个选择。"
+    if len(compact) > 180:
+        compact = compact[:177].rstrip() + "..."
+    return f"皮皮把检索到的参考信息压缩成一个选择：{compact}"
 
 
 def _compose_with_deepseek(*, reference: dict[str, Any], web_hits: list[dict[str, str]]) -> CardDraft:

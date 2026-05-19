@@ -17,6 +17,9 @@ TRUSTED_IMAGE_DOMAINS = [
     "visitkorea.or.kr",
     "oliveyoung.com",
     "tripadvisor.com",
+    "pishop.us",
+    "pishop.ca",
+    "core-electronics.com.au",
     "unsplash.com",
 ]
 
