@@ -196,6 +196,11 @@ struct DecisionCard: View {
                 .foregroundStyle(AppTheme.text)
                 .padding(.top, 8)
 
+            if let referenceImage = pick.referenceImage {
+                ReferenceWebPreview(image: referenceImage)
+                    .padding(.top, 14)
+            }
+
             Text(pick.reason)
                 .font(.system(size: 15))
                 .lineSpacing(5)
@@ -246,6 +251,97 @@ struct DecisionCard: View {
             .padding(.top, 18)
         }
         .cardStyle()
+    }
+}
+
+struct ReferenceWebPreview: View {
+    let image: ReferenceImage
+
+    private var imageURL: URL? {
+        URL(string: image.url)
+    }
+
+    private var sourceURL: URL? {
+        guard let sourceURL = image.sourceURL else { return nil }
+        return URL(string: sourceURL)
+    }
+
+    private var sourceLabel: String {
+        if let sourceDomain = image.sourceDomain, !sourceDomain.isEmpty {
+            return "引用网页 \(sourceDomain)"
+        }
+        return image.caption ?? "引用网页"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            AsyncImage(url: imageURL) { phase in
+                switch phase {
+                case .success(let loadedImage):
+                    loadedImage
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: 160)
+                        .padding(10)
+                case .failure:
+                    referencePlaceholder(title: "图片加载失败")
+                case .empty:
+                    ProgressView()
+                        .tint(AppTheme.textMuted)
+                        .frame(maxWidth: .infinity, minHeight: 150)
+                @unknown default:
+                    referencePlaceholder(title: "引用图")
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 150)
+            .background(AppTheme.bubble.opacity(0.7))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            if let sourceURL {
+                Link(destination: sourceURL) {
+                    sourceRow
+                }
+                .buttonStyle(.plain)
+            } else {
+                sourceRow
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(sourceLabel)
+    }
+
+    private var sourceRow: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "safari")
+                .font(.system(size: 12, weight: .medium))
+
+            Text(sourceLabel)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+
+            Spacer(minLength: 6)
+
+            if sourceURL != nil {
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .bold))
+            }
+        }
+        .foregroundStyle(AppTheme.textSecondary)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(AppTheme.bubble)
+        .clipShape(Capsule())
+    }
+
+    private func referencePlaceholder(title: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: "photo")
+                .font(.system(size: 22, weight: .medium))
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+        }
+        .foregroundStyle(AppTheme.textMuted)
+        .frame(maxWidth: .infinity, minHeight: 150)
     }
 }
 

@@ -57,6 +57,15 @@ struct TopPick: Hashable, Sendable {
     let bullets: [String]
     let warning: String
     let followups: [String]
+    let referenceImage: ReferenceImage?
+}
+
+struct ReferenceImage: Hashable, Sendable {
+    let url: String
+    let sourceURL: String?
+    let sourceDomain: String?
+    let caption: String?
+    let isAiGenerated: Bool
 }
 
 enum HelpRequestStatus: String, Codable, Hashable, Sendable {
@@ -433,7 +442,8 @@ private struct V1CardSummary: Decodable {
                 "只给一个低后悔选择。"
             ]),
             warning: clean(warning, fallback: "如果这个选择和你的偏好明显相反,就别选。"),
-            followups: resolvedFollowups.isEmpty ? ["为什么选这个?", "有没有别的选择?"] : resolvedFollowups
+            followups: resolvedFollowups.isEmpty ? ["为什么选这个?", "有没有别的选择?"] : resolvedFollowups,
+            referenceImage: image?.model
         )
     }
 }
@@ -449,14 +459,31 @@ private struct V1CardMetadata: Decodable {
 private struct V1ImageAsset: Decodable {
     let id: UUID?
     let url: String?
+    let sourceUrl: String?
+    let sourceDomain: String?
+    let caption: String?
     let verified: Bool
     let isAiGenerated: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
         case url
+        case sourceUrl = "source_url"
+        case sourceDomain = "source_domain"
+        case caption
         case verified
         case isAiGenerated = "is_ai_generated"
+    }
+
+    var model: ReferenceImage? {
+        guard let url, verified, !isAiGenerated else { return nil }
+        return ReferenceImage(
+            url: url,
+            sourceURL: sourceUrl,
+            sourceDomain: sourceDomain,
+            caption: caption,
+            isAiGenerated: isAiGenerated
+        )
     }
 }
 
@@ -794,7 +821,8 @@ private struct TopPickResponse: Decodable {
             reason: clean(reason, fallback: "你已经给了位置和目的,这题先做一个低后悔选择。"),
             bullets: cleanArray(bullets, fallback: MockData.topPick(for: fallbackQuery).bullets),
             warning: clean(warning, fallback: "如果你明确不喜欢这个类型,就别选。"),
-            followups: resolvedFollowups.isEmpty ? ["为什么?", "换个小众的"] : resolvedFollowups
+            followups: resolvedFollowups.isEmpty ? ["为什么?", "换个小众的"] : resolvedFollowups,
+            referenceImage: nil
         )
     }
 }
@@ -1188,7 +1216,8 @@ enum MockData {
                 "这组比只点面更完整。"
             ],
             warning: "不爱吃面,就别选。",
-            followups: ["为什么?", "换个小众的"]
+            followups: ["为什么?", "换个小众的"],
+            referenceImage: nil
         )
     }
 
