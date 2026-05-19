@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: just-pick-this-backend-postgres
+    environment:
+      POSTGRES_DB: just_pick_this_test
+      POSTGRES_USER: just_pick_this
+      POSTGRES_PASSWORD: just_pick_this
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U just_pick_this -d just_pick_this_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

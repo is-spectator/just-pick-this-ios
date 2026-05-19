@@ -1,0 +1,443 @@
+# 就选这个
+
+iOS-first 的旅行决策 App。用户不想查攻略、不想比较多个选项时，只说一句「我在哪，我想干什么」，AI 管家「皮皮」直接给一个选择；如果皮皮不敢硬选，就生成「求一个」，让懂的人「来一句」，再由皮皮汇总成最终答案。
+
+## iOS 截图
+
+<p align="center">
+  <img src="docs/images/ios-home.png" width="190" alt="首页输入" />
+  <img src="docs/images/ios-top1-card.png" width="190" alt="Top 1 推荐卡" />
+  <img src="docs/images/ios-help-card.png" width="190" alt="求一个求助卡" />
+  <img src="docs/images/ios-answer-card.png" width="190" alt="来一句答主卡" />
+</p>
+
+## 一句话
+
+```text
+输入 -> 皮皮给 Top 1 -> 不确定就求一个 -> 别人来一句 -> 皮皮汇总最终答案 -> 用户采纳
+```
+
+## 当前版本
+
+- iOS：SwiftUI 原生 App，iOS first。
+- Backend：Python 3.11+ FastAPI + LangGraph Python + SQLAlchemy + Alembic + PostgreSQL。
+- Agent：皮皮，V0 默认 deterministic adapter，可选 DeepSeek 对数据库参考答案做二次加工。
+- 主入口：`POST /v1/chat/turn`。
+- 状态：conversation、turn、agent run、tool call、retrieval、intent answer、card、help card、answer、light event 都落库。
+- 图片：推荐卡必须绑定数据库里 verified 且 `is_ai_generated=false` 的 `image_assets`。
+- 旧版 Node 后端：保留在 `backend-node-legacy/`，仅作参考。
+
+## 产品说明书
+
+### 1. 首页输入
+
+用户输入一句自然语言，例如：
+
+```text
+我现在在大同喜晋道，不知道吃什么
+```
+
+iOS 调用：
+
+```http
+POST /v1/chat/turn
+```
+
+后端做三件事：
+
+- 创建或恢复 user / conversation。
+- 写入用户 turn。
+- 进入 `PipiChatGraph`。
+
+### 2. Top 1 推荐卡
+
+当皮皮能确定答案，并且找到可用图片资产时，调用工具：
+
+```text
+create_recommendation_card
+```
+
+卡片返回给 iOS 的核心内容：
+
+- 标题：这次只给一个选择。
+- 副标题：为什么适合当前问题。
+- 理由：短解释，不做长攻略。
+- 要点：最多几条能帮助用户放心采纳的信息。
+- 避雷：明确什么情况下别选。
+- 图片：只引用数据库 `ImageAsset.id`，不让模型编 URL。
+
+用户可以：
+
+- 点绿色采纳：问题完成，进入历史记录。
+- 点红色不采纳：转成求一个。
+- 继续追问一句。
+- 问真人。
+
+### 3. 求一个求助卡
+
+当皮皮不敢硬选，或用户主动「问真人」，调用工具：
+
+```text
+draft_help_card
+```
+
+求助卡不是社区帖子首页，也不是信息流，它是当前问题的一个待发布卡片。
+
+求助卡字段：
+
+- `title`：把用户问题改写成别人能快速理解的一句话。
+- `context_text`：皮皮说明缺少什么信息、为什么不硬选。
+- `missing_info`：缺失偏好、预算、位置、风格等。
+- `status=draft`：待发布，用户还能补一句背景。
+
+用户点「发出去」后调用：
+
+```text
+publish_help_card
+```
+
+状态变化：
+
+```text
+draft -> published / collecting
+```
+
+发出去之后不能反悔，用户回到首页，等后台亮灯。
+
+### 4. 来一句答主卡
+
+答主从首页右上角「来一句」进入内容池。这里不是完整社区，也没有信息流，只展示一个需要帮忙的求助卡。
+
+答主只能提交一句话：
+
+```text
+别去明洞当背景板，去圣水。
+```
+
+iOS 调用：
+
+```http
+POST /v1/help-cards/{id}/one-liner
+```
+
+后端写入：
+
+```text
+HelpAnswer
+```
+
+注意：来一句只是 human evidence，不是最终答案。它不会直接变成用户看到的最终推荐卡。
+
+### 5. 最终答案和亮灯
+
+当一个求助卡累计到足够答案：
+
+```text
+answer_count >= min_answers_required
+```
+
+触发：
+
+```text
+PipiFinalizeGraph
+```
+
+最终流程：
+
+- 读取 help card。
+- 读取所有 one-liner answers。
+- 再检索数据库里的意图答案、历史卡片、图片资产。
+- 调用 `create_recommendation_card` 生成最终卡。
+- 调用 `save_intent_answer` 把这次新答案沉淀回数据库。
+- 调用 `light_user` 给提问用户亮灯。
+
+用户下次打开或轮询到亮灯事件后，可以回到最终推荐卡并采纳。
+
+## Agent 架构
+
+```mermaid
+flowchart TD
+    A[iOS SwiftUI App] --> B["POST /v1/chat/turn"]
+    B --> C[FastAPI]
+    C --> D[(PostgreSQL)]
+    C --> E[PipiChatGraph]
+    E --> F[ingest_turn]
+    F --> G[retrieve_knowledge]
+    G --> D
+    G --> H[decide_next_action]
+    H --> I{Tool Call}
+    I --> J[create_recommendation_card]
+    I --> K[draft_help_card]
+    I --> L[publish_help_card]
+    I --> M[submit_one_liner_answer]
+    K --> N[Help Feed]
+    M --> O[PipiFinalizeGraph]
+    O --> P[finalize_help_card]
+    P --> Q[save_intent_answer]
+    Q --> R[light_user]
+    J --> S[UI Events]
+    K --> S
+    L --> S
+    R --> S
+    S --> A
+```
+
+## 关键规则
+
+- 主流程是 chat，不是传统推荐 API。
+- 推荐卡和求助卡必须由 tool call 创建。
+- 模型不能绕过工具直接吐卡片 JSON。
+- 数据库里的 `intent_answers` 是可信参考，不是最终文案。
+- DeepSeek / web search 只能作为加工和补充证据层。
+- 图片只能来自数据库 `image_assets`。
+- 不允许 AI 生成图。
+- 不做登录，V0 用 `device_uid` 表示一个手机。
+- 不做底部 Tab、社区首页、信息流、设置页、Top 3。
+
+## 目录
+
+```text
+just-pick-this-ios/
+  NativeApp/                 # SwiftUI iOS App
+  backend/                   # Python Agent Backend
+  backend-node-legacy/        # 旧 Node 后端参考
+  docs/images/                # README iOS 截图
+  JustPickThisIOS.xcodeproj
+```
+
+## 后端启动
+
+```sh
+cd backend
+uv sync --extra dev
+cp .env.example .env
+```
+
+编辑 `backend/.env`：
+
+```sh
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@localhost:5432/just_pick_this_agent_v0
+PIPI_CARD_COMPOSER=deterministic
+```
+
+初始化数据库：
+
+```sh
+uv run alembic upgrade head
+```
+
+启动服务：
+
+```sh
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8788
+```
+
+健康检查：
+
+```sh
+curl http://127.0.0.1:8788/health
+```
+
+期望返回：
+
+```json
+{"ok": true}
+```
+
+## 可选 AI 加工
+
+默认离线模式：
+
+```sh
+PIPI_CARD_COMPOSER=deterministic
+```
+
+启用 DeepSeek：
+
+```sh
+PIPI_CARD_COMPOSER=deepseek
+DEEPSEEK_API_KEY=...
+DEEPSEEK_MODEL=deepseek-reasoner
+```
+
+可选 web search：
+
+```sh
+WEB_SEARCH_PROVIDER=tavily
+TAVILY_API_KEY=...
+```
+
+无论是否启用 AI 或 web search，最终卡片仍必须通过 tool call 创建，并绑定 verified 非 AI 图片资产。
+
+## iOS 运行
+
+```sh
+xcodebuild \
+  -project JustPickThisIOS.xcodeproj \
+  -scheme JustPickThisIOS \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  build
+```
+
+也可以直接用 Xcode 打开：
+
+```text
+JustPickThisIOS.xcodeproj
+```
+
+App 默认连接：
+
+```text
+http://127.0.0.1:8788
+```
+
+## 截图复现
+
+Debug 包支持文档截图启动参数：
+
+```sh
+xcrun simctl launch booted com.justpickthis.ios --demo-screen=result
+xcrun simctl launch booted com.justpickthis.ios --demo-screen=ask
+xcrun simctl launch booted com.justpickthis.ios --demo-screen=answer
+```
+
+截图命令：
+
+```sh
+xcrun simctl io booted screenshot docs/images/ios-help-card.png
+```
+
+## 核心接口
+
+### Bootstrap
+
+```http
+POST /v1/bootstrap
+```
+
+```json
+{
+  "device_uid": "ios-demo-device",
+  "platform": "ios",
+  "app_version": "0.1.0"
+}
+```
+
+### Chat Turn
+
+```http
+POST /v1/chat/turn
+```
+
+```json
+{
+  "device_uid": "ios-demo-device",
+  "message": "我在大同喜晋道，不知道吃什么"
+}
+```
+
+可能返回：
+
+- `show_recommendation_card`
+- `show_help_card_draft`
+- `help_card_published`
+- `light_event`
+
+### Help Feed
+
+```http
+GET /v1/help-feed?device_uid=ios-answer-user&limit=10
+```
+
+规则：
+
+- 不返回 owner 自己的求助卡。
+- 不返回自己已经回答过的求助卡。
+- 优先返回 answer_count 少的卡。
+
+### One-liner
+
+```http
+POST /v1/help-cards/{id}/one-liner
+```
+
+```json
+{
+  "device_uid": "ios-answer-user",
+  "text": "别去明洞当背景板，去圣水。"
+}
+```
+
+### Light Events
+
+```http
+GET /v1/light-events?device_uid=ios-demo-device
+```
+
+### Accept Card
+
+```http
+POST /v1/cards/{id}/accept
+```
+
+## 数据对象
+
+核心表：
+
+- `User`
+- `Conversation`
+- `Turn`
+- `AgentRun`
+- `ToolCall`
+- `RetrievalRun`
+- `RetrievalHit`
+- `Intent`
+- `IntentAnswer`
+- `ImageAsset`
+- `Question`
+- `RecommendationCard`
+- `HelpCard`
+- `HelpAnswer`
+- `LightEvent`
+
+关键状态：
+
+```text
+Question: received -> top1_ready / ask_draft_ready -> help_published -> final_ready -> completed
+HelpCard: draft -> published -> collecting -> final_ready -> closed
+RecommendationCard: ready -> accepted / dismissed
+```
+
+## 测试
+
+后端：
+
+```sh
+cd backend
+uv run pytest
+uv run ruff check app tests
+```
+
+iOS：
+
+```sh
+xcodebuild \
+  -project JustPickThisIOS.xcodeproj \
+  -scheme JustPickThisIOS \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+## Demo 数据
+
+后端启动时会幂等 seed：
+
+- 图片资产：`datong-xijindao / knife-cut-noodles-meatball`
+- 图片资产：`korea-seongsu / shopping-street`
+- 意图答案：大同喜晋道到店不知道点什么 -> 刀削面 + 肉丸子
+- 意图答案：韩国逛街不去明洞想小众 -> 去圣水
+
+这些数据只作为皮皮检索和加工的参考，不是前端 mock，也不是最终卡片硬编码。

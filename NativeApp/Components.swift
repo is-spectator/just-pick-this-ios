@@ -1,0 +1,670 @@
+import SwiftUI
+
+struct AppChrome<Content: View, Footer: View>: View {
+    let showsBack: Bool
+    let backAction: (() -> Void)?
+    @ViewBuilder let content: Content
+    @ViewBuilder let footer: Footer
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TopBar(showsBack: showsBack) {
+                if let backAction {
+                    backAction()
+                } else {
+                    dismiss()
+                }
+            }
+
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            footer
+        }
+        .appScreenBackground()
+        .navigationBarBackButtonHidden(true)
+    }
+}
+
+struct TopBar: View {
+    let showsBack: Bool
+    let onBack: () -> Void
+
+    var body: some View {
+        HStack {
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(AppTheme.text)
+                    .frame(width: 36, height: 36, alignment: .leading)
+            }
+            .opacity(showsBack ? 1 : 0)
+            .disabled(!showsBack)
+            .accessibilityLabel("返回")
+
+            Spacer()
+
+            Text("就选这个")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.text)
+
+            Spacer()
+
+            Color.clear
+                .frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 50)
+    }
+}
+
+struct BottomComposer: View {
+    @Binding var text: String
+    let placeholder: String
+    let isSending: Bool
+    let onSend: () -> Void
+
+    @FocusState private var isFocused: Bool
+
+    private var canSend: Bool {
+        !isSending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    init(
+        text: Binding<String>,
+        placeholder: String,
+        isSending: Bool = false,
+        onSend: @escaping () -> Void
+    ) {
+        self._text = text
+        self.placeholder = placeholder
+        self.isSending = isSending
+        self.onSend = onSend
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField(placeholder, text: $text, axis: .vertical)
+                .focused($isFocused)
+                .font(.system(size: 15))
+                .foregroundStyle(AppTheme.text)
+                .lineLimit(1...3)
+                .textInputAutocapitalization(.never)
+                .submitLabel(.send)
+                .disabled(isSending)
+                .onSubmit {
+                    if canSend {
+                        onSend()
+                    }
+                }
+
+            Button(action: onSend) {
+                ZStack {
+                    if isSending {
+                        ProgressView()
+                            .tint(Color.white)
+                            .scaleEffect(0.74)
+                    } else {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(canSend ? Color.white : Color(red: 181 / 255, green: 181 / 255, blue: 181 / 255))
+                    }
+                }
+                .frame(width: 32, height: 32)
+                .background(canSend || isSending ? AppTheme.text : AppTheme.disabled)
+                .clipShape(Circle())
+            }
+            .disabled(!canSend)
+            .accessibilityLabel("发送")
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .frame(minHeight: 56)
+        .background(AppTheme.card)
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(isFocused ? AppTheme.text.opacity(0.9) : AppTheme.border, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(AppTheme.background)
+    }
+}
+
+struct QueryBubble: View {
+    let text: String
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Text(text)
+                .font(.system(size: 14))
+                .lineSpacing(2)
+                .foregroundStyle(AppTheme.text)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(AppTheme.bubble)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .frame(maxWidth: 315, alignment: .trailing)
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 18)
+    }
+}
+
+struct DecisionCard: View {
+    let pick: TopPick
+    let isFollowingUp: Bool
+    let isAccepting: Bool
+    let onFollowup: (String) -> Void
+    let onAskHuman: () -> Void
+    let onReject: () -> Void
+    let onAccept: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(pick.preface)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.textMuted)
+
+                    Text(pick.title)
+                        .font(.system(size: 32, weight: .semibold))
+                        .lineSpacing(2)
+                        .foregroundStyle(AppTheme.text)
+                        .padding(.top, 10)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 8) {
+                    RejectIconButton(action: onReject)
+                    AcceptIconButton(isLoading: isAccepting, action: onAccept)
+                }
+                .padding(.top, 2)
+            }
+
+            Text(pick.subtitle)
+                .font(.system(size: 16, weight: .medium))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.text)
+                .padding(.top, 8)
+
+            Text(pick.reason)
+                .font(.system(size: 15))
+                .lineSpacing(5)
+                .foregroundStyle(AppTheme.textSecondary)
+                .padding(.top, 10)
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(pick.bullets, id: \.self) { line in
+                    HStack(alignment: .top, spacing: 12) {
+                        Circle()
+                            .fill(AppTheme.textMuted)
+                            .frame(width: 3, height: 3)
+                            .padding(.top, 10)
+
+                        Text(line)
+                            .font(.system(size: 14))
+                            .lineSpacing(4)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .padding(.top, 18)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(AppTheme.borderSoft)
+                    .frame(height: 1)
+            }
+            .padding(.top, 20)
+
+            Text(pick.warning)
+                .font(.system(size: 13))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.orangeText)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.orangeBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.top, 18)
+
+            FollowupSuggestions(
+                suggestions: pick.followups,
+                isLoading: isFollowingUp,
+                onFollowup: onFollowup,
+                onAskHuman: onAskHuman
+            )
+            .padding(.top, 18)
+        }
+        .cardStyle()
+    }
+}
+
+struct RejectIconButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.red)
+                    .frame(width: 38, height: 38)
+
+                Image(systemName: "xmark")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color.white)
+            }
+            .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("不采纳")
+    }
+}
+
+struct AcceptIconButton: View {
+    let isLoading: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.green)
+                    .frame(width: 38, height: 38)
+
+                if isLoading {
+                    ProgressView()
+                        .tint(Color.white)
+                        .scaleEffect(0.72)
+                } else {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Color.white)
+                }
+            }
+            .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .accessibilityLabel("采纳这个")
+    }
+}
+
+struct FollowupSuggestions: View {
+    let suggestions: [String]
+    let isLoading: Bool
+    let onFollowup: (String) -> Void
+    let onAskHuman: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text("猜你想问")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textMuted)
+
+                if isLoading {
+                    ProgressView()
+                        .tint(AppTheme.textMuted)
+                        .scaleEffect(0.72)
+                }
+            }
+
+            FlowLayout(spacing: 8, rowSpacing: 8) {
+                ForEach(suggestions, id: \.self) { suggestion in
+                    FollowupChip(label: suggestion, isDisabled: isLoading) {
+                        onFollowup(suggestion)
+                    }
+                }
+
+                FollowupChip(label: "问真人", icon: "person.crop.circle.badge.questionmark", isDisabled: isLoading, action: onAskHuman)
+            }
+        }
+    }
+}
+
+struct FollowupChip: View {
+    let label: String
+    let icon: String?
+    let isDisabled: Bool
+    let action: () -> Void
+
+    init(label: String, icon: String? = nil, isDisabled: Bool, action: @escaping () -> Void) {
+        self.label = label
+        self.icon = icon
+        self.isDisabled = isDisabled
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(AppTheme.text)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(AppTheme.bubble)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(AppTheme.borderSoft, lineWidth: 1)
+            )
+            .opacity(isDisabled ? 0.52 : 1)
+        }
+        .disabled(isDisabled)
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+struct FlowLayout: Layout {
+    let spacing: CGFloat
+    let rowSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? 0
+        let rows = rows(in: maxWidth, subviews: subviews)
+        return CGSize(
+            width: maxWidth,
+            height: rows.last.map { $0.y + $0.height } ?? 0
+        )
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for row in rows(in: bounds.width, subviews: subviews) {
+            for item in row.items {
+                subviews[item.index].place(
+                    at: CGPoint(x: bounds.minX + item.x, y: bounds.minY + row.y),
+                    proposal: ProposedViewSize(item.size)
+                )
+            }
+        }
+    }
+
+    private func rows(in maxWidth: CGFloat, subviews: Subviews) -> [FlowRow] {
+        guard maxWidth > 0 else { return [] }
+
+        var rows: [FlowRow] = []
+        var currentItems: [FlowItem] = []
+        var currentX: CGFloat = 0
+        var currentHeight: CGFloat = 0
+        var currentY: CGFloat = 0
+
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let itemWidth = min(size.width, maxWidth)
+            let shouldWrap = !currentItems.isEmpty && currentX + itemWidth > maxWidth
+
+            if shouldWrap {
+                rows.append(FlowRow(y: currentY, height: currentHeight, items: currentItems))
+                currentY += currentHeight + rowSpacing
+                currentItems = []
+                currentX = 0
+                currentHeight = 0
+            }
+
+            currentItems.append(
+                FlowItem(index: index, x: currentX, size: CGSize(width: itemWidth, height: size.height))
+            )
+            currentX += itemWidth + spacing
+            currentHeight = max(currentHeight, size.height)
+        }
+
+        if !currentItems.isEmpty {
+            rows.append(FlowRow(y: currentY, height: currentHeight, items: currentItems))
+        }
+
+        return rows
+    }
+}
+
+private struct FlowRow {
+    let y: CGFloat
+    let height: CGFloat
+    let items: [FlowItem]
+}
+
+private struct FlowItem {
+    let index: Int
+    let x: CGFloat
+    let size: CGSize
+}
+
+struct RequestCard: View {
+    let request: HelpRequest
+    let reward: String?
+
+    init(request: HelpRequest, reward: String? = nil) {
+        self.request = request
+        self.reward = reward
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("求一个")
+                    .font(.system(size: 11, weight: .medium))
+                    .tracking(1.6)
+                    .foregroundStyle(AppTheme.textMuted)
+
+                Spacer()
+
+                if let reward {
+                    Text(reward)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.green)
+                } else {
+                    Text(request.status.label)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textMuted)
+                }
+            }
+
+            Text(request.title)
+                .font(.system(size: 22, weight: .semibold))
+                .lineSpacing(2)
+                .foregroundStyle(AppTheme.text)
+                .padding(.top, 14)
+
+            Text(request.context)
+                .font(.system(size: 13))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.textSecondary)
+                .padding(.top, 12)
+
+            if !request.answers.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("已收到一句")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textMuted)
+
+                    ForEach(request.answers) { answer in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(answer.text)
+                                .font(.system(size: 15, weight: .medium))
+                                .lineSpacing(4)
+                                .foregroundStyle(AppTheme.text)
+
+                            Text("\(answer.nickname) · \(answer.timeLabel)")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppTheme.textMuted)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.top, 18)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(AppTheme.borderSoft)
+                        .frame(height: 1)
+                }
+                .padding(.top, 18)
+            }
+        }
+        .cardStyle()
+    }
+}
+
+struct AnswerRequestSquareCard: View {
+    let request: HelpRequest
+    let reward: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("求一个")
+                    .font(.system(size: 12, weight: .medium))
+                    .tracking(1.6)
+                    .foregroundStyle(AppTheme.textMuted)
+
+                Spacer()
+
+                Text(reward)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.green)
+            }
+
+            Spacer(minLength: 18)
+
+            Text(request.title)
+                .font(.system(size: 28, weight: .semibold))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.text)
+                .lineLimit(3)
+                .minimumScaleFactor(0.82)
+
+            Text(request.context)
+                .font(.system(size: 15))
+                .lineSpacing(6)
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(4)
+                .padding(.top, 18)
+
+            Spacer(minLength: 18)
+
+            HStack(spacing: 8) {
+                Image(systemName: "quote.bubble")
+                    .font(.system(size: 13, weight: .medium))
+
+                Text("只要来一句")
+                    .font(.system(size: 13, weight: .medium))
+
+                Spacer()
+
+                Text("写完即送")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            .foregroundStyle(AppTheme.text)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 10)
+            .background(AppTheme.bubble)
+            .clipShape(Capsule())
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity)
+        .aspectRatio(1, contentMode: .fit)
+        .background(AppTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(AppTheme.border, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("求一个, \(request.title), \(reward)")
+    }
+}
+
+struct PageIntro: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(AppTheme.text)
+
+            Text(subtitle)
+                .font(.system(size: 14))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+        .padding(.bottom, 20)
+    }
+}
+
+struct PrimaryButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(AppTheme.text)
+                .clipShape(Capsule())
+                .shadow(color: .black.opacity(0.1), radius: 14, x: 0, y: 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+}
+
+struct ToastView: View {
+    let message: String
+    let isVisible: Bool
+
+    var body: some View {
+        VStack {
+            Spacer()
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(AppTheme.text)
+                .clipShape(Capsule())
+                .opacity(isVisible ? 1 : 0)
+                .offset(y: isVisible ? 0 : 8)
+                .animation(.easeOut(duration: 0.22), value: isVisible)
+        }
+        .padding(.bottom, 110)
+        .allowsHitTesting(false)
+    }
+}
+
+private extension View {
+    func cardStyle() -> some View {
+        padding(22)
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 10)
+    }
+}

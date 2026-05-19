@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String        @id @default(uuid())
+  deviceUid         String        @unique
+  displayName       String
+  platform          String?
+  appVersion        String?
+  createdAt         DateTime      @default(now())
+  lastSeenAt        DateTime      @default(now())
+  questions         Question[]
+  top1Cards         Top1Card[]
+  ownedHelpRequests HelpRequest[] @relation("HelpRequestOwner")
+  answers           HelpAnswer[]
+  lightEvents       LightEvent[]
+
+  @@map("users")
+}
+
+model Question {
+  id                  String        @id @default(uuid())
+  userId              String
+  rawText             String
+  normalizedText      String?
+  status              String
+  currentCardId       String?
+  helpRequestId       String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  user                User          @relation(fields: [userId], references: [id])
+  currentCard         Top1Card?     @relation("QuestionCurrentCard", fields: [currentCardId], references: [id])
+  currentHelpRequest  HelpRequest?  @relation("QuestionCurrentHelp", fields: [helpRequestId], references: [id])
+  top1Cards           Top1Card[]    @relation("QuestionCards")
+  createdHelpRequests HelpRequest[] @relation("HelpRequestQuestion")
+  pipiRuns            PipiRun[]
+  lightEvents         LightEvent[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("questions")
+}
+
+model Top1Card {
+  id                   String        @id @default(uuid())
+  questionId           String
+  userId               String
+  source               String
+  title                String
+  subtitle             String
+  reason               String
+  bullets              Json
+  warning              String?
+  imageAssetId         String
+  confidence           Float?
+  status               String
+  createdAt            DateTime      @default(now())
+  question             Question      @relation("QuestionCards", fields: [questionId], references: [id])
+  user                 User          @relation(fields: [userId], references: [id])
+  imageAsset           ImageAsset    @relation(fields: [imageAssetId], references: [id])
+  currentForQuestions  Question[]    @relation("QuestionCurrentCard")
+  finalForHelpRequests HelpRequest[] @relation("HelpFinalCard")
+  lightEvents          LightEvent[]
+
+  @@index([questionId])
+  @@index([userId])
+  @@index([imageAssetId])
+  @@map("top1_cards")
+}
+
+model ImageAsset {
+  id                 String     @id @default(uuid())
+  sourceType         String
+  url                String
+  thumbnailUrl       String?
+  sourceUrl          String?
+  credit             String?
+  isAiGenerated      Boolean    @default(false)
+  verificationStatus String
+  placeKey           String?
+  itemKey            String?
+  createdAt          DateTime   @default(now())
+  top1Cards          Top1Card[]
+
+  @@index([verificationStatus, isAiGenerated])
+  @@index([placeKey, itemKey])
+  @@map("image_assets")
+}
+
+model HelpRequest {
+  id                 String       @id @default(uuid())
+  questionId         String
+  ownerUserId        String
+  title              String
+  contextText        String
+  status             String
+  answerCount        Int          @default(0)
+  minAnswersRequired Int          @default(3)
+  finalCardId        String?
+  publishedAt        DateTime?
+  finalReadyAt       DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  question           Question     @relation("HelpRequestQuestion", fields: [questionId], references: [id])
+  owner              User         @relation("HelpRequestOwner", fields: [ownerUserId], references: [id])
+  currentForQuestions Question[]  @relation("QuestionCurrentHelp")
+  finalCard          Top1Card?    @relation("HelpFinalCard", fields: [finalCardId], references: [id])
+  answers            HelpAnswer[]
+  pipiRuns           PipiRun[]
+  lightEvents        LightEvent[]
+
+  @@index([ownerUserId])
+  @@index([status, answerCount])
+  @@index([questionId])
+  @@map("help_requests")
+}
+
+model HelpAnswer {
+  id            String      @id @default(uuid())
+  helpRequestId String
+  answerUserId  String
+  rawText       String
+  normalizedText String?
+  status        String
+  rewardStatus  String
+  createdAt     DateTime    @default(now())
+  helpRequest   HelpRequest @relation(fields: [helpRequestId], references: [id])
+  answerUser    User        @relation(fields: [answerUserId], references: [id])
+
+  @@index([helpRequestId])
+  @@index([answerUserId])
+  @@map("help_answers")
+}
+
+model PipiRun {
+  id            String       @id @default(uuid())
+  runType       String
+  questionId    String?
+  helpRequestId String?
+  modelProvider String
+  modelName     String
+  inputJson     Json
+  outputJson    Json?
+  status        String
+  errorMessage  String?
+  createdAt     DateTime     @default(now())
+  question      Question?    @relation(fields: [questionId], references: [id])
+  helpRequest   HelpRequest? @relation(fields: [helpRequestId], references: [id])
+
+  @@index([questionId])
+  @@index([helpRequestId])
+  @@index([runType, status])
+  @@map("pipi_runs")
+}
+
+model LightEvent {
+  id            String       @id @default(uuid())
+  userId        String
+  questionId    String?
+  helpRequestId String?
+  cardId        String?
+  type          String
+  title         String
+  body          String
+  litAt         DateTime
+  expiresAt     DateTime?
+  seenAt        DateTime?
+  createdAt     DateTime     @default(now())
+  user          User         @relation(fields: [userId], references: [id])
+  question      Question?    @relation(fields: [questionId], references: [id])
+  helpRequest   HelpRequest? @relation(fields: [helpRequestId], references: [id])
+  card          Top1Card?    @relation(fields: [cardId], references: [id])
+
+  @@index([userId, litAt])
+  @@index([type])
+  @@map("light_events")
+}
