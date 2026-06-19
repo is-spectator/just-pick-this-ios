@@ -6,9 +6,13 @@ from fastapi import APIRouter, Query
 
 from app.api._service import call_service, dump_model, resolve_service_handler
 from app.schemas.cards import (
+    HelpCardDetail,
     HelpCardOneLinerRequest,
     HelpCardOneLinerResponse,
+    HelpCardPublishRequest,
+    HelpCardPublishResponse,
     HelpFeedResponse,
+    RewardsMeResponse,
 )
 
 
@@ -20,7 +24,7 @@ async def help_feed(
     user_id: str | None = None,
     device_uid: str | None = None,
     device_id: str | None = None,
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=10, ge=1, le=100),
     cursor: str | None = None,
 ) -> HelpFeedResponse:
     handler = resolve_service_handler("app.services.help_feed", "list_help_feed")
@@ -33,10 +37,35 @@ async def help_feed(
     )
 
 
-@router.post("/help-cards/{id}/one-liner", response_model=HelpCardOneLinerResponse)
+@router.get("/help-cards/{help_card_id}", response_model=HelpCardDetail)
+async def get_help_card(help_card_id: str) -> HelpCardDetail:
+    handler = resolve_service_handler("app.services.help_feed", "get_help_card")
+    return await call_service(handler, help_card_id)
+
+
+@router.post("/help-cards/{help_card_id}/publish", response_model=HelpCardPublishResponse)
+async def publish_help_card(
+    help_card_id: str,
+    payload: HelpCardPublishRequest,
+) -> HelpCardPublishResponse:
+    handler = resolve_service_handler("app.services.help_feed", "publish_help_card")
+    return await call_service(handler, help_card_id, dump_model(payload))
+
+
+@router.post("/help-cards/{help_card_id}/one-liner", response_model=HelpCardOneLinerResponse)
 async def help_card_one_liner(
-    id: str,
+    help_card_id: str,
     payload: HelpCardOneLinerRequest,
 ) -> HelpCardOneLinerResponse:
     handler = resolve_service_handler("app.services.help_feed", "create_one_liner")
-    return await call_service(handler, id, dump_model(payload))
+    return await call_service(handler, help_card_id, dump_model(payload))
+
+
+@router.get("/rewards/me", response_model=RewardsMeResponse)
+async def rewards_me(
+    user_id: str | None = None,
+    device_uid: str | None = None,
+    device_id: str | None = None,
+) -> RewardsMeResponse:
+    handler = resolve_service_handler("app.services.help_feed", "get_my_rewards")
+    return await call_service(handler, user_id=user_id, device_uid=device_uid or device_id)

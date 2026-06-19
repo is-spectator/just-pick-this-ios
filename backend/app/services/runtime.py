@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import make_session_factory
 from app.models import (
     AgentRun,
@@ -27,7 +28,10 @@ from app.models import (
 )
 from app.services.seed_service import (
     DATONG_IMAGE_ASSET_ID,
+    FOOD_INTENT_ID,
     FOOD_INTENT_ANSWER_ID,
+    SIJIMINFU_IMAGE_ASSET_ID,
+    SIJIMINFU_INTENT_ANSWER_ID,
     SEONGSU_IMAGE_ASSET_ID,
     SHOPPING_INTENT_ANSWER_ID,
     SHOPPING_INTENT_ID,
@@ -39,7 +43,8 @@ from app.services.seed_service import (
 def session_scope() -> Iterator[Session]:
     session_factory = make_session_factory()
     with session_factory() as session:
-        ensure_seed_data(session)
+        if get_settings().auto_seed_on_request:
+            ensure_seed_data(session)
         try:
             yield session
             session.commit()
@@ -49,7 +54,23 @@ def session_scope() -> Iterator[Session]:
 
 
 def ensure_seed_data(session: Session) -> None:
-    if session.scalar(select(func.count(ImageAsset.id))) == 0:
+    datong_image = session.get(ImageAsset, DATONG_IMAGE_ASSET_ID)
+    seongsu_image = session.get(ImageAsset, SEONGSU_IMAGE_ASSET_ID)
+    sijiminfu_image = session.get(ImageAsset, SIJIMINFU_IMAGE_ASSET_ID)
+    seed_required = (
+        datong_image is None
+        or seongsu_image is None
+        or sijiminfu_image is None
+        or datong_image.source_domain is None
+        or seongsu_image.source_domain is None
+        or sijiminfu_image.source_domain is None
+        or session.get(Intent, FOOD_INTENT_ID) is None
+        or session.get(Intent, SHOPPING_INTENT_ID) is None
+        or session.get(IntentAnswer, FOOD_INTENT_ANSWER_ID) is None
+        or session.get(IntentAnswer, SHOPPING_INTENT_ANSWER_ID) is None
+        or session.get(IntentAnswer, SIJIMINFU_INTENT_ANSWER_ID) is None
+    )
+    if seed_required:
         seed_initial_data(session)
 
 
@@ -68,11 +89,20 @@ def ensure_user(
     platform: str | None = None,
     app_version: str | None = None,
 ) -> User:
-    external_uid = normalize_external_user_id(device_uid) or normalize_external_user_id(user_id)
-    if external_uid is None:
+    settings = get_settings()
+    external_uid = normalize_external_user_id(device_uid)
+    user: User | None = None
+    if external_uid is None and user_id:
+        user = _user_by_external_or_uuid(session, user_id)
+        if user is None and not settings.require_device_uid:
+            external_uid = normalize_external_user_id(user_id)
+    if external_uid is None and user is None:
+        if settings.require_device_uid:
+            raise ValueError("device_uid is required")
         external_uid = f"anonymous-{uuid.uuid4()}"
 
-    user = session.scalar(select(User).where(User.device_uid == external_uid))
+    if user is None:
+        user = session.scalar(select(User).where(User.device_uid == external_uid))
     if user is None:
         user = User(
             device_uid=external_uid,
@@ -204,7 +234,7 @@ def serialize_image(image: ImageAsset | None) -> dict[str, Any] | None:
         "url": image.url,
         "source_url": image.source_url,
         "source_domain": image.source_domain,
-        "caption": "引用图",
+        "caption": "参考图片",
         "alt_text": image.alt_text,
         "verified": image.verified and image.verification_status == "verified" and image.displayable,
         "is_ai_generated": image.is_ai_generated,
@@ -220,33 +250,61 @@ def serialize_image(image: ImageAsset | None) -> dict[str, Any] | None:
 
 
 def serialize_card(card: RecommendationCard) -> dict[str, Any]:
+    payload = card.payload_json or {}
     return {
         "id": str(card.id),
+        "type": "recommendation_card",
+        "version": payload.get("version"),
+        "target_type": payload.get("target_type"),
+        "location_state": payload.get("location_state"),
         "title": card.title,
         "subtitle": card.subtitle,
         "one_liner": card.reason,
-        "bullets": card.bullets_json,
-        "warning": card.warning,
-        "followups": card.payload_json.get("followups", ["为什么选这个?", "有没有别的选择?", "问真人"]),
         "status": card.status,
         "image": serialize_image(card.image_asset),
+        "place": payload.get("place"),
+        "route": payload.get("route"),
+        "action": payload.get("action"),
         "image_status": card.image_status,
         "image_required": card.image_required,
+        "item": payload.get("item", {"title": card.title}),
+        "decision_factor": payload.get("decision_factor", {"text": card.reason}),
+        "provenance": payload.get("provenance", {}),
+        "ui": payload.get("ui", {}),
         "metadata": {
             "question_id": str(card.question_id),
             "confidence": card.confidence,
             "source": card.source,
-            "composer": card.payload_json.get("composer"),
+            "composer": _public_composer_metadata(payload.get("composer")),
         },
     }
 
 
+def _public_composer_metadata(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    allowed = {
+        "provider",
+        "model",
+        "used_web_search",
+        "composition",
+        "reference_answer_id",
+        "composer_fallback",
+    }
+    return {key: value[key] for key in allowed if key in value}
+
+
 def serialize_card_detail(card: RecommendationCard) -> dict[str, Any]:
     data = serialize_card(card)
+    raw_evidence = card.payload_json.get("evidence_ids", [])
+    evidence = [
+        item if isinstance(item, dict) else {"id": str(item), "type": "retrieval_hit"}
+        for item in raw_evidence
+    ]
     data.update(
         {
             "description": card.reason,
-            "evidence": card.payload_json.get("evidence_ids", []),
+            "evidence": evidence,
             "created_at": card.created_at,
             "updated_at": card.updated_at,
         }
@@ -255,10 +313,32 @@ def serialize_card_detail(card: RecommendationCard) -> dict[str, Any]:
 
 
 def serialize_help_card(help_card: HelpCard) -> dict[str, Any]:
+    payload = help_card.payload_json or {}
+    answer_stats = dict(payload.get("answer_stats") or {})
+    answer_stats["count"] = help_card.answer_count
+    answer_stats["min_required"] = help_card.min_answers_required
+    reward = dict(payload.get("reward") or {})
+    reward_value = int(reward.get("value") or payload.get("reward_value") or 10)
+    reward.setdefault("value", reward_value)
+    reward.setdefault("label", f"+{reward_value}")
+    reward.setdefault("status", "pending")
     return {
         "id": str(help_card.id),
+        "type": "help_card",
+        "version": payload.get("version"),
+        "title": help_card.title,
         "prompt": help_card.prompt,
+        "location_state": payload.get("location_state"),
+        "context": payload.get("context", {}),
+        "wants": payload.get("wants", []),
+        "avoids": payload.get("avoids", []),
+        "constraints": payload.get("constraints", []),
+        "reward": reward,
+        "answer_stats": answer_stats,
+        "revision": payload.get("revision"),
         "status": help_card.status,
+        "context_text": help_card.context_text,
+        "answer_count": help_card.answer_count,
         "one_liner": help_card.context_text,
         "card": serialize_card(help_card.final_recommendation_card)
         if help_card.final_recommendation_card is not None
@@ -277,10 +357,13 @@ def serialize_light_event(event: LightEvent) -> dict[str, Any]:
     return {
         "id": str(event.id),
         "kind": event.type,
+        "type": event.type,
         "title": event.title,
         "message": event.body,
+        "body": event.body,
         "card_id": str(event.recommendation_card_id) if event.recommendation_card_id else None,
         "help_card_id": str(event.help_card_id) if event.help_card_id else None,
+        "lit_at": event.lit_at,
         "created_at": event.created_at,
         "metadata": event.payload_json,
     }
@@ -304,6 +387,7 @@ def serialize_retrieval(run: RetrievalRun | None) -> dict[str, Any] | None:
         "id": str(run.id),
         "status": "succeeded" if run.status == "succeeded" else run.status,
         "query": run.query,
+        "metadata": run.metadata_json or {},
         "hits": [
             {
                 "id": str(hit.id),
@@ -319,11 +403,11 @@ def serialize_retrieval(run: RetrievalRun | None) -> dict[str, Any] | None:
 
 
 def build_card_ui_event(card: RecommendationCard) -> dict[str, Any]:
-    return {"type": "show_recommendation_card", "card": serialize_card(card)}
+    return {"type": "show_recommendation_card", "card_id": str(card.id), "card": serialize_card(card)}
 
 
 def build_help_ui_event(help_card: HelpCard, event_type: str = "show_help_card_draft") -> dict[str, Any]:
-    return {"type": event_type, "help_card": serialize_help_card(help_card)}
+    return {"type": event_type, "help_card_id": str(help_card.id), "help_card": serialize_help_card(help_card)}
 
 
 def create_tool_call(
@@ -392,6 +476,18 @@ def ensure_seongsu_assets(session: Session) -> tuple[ImageAsset, IntentAnswer]:
         answer = session.get(IntentAnswer, SHOPPING_INTENT_ANSWER_ID)
     if image is None or answer is None:
         raise RuntimeError("seeded Seongsu image asset or intent answer missing")
+    return image, answer
+
+
+def ensure_sijiminfu_assets(session: Session) -> tuple[ImageAsset, IntentAnswer]:
+    image = session.get(ImageAsset, SIJIMINFU_IMAGE_ASSET_ID)
+    answer = session.get(IntentAnswer, SIJIMINFU_INTENT_ANSWER_ID)
+    if image is None or answer is None:
+        seed_initial_data(session)
+        image = session.get(ImageAsset, SIJIMINFU_IMAGE_ASSET_ID)
+        answer = session.get(IntentAnswer, SIJIMINFU_INTENT_ANSWER_ID)
+    if image is None or answer is None:
+        raise RuntimeError("seeded Siji Minfu image asset or intent answer missing")
     return image, answer
 
 

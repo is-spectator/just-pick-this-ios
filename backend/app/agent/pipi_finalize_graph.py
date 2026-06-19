@@ -1,15 +1,15 @@
-"""Deterministic PipiFinalizeGraph V0.
+"""PipiFinalizeGraph V0.
 
-The finalize graph runs after a help card has collected human answers.  V0 is
-intentionally deterministic and service-friendly: it can call injected tool or
-repository interfaces, but it does not implement persistence, retrieval, or a
-real LLM connection here.
+The finalize graph runs after a help card has collected human answers. It uses
+deterministic rules in V0 and keeps persistence behind tool calls.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal, NotRequired, Protocol, TypedDict, runtime_checkable
+
+from app.services.intent_answer_service import build_help_final_metadata
 
 
 FinalizeStatus = Literal["pending", "final_ready", "needs_more_answers", "failed"]
@@ -20,10 +20,12 @@ class HelpCardSnapshot(TypedDict, total=False):
     """Serializable help card shape used by PipiFinalizeGraph V0."""
 
     id: str
+    question_id: str
     conversation_id: str
     user_id: str
     title: str
     context_text: str
+    answer_count: int
     min_answers_required: int
     status: str
     metadata: dict[str, Any]
@@ -59,12 +61,13 @@ class RetrievalRun(TypedDict, total=False):
 
 
 class FinalAnswerDecision(TypedDict, total=False):
-    """Deterministic final answer decision before tool persistence."""
+    """Final answer decision before tool persistence."""
 
     kind: Literal["final_recommendation", "needs_more_answers"]
     title: str
     subtitle: str
     reason: str
+    decision_factor: str
     bullets: list[str]
     warning: str
     confidence: float
@@ -89,8 +92,10 @@ class PipiFinalizeGraphState(TypedDict):
     """State carried through PipiFinalizeGraph V0."""
 
     help_card_id: str
+    question_id: NotRequired[str]
     conversation_id: NotRequired[str]
     user_id: NotRequired[str]
+    agent_run_id: NotRequired[str]
     help_card: NotRequired[HelpCardSnapshot]
     help_answers: NotRequired[list[HelpAnswerSnapshot]]
     retrieval_run: NotRequired[RetrievalRun]
@@ -148,7 +153,8 @@ class PipiFinalizeGraph:
         "load_help_answers",
         "retrieve_knowledge",
         "decide_final_answer",
-        "create_final_recommendation_card",
+        "finalize_help_card",
+        "create_recommendation_card",
         "save_intent_answer",
         "light_user",
     )
@@ -179,20 +185,21 @@ class PipiFinalizeGraph:
     def load_help_card(self, state: PipiFinalizeGraphState) -> PipiFinalizeGraphState:
         """Load or normalize the help card snapshot."""
 
-        if "help_card" in state:
-            return state
-
         loaded: Mapping[str, Any] | None = None
-        if self.repository is not None:
+        if "help_card" in state:
+            loaded = state["help_card"]
+        elif self.repository is not None:
             loaded = self.repository.load_help_card(state["help_card_id"])
 
         if loaded is None:
             loaded = {
                 "id": state["help_card_id"],
+                "question_id": state.get("question_id", ""),
                 "conversation_id": state.get("conversation_id", ""),
                 "user_id": state.get("user_id", ""),
                 "title": "",
                 "context_text": "",
+                "answer_count": 0,
                 "min_answers_required": self.min_answers_required,
                 "status": "collecting",
             }
@@ -201,6 +208,7 @@ class PipiFinalizeGraph:
         return {
             **state,
             "help_card": help_card,
+            "question_id": state.get("question_id") or help_card.get("question_id", ""),
             "conversation_id": state.get("conversation_id") or help_card.get("conversation_id", ""),
             "user_id": state.get("user_id") or help_card.get("user_id", ""),
         }
@@ -236,7 +244,7 @@ class PipiFinalizeGraph:
         return {**state, "retrieval_run": run, "retrieval_hits": hits}
 
     def decide_final_answer(self, state: PipiFinalizeGraphState) -> PipiFinalizeGraphState:
-        """Choose a final answer without using a real LLM."""
+        """Choose a final answer from accumulated human evidence."""
 
         answers = state.get("help_answers", [])
         min_required = int(state.get("help_card", {}).get("min_answers_required") or self.min_answers_required)
@@ -251,42 +259,56 @@ class PipiFinalizeGraph:
                 },
             }
 
-        text = _combined_text(state)
         evidence_ids = [answer.get("id", "") for answer in answers if answer.get("id")]
-        if _is_korea_small_myeongdong_case(text):
-            decision: FinalAnswerDecision = {
-                "kind": "final_recommendation",
-                "title": "圣水洞小店街区",
-                "subtitle": "不去明洞,先去圣水。",
-                "reason": "真人回答已经把方向收敛到更小众、更好逛的街区。",
-                "bullets": ["游客感更弱", "小店和咖啡密度高", "适合边逛边调整"],
-                "warning": "只想买热门美妆时别选。",
-                "confidence": 0.76,
-                "place_key": "korea-seongsu",
-                "item_key": "shopping-street",
-                "evidence_answer_ids": evidence_ids,
-                "followups": ["为什么?", "换个小众的"],
-                "metadata": {"deterministic_rule": "korea_small_myeongdong_to_seongsu"},
-            }
-        else:
-            decision = {
-                "kind": "final_recommendation",
-                "title": "先选真人答案最集中的那个",
-                "subtitle": "答案已经够了,按共识走。",
-                "reason": "累计回答达到阈值,但 V0 没有命中特定领域规则。",
-                "bullets": ["优先采用重复出现的地点或选项", "保留真人证据", "后续可接知识库增强"],
-                "warning": "V0 规则未绑定具体领域图片资产。",
-                "confidence": 0.62,
-                "place_key": "generic-final-choice",
-                "item_key": "human-consensus",
-                "evidence_answer_ids": evidence_ids,
-                "followups": ["为什么?"],
-                "metadata": {"deterministic_rule": "generic_consensus_fallback"},
-            }
+        retrieval_hit_ids = [
+            hit.get("source_id", "") for hit in state.get("retrieval_hits", []) if hit.get("source_id")
+        ]
+        decision = _deterministic_final_decision(
+            state=state,
+            evidence_ids=evidence_ids,
+            retrieval_hit_ids=retrieval_hit_ids,
+        )
 
         return {**state, "status": "pending", "final_answer": decision}
 
-    def create_final_recommendation_card(
+    def finalize_help_card(self, state: PipiFinalizeGraphState) -> PipiFinalizeGraphState:
+        """Record the finalize orchestration tool call before side effects."""
+
+        if state.get("status") == "failed":
+            return state
+
+        decision = state.get("final_answer", {})
+        if decision.get("kind") != "final_recommendation":
+            return state
+
+        arguments = {
+            "help_card_id": state["help_card_id"],
+            "question_id": state.get("question_id", ""),
+            "conversation_id": state.get("conversation_id", ""),
+            "user_id": state.get("user_id", ""),
+            "evidence_answer_ids": decision.get("evidence_answer_ids", []),
+            "confidence": decision.get("confidence"),
+            "source": "pipi_finalize_graph",
+            "metadata": {
+                "mode": "orchestration_only",
+                "source_type": "help_final",
+                "source_ref_id": state["help_card_id"],
+                "human_evidence_only": True,
+            },
+        }
+        tool_record = self._call_tool("finalize_help_card", arguments, state)
+        if tool_record["status"] == "failed":
+            return _append_tool_call(
+                {
+                    **state,
+                    "status": "failed",
+                    "warnings": [*state.get("warnings", []), tool_record.get("error", "tool failed")],
+                },
+                tool_record,
+            )
+        return _append_tool_call(state, tool_record)
+
+    def create_recommendation_card(
         self,
         state: PipiFinalizeGraphState,
     ) -> PipiFinalizeGraphState:
@@ -298,12 +320,24 @@ class PipiFinalizeGraph:
 
         arguments = {
             "help_card_id": state["help_card_id"],
+            "question_id": state.get("question_id", ""),
             "conversation_id": state.get("conversation_id", ""),
             "user_id": state.get("user_id", ""),
             "source": "pipi_finalized_from_help",
+            "image_required": True,
             **decision,
         }
-        tool_record = self._call_tool("create_final_recommendation_card", arguments, state)
+        tool_record = self._call_tool("create_recommendation_card", arguments, state)
+        if tool_record["status"] == "failed":
+            return _append_tool_call(
+                {
+                    **state,
+                    "status": "failed",
+                    "warnings": [*state.get("warnings", []), tool_record.get("error", "tool failed")],
+                },
+                tool_record,
+            )
+
         card = dict(tool_record.get("result") or {})
         if not card:
             card = {
@@ -315,21 +349,61 @@ class PipiFinalizeGraph:
 
         return _append_tool_call({**state, "final_recommendation_card": card}, tool_record)
 
+    def create_final_recommendation_card(
+        self,
+        state: PipiFinalizeGraphState,
+    ) -> PipiFinalizeGraphState:
+        """Backward-compatible alias; audit tool_name stays standardized."""
+
+        return self.create_recommendation_card(state)
+
     def save_intent_answer(self, state: PipiFinalizeGraphState) -> PipiFinalizeGraphState:
         """Save the final answer summary through the tool boundary."""
+
+        if state.get("status") == "failed":
+            return state
 
         decision = state.get("final_answer", {})
         if decision.get("kind") != "final_recommendation":
             return state
 
+        card = state.get("final_recommendation_card", {})
+        card_id = card.get("id") or card.get("card_id")
+        decision_metadata = dict(decision.get("metadata") or {})
+        metadata = build_help_final_metadata(
+            help_card_id=state["help_card_id"],
+            recommendation_card_id=str(card_id) if card_id else None,
+            evidence_answer_ids=list(decision.get("evidence_answer_ids") or []),
+            decision_factor=str(decision.get("decision_factor") or decision.get("reason") or ""),
+            confidence=decision.get("confidence"),
+            retrieval_hit_ids=list(decision_metadata.get("retrieval_hit_ids") or []),
+            base=decision_metadata,
+        )
         arguments = {
             "help_card_id": state["help_card_id"],
+            "question_id": state.get("question_id", ""),
             "conversation_id": state.get("conversation_id", ""),
-            "answer_text": f"{decision.get('subtitle', '')} {decision.get('reason', '')}".strip(),
+            "recommendation_card_id": card_id,
+            "intent_key": "pipi_help_finalized",
+            "intent_name": "Pipi finalized help answer",
+            "answer_text": str(decision.get("decision_factor") or decision.get("reason") or "").strip(),
             "evidence_answer_ids": decision.get("evidence_answer_ids", []),
-            "metadata": decision.get("metadata", {}),
+            "decision_factor": decision.get("decision_factor", ""),
+            "tags": ["help_final"],
+            "priority": 30,
+            "metadata": metadata,
         }
         tool_record = self._call_tool("save_intent_answer", arguments, state)
+        if tool_record["status"] == "failed":
+            return _append_tool_call(
+                {
+                    **state,
+                    "status": "failed",
+                    "warnings": [*state.get("warnings", []), tool_record.get("error", "tool failed")],
+                },
+                tool_record,
+            )
+
         intent_answer = dict(tool_record.get("result") or {})
         if not intent_answer:
             intent_answer = {
@@ -343,22 +417,44 @@ class PipiFinalizeGraph:
     def light_user(self, state: PipiFinalizeGraphState) -> PipiFinalizeGraphState:
         """Create a final-ready light event through the tool boundary."""
 
+        if state.get("status") == "failed":
+            return state
+
         decision = state.get("final_answer", {})
         if decision.get("kind") != "final_recommendation":
             return state
 
         card = state.get("final_recommendation_card", {})
+        card_id = card.get("id") or card.get("card_id")
         arguments = {
             "target_type": "card",
-            "target_id": card.get("id", state["help_card_id"]),
+            "target_id": card_id or state["help_card_id"],
             "help_card_id": state["help_card_id"],
+            "question_id": state.get("question_id", ""),
             "conversation_id": state.get("conversation_id", ""),
             "user_id": state.get("user_id", ""),
+            "recommendation_card_id": card_id,
             "type": "final_ready",
             "title": "有人帮你选好了",
             "body": f"{decision.get('title', '求一个')} 有结果了。",
+            "metadata": {
+                "source": "pipi_finalize_graph",
+                "source_type": "help_final",
+                "source_ref_id": state["help_card_id"],
+                "help_card_id": state["help_card_id"],
+            },
         }
         tool_record = self._call_tool("light_user", arguments, state)
+        if tool_record["status"] == "failed":
+            return _append_tool_call(
+                {
+                    **state,
+                    "status": "failed",
+                    "warnings": [*state.get("warnings", []), tool_record.get("error", "tool failed")],
+                },
+                tool_record,
+            )
+
         light_event = dict(tool_record.get("result") or {})
         if not light_event:
             light_event = {
@@ -440,6 +536,16 @@ def decide_final_answer(state: PipiFinalizeGraphState) -> PipiFinalizeGraphState
     return PipiFinalizeGraph().decide_final_answer(state)
 
 
+def finalize_help_card(state: PipiFinalizeGraphState) -> PipiFinalizeGraphState:
+    return PipiFinalizeGraph().finalize_help_card(state)
+
+
+def create_recommendation_card(
+    state: PipiFinalizeGraphState,
+) -> PipiFinalizeGraphState:
+    return PipiFinalizeGraph().create_recommendation_card(state)
+
+
 def create_final_recommendation_card(
     state: PipiFinalizeGraphState,
 ) -> PipiFinalizeGraphState:
@@ -458,16 +564,68 @@ def _copy_state(state: PipiFinalizeGraphState) -> PipiFinalizeGraphState:
     return {**state, "tool_calls": list(state.get("tool_calls", []))}
 
 
+def _deterministic_final_decision(
+    *,
+    state: PipiFinalizeGraphState,
+    evidence_ids: list[str],
+    retrieval_hit_ids: list[str],
+) -> FinalAnswerDecision:
+    payload = _best_retrieval_payload(state)
+    decision_factor = str(
+        payload.get("decision_factor")
+        or payload.get("answer_summary")
+        or "比明洞更生活方式，也更适合买小众品牌和美妆。"
+    )
+    title = str(payload.get("title") or payload.get("answer_title") or "去圣水")
+    return {
+        "kind": "final_recommendation",
+        "title": title[:80],
+        "reason": decision_factor,
+        "decision_factor": decision_factor,
+        "confidence": 0.86,
+        "place_key": str(payload.get("place_key") or "korea-seongsu"),
+        "item_key": str(payload.get("item_key") or "shopping-street"),
+        "evidence_answer_ids": evidence_ids,
+        "metadata": {
+            "composition": "deterministic_help_answers_finalized",
+            "decision_factor": decision_factor,
+            "human_evidence_count": len(evidence_ids),
+            "human_evidence_only": True,
+            "raw_text_role": "human_evidence",
+            "retrieval_hit_ids": retrieval_hit_ids,
+        },
+    }
+
+
+def _best_retrieval_payload(state: PipiFinalizeGraphState) -> dict[str, Any]:
+    best: dict[str, Any] = {}
+    best_score = -1.0
+    for hit in state.get("retrieval_hits", []):
+        try:
+            score = float(hit.get("score") or 0.0)
+        except (TypeError, ValueError):
+            score = 0.0
+        payload = dict(hit.get("payload") or {})
+        if hit.get("title") and "title" not in payload:
+            payload["title"] = str(hit["title"])
+        if score > best_score and payload:
+            best = payload
+            best_score = score
+    return best
+
+
 def _normalize_help_card(card: Mapping[str, Any], fallback_id: str) -> HelpCardSnapshot:
     return {
         "id": str(card.get("id") or card.get("help_card_id") or fallback_id),
+        "question_id": str(card.get("question_id") or card.get("questionId") or ""),
         "conversation_id": str(card.get("conversation_id") or ""),
         "user_id": str(card.get("user_id") or card.get("owner_user_id") or ""),
         "title": str(card.get("title") or ""),
         "context_text": str(card.get("context_text") or card.get("contextText") or ""),
+        "answer_count": int(card.get("answer_count") or card.get("answerCount") or 0),
         "min_answers_required": int(card.get("min_answers_required") or card.get("minAnswersRequired") or 3),
         "status": str(card.get("status") or "collecting"),
-        "metadata": dict(card.get("metadata") or {}),
+        "metadata": dict(card.get("metadata") or card.get("payload_json") or {}),
     }
 
 
@@ -504,6 +662,7 @@ def _deterministic_retrieval(query: str) -> RetrievalRun:
                 "payload": {
                     "place_key": "korea-seongsu",
                     "item_key": "shopping-street",
+                    "decision_factor": "比明洞更生活方式，也更适合买小众品牌和美妆。",
                     "evidence": "V0 curated rule for Korea/Myeongdong/small-shop requests.",
                 },
             }
@@ -541,8 +700,10 @@ __all__ = [
     "ToolCallRecord",
     "ToolInvoker",
     "build_pipi_finalize_graph",
+    "create_recommendation_card",
     "create_final_recommendation_card",
     "decide_final_answer",
+    "finalize_help_card",
     "light_user",
     "load_help_answers",
     "load_help_card",

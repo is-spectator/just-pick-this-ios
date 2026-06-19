@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pipi Ops</title>
+  <link rel="stylesheet" href="/ops/static/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Pipi Ops</h1>
+      <small>Agent Flow · Trace Replay · Prompt Center</small>
+    </div>
+    <div class="env">env: <span id="envLabel">staging</span></div>
+  </header>
+  <main>
+    <nav>
+      <button data-page="agent-flow" class="active">Agent Flow</button>
+      <button data-page="traces">Traces</button>
+      <button data-page="prompts">Prompt Center</button>
+    </nav>
+    <section id="app"></section>
+    <aside id="detail">
+      <h2>选择一项</h2>
+      <p class="muted">点击节点、trace step 或 prompt 版本查看详情。</p>
+    </aside>
+  </main>
+  <script src="/ops/static/app.js"></script>
+</body>
+</html>

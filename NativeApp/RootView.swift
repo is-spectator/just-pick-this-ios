@@ -10,6 +10,7 @@ struct RootView: View {
     @State private var path: [AppRoute]
     @State private var session: AppSession
     @State private var answerPollTask: Task<Void, Never>?
+    @State private var showsEmailLogin = false
 
     init() {
         let demoScreen = DocumentationDemoScreen.current
@@ -23,6 +24,8 @@ struct RootView: View {
         NavigationStack(path: $path) {
             InputScreen(session: session) { decision in
                 switch decision {
+                case .none:
+                    break
                 case .top1:
                     path.append(.resultDatong)
                 case .ask:
@@ -30,6 +33,8 @@ struct RootView: View {
                 }
             } onAnswerEntry: {
                 path.append(.answer)
+            } onAccountEntry: {
+                showsEmailLogin = true
             } onHistorySelect: { item in
                 Task { @MainActor in
                     let destination = await session.restoreHistoryItem(item)
@@ -41,6 +46,13 @@ struct RootView: View {
                         path.append(.askKorea)
                     }
                 }
+            }
+            .sheet(isPresented: $showsEmailLogin) {
+                EmailLoginView(authService: AuthAPIService()) {
+                    showsEmailLogin = false
+                }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
             }
             .navigationDestination(for: AppRoute.self) { route in
                 switch route {

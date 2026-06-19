@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -43,6 +45,11 @@ class User(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     device_uid: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(String(320), unique=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    auth_provider: Mapped[str] = mapped_column(String(50), default="device", nullable=False)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     platform: Mapped[str | None] = mapped_column(String(50))
     app_version: Mapped[str | None] = mapped_column(String(50))
@@ -61,6 +68,13 @@ class User(TimestampMixin, Base):
     recommendation_cards: Mapped[list[RecommendationCard]] = relationship(back_populates="user")
     help_cards: Mapped[list[HelpCard]] = relationship(back_populates="owner")
     help_answers: Mapped[list[HelpAnswer]] = relationship(back_populates="answer_user")
+    reward_events: Mapped[list[RewardEvent]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    auth_sessions: Mapped[list[AuthSession]] = relationship(back_populates="user")
+    devices: Mapped[list[UserDevice]] = relationship(back_populates="user")
     light_events: Mapped[list[LightEvent]] = relationship(back_populates="user")
 
 
@@ -310,6 +324,22 @@ class IntentAnswer(TimestampMixin, Base):
         ForeignKey("image_assets.id", ondelete="SET NULL"),
     )
     answer_text: Mapped[str] = mapped_column(Text, nullable=False)
+    intent_key: Mapped[str | None] = mapped_column(String(255))
+    intent_text: Mapped[str | None] = mapped_column(Text)
+    answer_title: Mapped[str | None] = mapped_column(Text)
+    answer_summary: Mapped[str | None] = mapped_column(Text)
+    constraints_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
+    )
+    source_type: Mapped[str | None] = mapped_column(String(100))
+    source_ref_id: Mapped[str | None] = mapped_column(String(255))
+    confidence: Mapped[float | None] = mapped_column(Float)
+    success_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
+    rejection_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     locale: Mapped[str | None] = mapped_column(String(50))
     tags_json: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     evidence_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
@@ -472,6 +502,330 @@ class WebSearchResult(CreatedAtMixin, Base):
     web_search_run: Mapped[WebSearchRun] = relationship(back_populates="results")
 
 
+class AmapPoiSearchRun(CreatedAtMixin, Base):
+    __tablename__ = "amap_poi_search_runs"
+    __table_args__ = (
+        Index("ix_amap_poi_search_runs_agent_run_id", "agent_run_id"),
+        Index("ix_amap_poi_search_runs_status_created_at", "status", "created_at"),
+        Index("ix_amap_poi_search_runs_request_json", "request_json", postgresql_using="gin"),
+        Index("ix_amap_poi_search_runs_response_json", "response_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agent_runs.id", ondelete="SET NULL"))
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("turns.id", ondelete="SET NULL"))
+    city: Mapped[str | None] = mapped_column(String(100))
+    keyword: Mapped[str | None] = mapped_column(String(255))
+    types: Mapped[str | None] = mapped_column(String(255))
+    center_lng: Mapped[float | None] = mapped_column(Float)
+    center_lat: Mapped[float | None] = mapped_column(Float)
+    radius_meters: Mapped[int | None] = mapped_column(Integer)
+    limit: Mapped[int | None] = mapped_column(Integer)
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    candidates: Mapped[list[AmapPoiCandidate]] = relationship(back_populates="search_run")
+
+
+class AmapPoiCandidate(CreatedAtMixin, Base):
+    __tablename__ = "amap_poi_candidates"
+    __table_args__ = (
+        Index("ix_amap_poi_candidates_search_run_rank", "search_run_id", "rank"),
+        Index("ix_amap_poi_candidates_poi_id", "poi_id"),
+        Index("ix_amap_poi_candidates_name", "name"),
+        Index("ix_amap_poi_candidates_raw_json", "raw_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    search_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("amap_poi_search_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    poi_id: Mapped[str | None] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    type: Mapped[str | None] = mapped_column(Text)
+    typecode: Mapped[str | None] = mapped_column(String(100))
+    address: Mapped[str | None] = mapped_column(Text)
+    lng: Mapped[float | None] = mapped_column(Float)
+    lat: Mapped[float | None] = mapped_column(Float)
+    distance_meters: Mapped[int | None] = mapped_column(Integer)
+    tel: Mapped[str | None] = mapped_column(Text)
+    raw_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
+    search_run: Mapped[AmapPoiSearchRun] = relationship(back_populates="candidates")
+
+
+class AmapRouteRun(CreatedAtMixin, Base):
+    __tablename__ = "amap_route_runs"
+    __table_args__ = (
+        Index("ix_amap_route_runs_agent_run_id", "agent_run_id"),
+        Index("ix_amap_route_runs_status_created_at", "status", "created_at"),
+        Index("ix_amap_route_runs_request_json", "request_json", postgresql_using="gin"),
+        Index("ix_amap_route_runs_response_json", "response_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agent_runs.id", ondelete="SET NULL"))
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("turns.id", ondelete="SET NULL"))
+    mode: Mapped[str] = mapped_column(String(50), nullable=False)
+    origin_lng: Mapped[float] = mapped_column(Float, nullable=False)
+    origin_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    destination_lng: Mapped[float] = mapped_column(Float, nullable=False)
+    destination_lat: Mapped[float] = mapped_column(Float, nullable=False)
+    distance_meters: Mapped[int | None] = mapped_column(Integer)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    summary_text: Mapped[str | None] = mapped_column(Text)
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class AgentPromptConfig(TimestampMixin, Base):
+    __tablename__ = "agent_prompt_configs"
+    __table_args__ = (
+        UniqueConstraint("key", name="uq_agent_prompt_configs_key"),
+        Index("ix_agent_prompt_configs_key_enabled", "key", "enabled"),
+        Index("ix_agent_prompt_configs_prompt_type", "prompt_type"),
+        Index("ix_agent_prompt_configs_config_json", "config_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    updated_by: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
+class AgentPromptConfigVersion(CreatedAtMixin, Base):
+    __tablename__ = "agent_prompt_config_versions"
+    __table_args__ = (
+        UniqueConstraint("prompt_key", "version", name="uq_agent_prompt_config_versions_key_version"),
+        Index("ix_agent_prompt_config_versions_prompt_key_created_at", "prompt_key", "created_at"),
+        Index("ix_agent_prompt_config_versions_config_json", "config_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_config_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_prompt_configs.id", ondelete="SET NULL"),
+    )
+    prompt_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    updated_by: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+    change_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class PromptTemplate(TimestampMixin, Base):
+    __tablename__ = "prompt_templates"
+    __table_args__ = (
+        UniqueConstraint("prompt_key", name="uq_prompt_templates_prompt_key"),
+        Index("ix_prompt_templates_scope", "scope"),
+        Index("ix_prompt_templates_variables_schema_json", "variables_schema_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    scope: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    variables_schema_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
+
+class PromptVersion(CreatedAtMixin, Base):
+    __tablename__ = "prompt_versions"
+    __table_args__ = (
+        UniqueConstraint("template_id", "version", name="uq_prompt_versions_template_version"),
+        Index("ix_prompt_versions_template_status", "template_id", "status"),
+        Index("ix_prompt_versions_checksum", "checksum"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("prompt_templates.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PromptAssignment(TimestampMixin, Base):
+    __tablename__ = "prompt_assignments"
+    __table_args__ = (
+        UniqueConstraint("prompt_key", "environment", name="uq_prompt_assignments_key_environment"),
+        Index("ix_prompt_assignments_environment", "environment"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    active_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    environment: Mapped[str] = mapped_column(String(50), default="staging", nullable=False)
+    rollout_percent: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+
+
+class PromptPublishEvent(CreatedAtMixin, Base):
+    __tablename__ = "prompt_publish_events"
+    __table_args__ = (
+        Index("ix_prompt_publish_events_prompt_key_published_at", "prompt_key", "published_at"),
+        Index("ix_prompt_publish_events_dry_run_result_json", "dry_run_result_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    from_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("prompt_versions.id", ondelete="SET NULL"),
+    )
+    to_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    dry_run_result_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    published_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class PromptAuditLog(CreatedAtMixin, Base):
+    __tablename__ = "prompt_audit_logs"
+    __table_args__ = (
+        Index("ix_prompt_audit_logs_prompt_key_created_at", "prompt_key", "created_at"),
+        Index("ix_prompt_audit_logs_action", "action"),
+        Index("ix_prompt_audit_logs_before_json", "before_json", postgresql_using="gin"),
+        Index("ix_prompt_audit_logs_after_json", "after_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    prompt_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    version_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("prompt_versions.id", ondelete="SET NULL"),
+    )
+    before_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    after_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    actor: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class PromptReplayRun(CreatedAtMixin, Base):
+    __tablename__ = "prompt_replay_runs"
+    __table_args__ = (
+        Index("ix_prompt_replay_runs_prompt_key_created_at", "prompt_key", "created_at"),
+        Index("ix_prompt_replay_runs_status_created_at", "status", "created_at"),
+        Index("ix_prompt_replay_runs_input_json", "input_json", postgresql_using="gin"),
+        Index("ix_prompt_replay_runs_output_json", "output_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt_version: Mapped[int | None] = mapped_column(Integer)
+    candidate_version: Mapped[int | None] = mapped_column(Integer)
+    admin_actor: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    input_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    output_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class AgentAbilityConfig(TimestampMixin, Base):
+    __tablename__ = "agent_ability_configs"
+    __table_args__ = (
+        UniqueConstraint("key", name="uq_agent_ability_configs_key"),
+        Index("ix_agent_ability_configs_key_enabled", "key", "enabled"),
+        Index("ix_agent_ability_configs_tool_name", "tool_name"),
+        Index("ix_agent_ability_configs_ability_type", "ability_type"),
+        Index("ix_agent_ability_configs_trigger_intents_json", "trigger_intents_json", postgresql_using="gin"),
+        Index("ix_agent_ability_configs_config_json", "config_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    ability_type: Mapped[str] = mapped_column(String(100), default="builtin_tool", nullable=False)
+    tool_name: Mapped[str | None] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    runtime_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    trigger_intents_json: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    input_schema_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    output_contract_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    guardrails_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    prompt_keys_json: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    updated_by: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
+class OpsMetricSnapshot(CreatedAtMixin, Base):
+    __tablename__ = "ops_metric_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "bucket",
+            "bucket_start",
+            "metric_key",
+            "dimension_key",
+            name="uq_ops_metric_snapshots_bucket_metric",
+        ),
+        Index("ix_ops_metric_snapshots_bucket_start", "bucket", "bucket_start"),
+        Index("ix_ops_metric_snapshots_metric_key", "metric_key"),
+        Index("ix_ops_metric_snapshots_dimensions_json", "dimensions_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    bucket: Mapped[str] = mapped_column(String(50), nullable=False)
+    bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    metric_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    dimension_key: Mapped[str] = mapped_column(String(255), default="global", nullable=False)
+    metric_value: Mapped[float] = mapped_column(Float, nullable=False)
+    dimensions_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    source: Mapped[str] = mapped_column(String(100), default="admin_runtime", nullable=False)
+
+
+class ContentReviewTask(TimestampMixin, Base):
+    __tablename__ = "content_review_tasks"
+    __table_args__ = (
+        Index("ix_content_review_tasks_status_priority", "status", "priority"),
+        Index("ix_content_review_tasks_task_type_created_at", "task_type", "created_at"),
+        Index("ix_content_review_tasks_target", "target_table", "target_record_id"),
+        Index("ix_content_review_tasks_payload_json", "payload_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="open", nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    target_table: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_record_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    assigned_to: Mapped[str | None] = mapped_column(String(255))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[str | None] = mapped_column(String(255))
+
+
 class HelpCard(TimestampMixin, Base):
     __tablename__ = "help_cards"
     __table_args__ = (
@@ -548,6 +902,107 @@ class HelpAnswer(CreatedAtMixin, Base):
 
     help_card: Mapped[HelpCard] = relationship(back_populates="answers")
     answer_user: Mapped[User | None] = relationship(back_populates="help_answers")
+    reward_events: Mapped[list[RewardEvent]] = relationship(back_populates="help_answer")
+
+
+class RewardEvent(CreatedAtMixin, Base):
+    __tablename__ = "reward_events"
+    __table_args__ = (
+        Index("ix_reward_events_user_id_created_at", "user_id", "created_at"),
+        Index("ix_reward_events_help_card_id", "help_card_id"),
+        Index("ix_reward_events_help_answer_id", "help_answer_id"),
+        Index("ix_reward_events_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    help_card_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("help_cards.id", ondelete="SET NULL"))
+    help_answer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("help_answers.id", ondelete="SET NULL"))
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    label: Mapped[str] = mapped_column(String(50), nullable=False)
+    value: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
+    user: Mapped[User] = relationship(back_populates="reward_events")
+    help_answer: Mapped[HelpAnswer | None] = relationship(back_populates="reward_events")
+
+
+class EmailLoginCode(TimestampMixin, Base):
+    __tablename__ = "email_login_codes"
+    __table_args__ = (
+        Index("ix_email_login_codes_email_status_expires_at", "email", "status", "expires_at"),
+        Index("ix_email_login_codes_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(50), default="login", nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    request_ip: Mapped[str | None] = mapped_column(String(100))
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    device_uid: Mapped[str | None] = mapped_column(String(255))
+
+
+class AuthSession(CreatedAtMixin, Base):
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        Index("ix_auth_sessions_user_id_status", "user_id", "status"),
+        Index("ix_auth_sessions_refresh_token_hash", "refresh_token_hash"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    device_uid: Mapped[str | None] = mapped_column(String(255))
+    refresh_token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ip_address: Mapped[str | None] = mapped_column(String(100))
+    user_agent: Mapped[str | None] = mapped_column(Text)
+
+    user: Mapped[User] = relationship(back_populates="auth_sessions")
+
+
+class AuthAuditLog(CreatedAtMixin, Base):
+    __tablename__ = "auth_audit_logs"
+    __table_args__ = (
+        Index("ix_auth_audit_logs_email_created_at", "email", "created_at"),
+        Index("ix_auth_audit_logs_action_created_at", "action", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    email: Mapped[str | None] = mapped_column(String(320))
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    ip_address: Mapped[str | None] = mapped_column(String(100))
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
+
+class UserDevice(TimestampMixin, Base):
+    __tablename__ = "user_devices"
+    __table_args__ = (
+        UniqueConstraint("user_id", "device_uid", name="uq_user_devices_user_id_device_uid"),
+        Index("ix_user_devices_device_uid", "device_uid"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    device_uid: Mapped[str] = mapped_column(String(255), nullable=False)
+    platform: Mapped[str | None] = mapped_column(String(50))
+    app_version: Mapped[str | None] = mapped_column(String(50))
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user: Mapped[User] = relationship(back_populates="devices")
 
 
 class LightEvent(CreatedAtMixin, Base):
@@ -581,3 +1036,27 @@ class LightEvent(CreatedAtMixin, Base):
     seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="light_events")
+
+
+class AdminAuditLog(CreatedAtMixin, Base):
+    __tablename__ = "admin_audit_logs"
+    __table_args__ = (
+        Index("ix_admin_audit_logs_created_at", "created_at"),
+        Index("ix_admin_audit_logs_table_action", "target_table", "action"),
+        Index("ix_admin_audit_logs_target_record", "target_table", "target_record_id"),
+        Index("ix_admin_audit_logs_request_json", "request_json", postgresql_using="gin"),
+        Index("ix_admin_audit_logs_before_json", "before_json", postgresql_using="gin"),
+        Index("ix_admin_audit_logs_after_json", "after_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    admin_actor: Mapped[str] = mapped_column(String(255), nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_table: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_record_id: Mapped[str | None] = mapped_column(String(255))
+    request_path: Mapped[str | None] = mapped_column(Text)
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    before_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    after_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    ip_address: Mapped[str | None] = mapped_column(String(255))
+    user_agent: Mapped[str | None] = mapped_column(Text)

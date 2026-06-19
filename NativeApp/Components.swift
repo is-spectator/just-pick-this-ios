@@ -3,14 +3,44 @@ import SwiftUI
 struct AppChrome<Content: View, Footer: View>: View {
     let showsBack: Bool
     let backAction: (() -> Void)?
+    let onHistory: (() -> Void)?
+    let onNewConversation: (() -> Void)?
+    let onAnswerEntry: (() -> Void)?
+    let onAccountEntry: (() -> Void)?
     @ViewBuilder let content: Content
     @ViewBuilder let footer: Footer
 
     @Environment(\.dismiss) private var dismiss
 
+    init(
+        showsBack: Bool,
+        backAction: (() -> Void)?,
+        onHistory: (() -> Void)? = nil,
+        onNewConversation: (() -> Void)? = nil,
+        onAnswerEntry: (() -> Void)? = nil,
+        onAccountEntry: (() -> Void)? = nil,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.showsBack = showsBack
+        self.backAction = backAction
+        self.onHistory = onHistory
+        self.onNewConversation = onNewConversation
+        self.onAnswerEntry = onAnswerEntry
+        self.onAccountEntry = onAccountEntry
+        self.content = content()
+        self.footer = footer()
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            TopBar(showsBack: showsBack) {
+            TopBar(
+                showsBack: showsBack,
+                onHistory: onHistory,
+                onNewConversation: onNewConversation,
+                onAnswerEntry: onAnswerEntry,
+                onAccountEntry: onAccountEntry
+            ) {
                 if let backAction {
                     backAction()
                 } else {
@@ -30,33 +60,82 @@ struct AppChrome<Content: View, Footer: View>: View {
 
 struct TopBar: View {
     let showsBack: Bool
+    let onHistory: (() -> Void)?
+    let onNewConversation: (() -> Void)?
+    let onAnswerEntry: (() -> Void)?
+    let onAccountEntry: (() -> Void)?
     let onBack: () -> Void
 
     var body: some View {
-        HStack {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 22, weight: .medium))
+        if showsBack {
+            HStack {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(AppTheme.text)
+                        .frame(width: 36, height: 36, alignment: .leading)
+                }
+                .accessibilityLabel("返回")
+
+                Spacer()
+
+                Text("就选这个")
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppTheme.text)
-                    .frame(width: 36, height: 36, alignment: .leading)
+
+                Spacer()
+
+                Color.clear
+                    .frame(width: 36, height: 36)
             }
-            .opacity(showsBack ? 1 : 0)
-            .disabled(!showsBack)
-            .accessibilityLabel("返回")
+            .padding(.horizontal, 16)
+            .frame(height: 50)
+        } else {
+            HStack(spacing: 14) {
+                Text("皮皮")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .accessibilityAddTraits(.isHeader)
 
-            Spacer()
+                Spacer()
 
-            Text("就选这个")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AppTheme.text)
+                Button(action: { onHistory?() }) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(AppTheme.text)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("历史")
 
-            Spacer()
+                Button(action: { onNewConversation?() }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus.message")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("新对话")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(AppTheme.text)
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .background(AppTheme.bubble)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("新对话")
 
-            Color.clear
-                .frame(width: 36, height: 36)
+                Button(action: { onAnswerEntry?() }) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(AppTheme.text)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("来一句")
+            }
+            .padding(.horizontal, 18)
+            .frame(height: 56)
         }
-        .padding(.horizontal, 16)
-        .frame(height: 50)
     }
 }
 
@@ -115,14 +194,16 @@ struct BottomComposer: View {
                 .frame(width: 32, height: 32)
                 .background(canSend || isSending ? AppTheme.text : AppTheme.disabled)
                 .clipShape(Circle())
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
             }
             .disabled(!canSend)
             .accessibilityLabel("发送")
         }
         .padding(.leading, 18)
-        .padding(.trailing, 8)
-        .padding(.vertical, 8)
-        .frame(minHeight: 56)
+        .padding(.trailing, 6)
+        .padding(.vertical, 7)
+        .frame(minHeight: 60)
         .background(AppTheme.card)
         .clipShape(Capsule())
         .overlay(
@@ -167,90 +248,135 @@ struct DecisionCard: View {
     let onReject: () -> Void
     let onAccept: () -> Void
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(pick.preface)
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppTheme.textMuted)
+    private var imageURL: URL? {
+        guard let url = pick.referenceImage?.url else { return nil }
+        return URL(string: url)
+    }
 
-                    Text(pick.title)
-                        .font(.system(size: 32, weight: .semibold))
-                        .lineSpacing(2)
-                        .foregroundStyle(AppTheme.text)
-                        .padding(.top, 10)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 8) {
-                    RejectIconButton(action: onReject)
-                    AcceptIconButton(isLoading: isAccepting, action: onAccept)
-                }
-                .padding(.top, 2)
-            }
-
-            Text(pick.subtitle)
-                .font(.system(size: 16, weight: .medium))
-                .lineSpacing(4)
-                .foregroundStyle(AppTheme.text)
-                .padding(.top, 8)
-
-            if let referenceImage = pick.referenceImage {
-                ReferenceWebPreview(image: referenceImage)
-                    .padding(.top, 14)
-            }
-
-            Text(pick.reason)
-                .font(.system(size: 15))
-                .lineSpacing(5)
-                .foregroundStyle(AppTheme.textSecondary)
-                .padding(.top, 10)
-
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(pick.bullets, id: \.self) { line in
-                    HStack(alignment: .top, spacing: 12) {
-                        Circle()
-                            .fill(AppTheme.textMuted)
-                            .frame(width: 3, height: 3)
-                            .padding(.top, 10)
-
-                        Text(line)
-                            .font(.system(size: 14))
-                            .lineSpacing(4)
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-            .padding(.top, 18)
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(AppTheme.borderSoft)
-                    .frame(height: 1)
-            }
-            .padding(.top, 20)
-
-            Text(pick.warning)
-                .font(.system(size: 13))
-                .lineSpacing(4)
-                .foregroundStyle(AppTheme.orangeText)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.orangeBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .padding(.top, 18)
-
-            FollowupSuggestions(
-                suggestions: pick.followups,
-                isLoading: isFollowingUp,
-                onFollowup: onFollowup,
-                onAskHuman: onAskHuman
-            )
-            .padding(.top, 18)
+    private var decisionReason: String {
+        let reason = pick.reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !reason.isEmpty {
+            return reason
         }
-        .cardStyle()
+        let subtitle = pick.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return subtitle.isEmpty ? "皮皮替你收成这一个。" : subtitle
+    }
+
+    private var supportingSubtitle: String? {
+        let subtitle = pick.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !subtitle.isEmpty, subtitle != decisionReason else { return nil }
+        return subtitle
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if imageURL != nil {
+                heroImage
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                if let supportingSubtitle {
+                    Text(supportingSubtitle)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Text(pick.title)
+                    .font(.system(size: imageURL == nil ? 34 : 31, weight: .bold))
+                    .lineSpacing(3)
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.82)
+
+                Text(decisionReason)
+                    .font(.system(size: 20, weight: .medium))
+                    .lineSpacing(5)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 12) {
+                Button(action: onAskHuman) {
+                    Text("求一个")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(AppTheme.card)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(AppTheme.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("求一个")
+
+                Button(action: onAccept) {
+                    HStack(spacing: 8) {
+                        if isAccepting {
+                            ProgressView()
+                                .tint(Color.white)
+                                .scaleEffect(0.76)
+                        }
+
+                        Text(isAccepting ? "确认中" : "就这个")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(AppTheme.text)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(isAccepting)
+                .accessibilityLabel("就这个")
+            }
+        }
+        .padding(imageURL == nil ? 22 : 16)
+        .padding(.bottom, 20)
+        .frame(minHeight: imageURL == nil ? 270 : nil, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(AppTheme.border, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("推荐卡, \(pick.title), \(decisionReason)")
+    }
+
+    @ViewBuilder
+    private var heroImage: some View {
+        if let imageURL {
+            AsyncImage(url: imageURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure:
+                    Color.clear
+                case .empty:
+                    ZStack {
+                        AppTheme.bubble
+                        ProgressView()
+                            .tint(AppTheme.textMuted)
+                    }
+                @unknown default:
+                    Color.clear
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 228)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipped()
+        }
     }
 }
 
@@ -267,10 +393,13 @@ struct ReferenceWebPreview: View {
     }
 
     private var sourceLabel: String {
-        if let sourceDomain = image.sourceDomain, !sourceDomain.isEmpty {
-            return "引用网页 \(sourceDomain)"
+        if let caption = image.caption?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !caption.isEmpty,
+           caption != "引用图",
+           !caption.hasPrefix("引用网页") {
+            return caption
         }
-        return image.caption ?? "引用网页"
+        return sourceURL == nil ? "参考图片" : "图片来源"
     }
 
     var body: some View {
@@ -290,7 +419,7 @@ struct ReferenceWebPreview: View {
                         .tint(AppTheme.textMuted)
                         .frame(maxWidth: .infinity, minHeight: 150)
                 @unknown default:
-                    referencePlaceholder(title: "引用图")
+                    referencePlaceholder(title: "参考图片")
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 150)
@@ -404,7 +533,7 @@ struct FollowupSuggestions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Text("猜你想问")
+                Text("继续问")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.textMuted)
 

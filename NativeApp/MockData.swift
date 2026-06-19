@@ -1,9 +1,19 @@
 import Foundation
+import CoreLocation
 import Observation
+import Security
 
 enum RecommendationDecision: Sendable {
+    case none
     case top1(TopPick)
     case ask(HelpRequest)
+
+    var isEmpty: Bool {
+        if case .none = self {
+            return true
+        }
+        return false
+    }
 }
 
 struct RecommendationResult: Sendable {
@@ -106,6 +116,8 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
     let id: UUID
     var title: String
     var context: String
+    var rewardLabel: String
+    var answerCount: Int
     var status: HelpRequestStatus
     var answers: [HumanAnswer]
 
@@ -113,12 +125,16 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
         id: UUID = UUID(),
         title: String,
         context: String,
+        rewardLabel: String = "+10",
+        answerCount: Int = 0,
         status: HelpRequestStatus = .draft,
         answers: [HumanAnswer] = []
     ) {
         self.id = id
         self.title = title
         self.context = context
+        self.rewardLabel = rewardLabel
+        self.answerCount = answerCount
         self.status = status
         self.answers = answers
     }
@@ -141,32 +157,50 @@ protocol RecommendationService: Sendable {
 }
 
 struct BackendRecommendationService: RecommendationService {
-    private let baseURL = URL(string: "http://127.0.0.1:8788")!
+    private let baseURL = URL(string: "http://67.230.169.161:8788")!
     private let deviceUid = DeviceIdentity.uid
 
     func submit(query: String, sessionId: UUID?) async -> RecommendationResult {
         do {
-            let conversationId = try await conversationId(existing: sessionId)
-            let payload: V1ChatTurnResponse = try await perform(makeRequest(
-                path: "/v1/chat/turn",
-                method: "POST",
-                body: V1ChatTurnRequest(
-                    message: query,
-                    conversationId: conversationId?.uuidString,
-                    deviceId: deviceUid,
-                    metadata: [:]
-                )
-            ))
+            let payload = try await submitChatTurn(query: query, conversationId: sessionId)
             return payload.result(for: query)
         } catch {
+            if shouldRetryWithFreshConversation(after: error, sessionId: sessionId) {
+                do {
+                    let payload = try await submitChatTurn(query: query, conversationId: nil)
+                    return payload.result(for: query)
+                } catch {
+                    print("BackendRecommendationService.submit retry failed: \(error)")
+                }
+            }
+
+            print("BackendRecommendationService.submit failed: \(error)")
             return RecommendationResult(
                 sessionId: sessionId,
                 questionId: nil,
                 history: [],
-                decision: MockData.backendUnavailableDecision(for: query),
-                serviceNotice: MockData.backendUnavailableNotice
+                decision: .none,
+                serviceNotice: MockData.backendUnavailableNotice(error: error)
             )
         }
+    }
+
+    private func submitChatTurn(query: String, conversationId: UUID?) async throws -> V1ChatTurnResponse {
+        let location = await DeviceLocationProvider.shared.currentLocationPayload()
+        return try await perform(makeRequest(
+            path: "/v1/chat/turn",
+            method: "POST",
+            body: V1ChatTurnRequest(
+                message: query,
+                conversationId: conversationId?.uuidString,
+                deviceId: deviceUid,
+                clientContext: V1ClientContext(
+                    source: "ios",
+                    location: location
+                ),
+                metadata: [:]
+            )
+        ))
     }
 
     func publish(_ helpRequest: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest {
@@ -178,6 +212,7 @@ struct BackendRecommendationService: RecommendationService {
                     message: "发出去",
                     conversationId: sessionId?.uuidString,
                     deviceId: deviceUid,
+                    clientContext: V1ClientContext(source: "ios", location: nil),
                     metadata: ["help_card_id": helpRequest.id.uuidString]
                 )
             ))
@@ -241,11 +276,14 @@ struct BackendRecommendationService: RecommendationService {
             ))
             var updated = helpRequest
             updated.answers.append(HumanAnswer(id: response.answerId ?? UUID(), text: text, nickname: "路过的人", timeLabel: "刚刚"))
+            updated.rewardLabel = response.reward?.label ?? updated.rewardLabel
+            updated.answerCount += 1
             updated.status = response.isFinalReady ? .answered : .published
             return updated
         } catch {
             var fallback = helpRequest
             fallback.answers.append(HumanAnswer(text: text, nickname: "路过的人", timeLabel: "刚刚"))
+            fallback.answerCount += 1
             fallback.status = .answered
             return fallback
         }
@@ -284,24 +322,31 @@ struct BackendRecommendationService: RecommendationService {
     }
 
     private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+        var request = authorized(request)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
               (200..<300).contains(httpResponse.statusCode) else {
-            throw URLError(.badServerResponse)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            if status == 401, await AuthAPIService().refreshIfPossible() {
+                request = authorized(request)
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: request)
+                if let retryHTTP = retryResponse as? HTTPURLResponse,
+                   (200..<300).contains(retryHTTP.statusCode) {
+                    return try JSONDecoder().decode(Response.self, from: retryData)
+                }
+            }
+            let body = String(data: data, encoding: .utf8) ?? ""
+            print("BackendRecommendationService HTTP \(status) for \(request.url?.absoluteString ?? "<nil>"): \(body)")
+            throw BackendServiceError.httpStatus(status, body)
         }
 
-        return try JSONDecoder().decode(Response.self, from: data)
-    }
-
-    private func conversationId(existing: UUID?) async throws -> UUID? {
-        if let existing { return existing }
-
-        let response: V1BootstrapResponse = try await perform(makeRequest(
-            path: "/v1/bootstrap",
-            method: "POST",
-            body: V1BootstrapRequest(deviceId: deviceUid, platform: "ios", appVersion: "0.1.0")
-        ))
-        return UUID(uuidString: response.conversationId)
+        do {
+            return try JSONDecoder().decode(Response.self, from: data)
+        } catch {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            print("BackendRecommendationService decode failed for \(request.url?.absoluteString ?? "<nil>"): \(error). Body: \(body)")
+            throw BackendServiceError.decoding(String(describing: error), body)
+        }
     }
 
     private func publishedFallback(_ helpRequest: HelpRequest) -> HelpRequest {
@@ -309,19 +354,339 @@ struct BackendRecommendationService: RecommendationService {
         fallback.status = .published
         return fallback
     }
+
+    private func shouldRetryWithFreshConversation(after error: Error, sessionId: UUID?) -> Bool {
+        guard sessionId != nil, let backendError = error as? BackendServiceError else { return false }
+
+        switch backendError {
+        case let .httpStatus(status, _):
+            return status == 404 || status == 409 || status >= 500
+        case .decoding:
+            return false
+        }
+    }
+
+    private func authorized(_ request: URLRequest) -> URLRequest {
+        var request = request
+        if let accessToken = AuthTokenStore.accessToken, !accessToken.isEmpty {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+}
+
+private enum BackendServiceError: LocalizedError {
+    case httpStatus(Int, String)
+    case decoding(String, String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .httpStatus(status, body):
+            "HTTP \(status): \(body.prefix(160))"
+        case let .decoding(message, body):
+            "JSON decode failed: \(message). Body: \(body.prefix(160))"
+        }
+    }
+}
+
+struct AuthenticatedAccount: Equatable {
+    let email: String?
+    let displayName: String
+}
+
+struct AuthAPIService: Sendable {
+    private let baseURL = URL(string: "http://67.230.169.161:8788")!
+
+    func requestCode(email: String) async throws {
+        var request = URLRequest(url: endpoint("/v1/auth/request-code"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 18
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(V1AuthRequestCodeRequest(
+            email: email,
+            deviceId: DeviceIdentity.uid,
+            platform: "ios",
+            appVersion: "0.1.0"
+        ))
+        let _: V1AuthRequestCodeResponse = try await perform(request)
+    }
+
+    func verify(email: String, code: String) async throws -> AuthenticatedAccount {
+        var request = URLRequest(url: endpoint("/v1/auth/verify-code"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 18
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(V1AuthVerifyCodeRequest(
+            email: email,
+            code: code,
+            deviceId: DeviceIdentity.uid,
+            platform: "ios",
+            appVersion: "0.1.0"
+        ))
+        let response: V1AuthVerifyCodeResponse = try await perform(request)
+        AuthTokenStore.accessToken = response.tokens.accessToken
+        AuthTokenStore.refreshToken = response.tokens.refreshToken
+        AuthTokenStore.email = response.user.email
+        AuthTokenStore.displayName = response.user.displayName
+        return AuthenticatedAccount(email: response.user.email, displayName: response.user.displayName)
+    }
+
+    func updateDisplayName(_ displayName: String) async throws -> AuthenticatedAccount {
+        var request = URLRequest(url: endpoint("/v1/auth/me"))
+        request.httpMethod = "PATCH"
+        request.timeoutInterval = 12
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request = authorized(request)
+        request.httpBody = try JSONEncoder().encode(V1AuthUpdateMeRequest(displayName: displayName))
+        let response: V1AuthMeResponse = try await perform(request)
+        AuthTokenStore.email = response.user.email
+        AuthTokenStore.displayName = response.user.displayName
+        return AuthenticatedAccount(email: response.user.email, displayName: response.user.displayName)
+    }
+
+    func refreshIfPossible() async -> Bool {
+        guard let refreshToken = AuthTokenStore.refreshToken, !refreshToken.isEmpty else { return false }
+        do {
+            var request = URLRequest(url: endpoint("/v1/auth/refresh"))
+            request.httpMethod = "POST"
+            request.timeoutInterval = 12
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(V1AuthRefreshRequest(refreshToken: refreshToken))
+            let response: V1AuthRefreshResponse = try await perform(request)
+            AuthTokenStore.accessToken = response.tokens.accessToken
+            AuthTokenStore.refreshToken = response.tokens.refreshToken
+            return true
+        } catch {
+            AuthTokenStore.clear()
+            return false
+        }
+    }
+
+    func logout() async {
+        guard let refreshToken = AuthTokenStore.refreshToken else {
+            AuthTokenStore.clear()
+            return
+        }
+        do {
+            var request = URLRequest(url: endpoint("/v1/auth/logout"))
+            request.httpMethod = "POST"
+            request.timeoutInterval = 12
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(V1AuthRefreshRequest(refreshToken: refreshToken))
+            let _: V1AuthLogoutResponse = try await perform(request)
+        } catch {
+            // Logout is best-effort on the client; local credentials must still go away.
+        }
+        AuthTokenStore.clear()
+    }
+
+    private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw BackendServiceError.httpStatus(status, body)
+        }
+        return try JSONDecoder().decode(Response.self, from: data)
+    }
+
+    private func endpoint(_ path: String) -> URL {
+        URL(string: path, relativeTo: baseURL)!.absoluteURL
+    }
+
+    private func authorized(_ request: URLRequest) -> URLRequest {
+        var request = request
+        if let accessToken = AuthTokenStore.accessToken, !accessToken.isEmpty {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
 }
 
 private enum DeviceIdentity {
     static let uid: String = {
         let key = "just_pick_this_device_uid"
+        if let existing = KeychainStore.string(for: key), !existing.isEmpty {
+            return existing
+        }
         if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
+            KeychainStore.set(existing, for: key)
             return existing
         }
 
         let generated = "ios-\(UUID().uuidString)"
         UserDefaults.standard.set(generated, forKey: key)
+        KeychainStore.set(generated, for: key)
         return generated
     }()
+}
+
+enum AuthTokenStore {
+    private static let accessKey = "auth_access_token"
+    private static let refreshKey = "auth_refresh_token"
+    private static let emailKey = "auth_email"
+    private static let displayNameKey = "auth_display_name"
+
+    static var accessToken: String? {
+        get { KeychainStore.string(for: accessKey) }
+        set { KeychainStore.setOrDelete(newValue, for: accessKey) }
+    }
+
+    static var refreshToken: String? {
+        get { KeychainStore.string(for: refreshKey) }
+        set { KeychainStore.setOrDelete(newValue, for: refreshKey) }
+    }
+
+    static var email: String? {
+        get { KeychainStore.string(for: emailKey) }
+        set { KeychainStore.setOrDelete(newValue, for: emailKey) }
+    }
+
+    static var displayName: String? {
+        get { KeychainStore.string(for: displayNameKey) }
+        set { KeychainStore.setOrDelete(newValue, for: displayNameKey) }
+    }
+
+    static func clear() {
+        KeychainStore.delete(accessKey)
+        KeychainStore.delete(refreshKey)
+        KeychainStore.delete(emailKey)
+        KeychainStore.delete(displayNameKey)
+    }
+}
+
+private enum KeychainStore {
+    private static let service = "com.justpickthis.pipii"
+
+    static func string(for key: String) -> String? {
+        var query = baseQuery(key)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func setOrDelete(_ value: String?, for key: String) {
+        if let value, !value.isEmpty {
+            set(value, for: key)
+        } else {
+            delete(key)
+        }
+    }
+
+    static func set(_ value: String, for key: String) {
+        let data = Data(value.utf8)
+        var query = baseQuery(key)
+        let attributes = [kSecValueData as String: data]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            query[kSecValueData as String] = data
+            SecItemAdd(query as CFDictionary, nil)
+        }
+    }
+
+    static func delete(_ key: String) {
+        SecItemDelete(baseQuery(key) as CFDictionary)
+    }
+
+    private static func baseQuery(_ key: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key
+        ]
+    }
+}
+
+private struct V1AuthRequestCodeRequest: Encodable {
+    let email: String
+    let deviceId: String
+    let platform: String
+    let appVersion: String
+
+    enum CodingKeys: String, CodingKey {
+        case email
+        case deviceId = "device_id"
+        case platform
+        case appVersion = "app_version"
+    }
+}
+
+private struct V1AuthRequestCodeResponse: Decodable {
+    let ok: Bool
+}
+
+private struct V1AuthVerifyCodeRequest: Encodable {
+    let email: String
+    let code: String
+    let deviceId: String
+    let platform: String
+    let appVersion: String
+
+    enum CodingKeys: String, CodingKey {
+        case email
+        case code
+        case deviceId = "device_id"
+        case platform
+        case appVersion = "app_version"
+    }
+}
+
+private struct V1AuthVerifyCodeResponse: Decodable {
+    let user: V1AuthUser
+    let tokens: V1AuthTokens
+}
+
+private struct V1AuthRefreshRequest: Encodable {
+    let refreshToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case refreshToken = "refresh_token"
+    }
+}
+
+private struct V1AuthUpdateMeRequest: Encodable {
+    let displayName: String
+
+    enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
+    }
+}
+
+private struct V1AuthMeResponse: Decodable {
+    let user: V1AuthUser
+}
+
+private struct V1AuthRefreshResponse: Decodable {
+    let tokens: V1AuthTokens
+}
+
+private struct V1AuthLogoutResponse: Decodable {
+    let ok: Bool
+}
+
+private struct V1AuthUser: Decodable {
+    let id: String
+    let email: String?
+    let displayName: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case email
+        case displayName = "display_name"
+    }
+}
+
+private struct V1AuthTokens: Decodable {
+    let accessToken: String
+    let refreshToken: String
+
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+    }
 }
 
 private struct V1BootstrapRequest: Encodable {
@@ -348,25 +713,136 @@ private struct V1ChatTurnRequest: Encodable {
     let message: String
     let conversationId: String?
     let deviceId: String
+    let clientContext: V1ClientContext
     let metadata: [String: String]
 
     enum CodingKeys: String, CodingKey {
         case message
         case conversationId = "conversation_id"
         case deviceId = "device_id"
+        case clientContext = "client_context"
         case metadata
+    }
+}
+
+private struct V1ClientContext: Encodable {
+    let source: String
+    let location: V1ClientLocation?
+}
+
+private struct V1ClientLocation: Encodable {
+    let latitude: Double
+    let longitude: Double
+    let horizontalAccuracy: Double
+    let capturedAt: String
+    let provider: String
+    let coordType: String
+
+    enum CodingKeys: String, CodingKey {
+        case latitude
+        case longitude
+        case horizontalAccuracy = "horizontal_accuracy"
+        case capturedAt = "captured_at"
+        case provider
+        case coordType = "coord_type"
+    }
+
+    init(location: CLLocation) {
+        self.latitude = location.coordinate.latitude
+        self.longitude = location.coordinate.longitude
+        self.horizontalAccuracy = max(location.horizontalAccuracy, 0)
+        self.capturedAt = ISO8601DateFormatter().string(from: location.timestamp)
+        self.provider = "ios_core_location"
+        self.coordType = "ios_core_location"
+    }
+}
+
+@MainActor
+private final class DeviceLocationProvider: NSObject, @preconcurrency CLLocationManagerDelegate {
+    static let shared = DeviceLocationProvider()
+
+    private let manager = CLLocationManager()
+    private var continuation: CheckedContinuation<V1ClientLocation?, Never>?
+    private var timeoutTask: Task<Void, Never>?
+
+    private override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        manager.distanceFilter = 50
+    }
+
+    func currentLocationPayload() async -> V1ClientLocation? {
+        guard CLLocationManager.locationServicesEnabled() else { return nil }
+
+        return await withCheckedContinuation { continuation in
+            finish(nil)
+            self.continuation = continuation
+            timeoutTask?.cancel()
+            timeoutTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                await MainActor.run {
+                    self?.finish(nil)
+                }
+            }
+
+            switch manager.authorizationStatus {
+            case .notDetermined:
+                manager.requestWhenInUseAuthorization()
+            case .authorizedAlways, .authorizedWhenInUse:
+                manager.requestLocation()
+            case .denied, .restricted:
+                finish(nil)
+            @unknown default:
+                finish(nil)
+            }
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            manager.requestLocation()
+        case .denied, .restricted:
+            finish(nil)
+        case .notDetermined:
+            break
+        @unknown default:
+            finish(nil)
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else {
+            finish(nil)
+            return
+        }
+        finish(V1ClientLocation(location: location))
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        finish(nil)
+    }
+
+    private func finish(_ payload: V1ClientLocation?) {
+        timeoutTask?.cancel()
+        timeoutTask = nil
+        continuation?.resume(returning: payload)
+        continuation = nil
     }
 }
 
 private struct V1ChatTurnResponse: Decodable {
     let conversationId: String
     let userTurnId: String?
+    let assistantMessage: String?
     let cards: [V1CardSummary]?
     let helpCards: [V1HelpCardSummary]?
 
     enum CodingKeys: String, CodingKey {
         case conversationId = "conversation_id"
         case userTurnId = "user_turn_id"
+        case assistantMessage = "assistant_message"
         case cards
         case helpCards = "help_cards"
     }
@@ -378,7 +854,7 @@ private struct V1ChatTurnResponse: Decodable {
         } else if let helpCard = helpCards?.first {
             decision = .ask(helpCard.model(fallbackTitle: query))
         } else {
-            decision = .ask(MockData.backendFallbackHelpRequest(for: query))
+            decision = .none
         }
 
         return RecommendationResult(
@@ -386,8 +862,16 @@ private struct V1ChatTurnResponse: Decodable {
             questionId: questionId,
             history: [],
             decision: decision,
-            serviceNotice: nil
+            serviceNotice: notice
         )
+    }
+
+    private var notice: ServiceNotice? {
+        guard cards?.isEmpty ?? true, helpCards?.isEmpty ?? true else { return nil }
+        guard let assistantMessage else { return nil }
+        let trimmed = assistantMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return ServiceNotice(title: "皮皮", detail: trimmed)
     }
 
     private var questionId: UUID? {
@@ -424,9 +908,9 @@ private struct V1CardSummary: Decodable {
     }
 
     func model(query fallbackQuery: String) -> TopPick {
-        let resolvedReason = clean(oneLiner, fallback: "皮皮根据数据库信息直接给出一个选择。")
+        let resolvedReason = clean(oneLiner, fallback: "我把已有线索收成一个选择。")
         let resolvedFollowups = removeAskHuman(
-            from: cleanArray(followups, fallback: ["为什么选这个?", "有没有别的选择?"])
+            from: cleanArrayAllowingEmpty(followups)
         )
 
         return TopPick(
@@ -436,13 +920,9 @@ private struct V1CardSummary: Decodable {
             title: clean(title, fallback: "先选一个最稳的"),
             subtitle: clean(subtitle, fallback: "不用再比较。"),
             reason: resolvedReason,
-            bullets: cleanArray(bullets, fallback: [
-                "皮皮已把数据库参考加工成当前这一问的选择。",
-                "图片资产来自数据库 verified 非 AI 记录。",
-                "只给一个低后悔选择。"
-            ]),
-            warning: clean(warning, fallback: "如果这个选择和你的偏好明显相反,就别选。"),
-            followups: resolvedFollowups.isEmpty ? ["为什么选这个?", "有没有别的选择?"] : resolvedFollowups,
+            bullets: cleanArrayAllowingEmpty(bullets),
+            warning: clean(warning, fallback: ""),
+            followups: resolvedFollowups,
             referenceImage: image?.model
         )
     }
@@ -489,17 +969,25 @@ private struct V1ImageAsset: Decodable {
 
 private struct V1HelpCardSummary: Decodable {
     let id: UUID?
+    let title: String?
     let prompt: String
     let status: String?
+    let contextText: String?
     let oneLiner: String?
+    let reward: V1RewardPayload?
+    let answerCount: Int?
     let card: V1CardSummary?
     let metadata: V1HelpCardMetadata?
 
     enum CodingKeys: String, CodingKey {
         case id
+        case title
         case prompt
         case status
+        case contextText = "context_text"
         case oneLiner = "one_liner"
+        case reward
+        case answerCount = "answer_count"
         case card
         case metadata
     }
@@ -512,8 +1000,10 @@ private struct V1HelpCardSummary: Decodable {
 
         return HelpRequest(
             id: id ?? UUID(),
-            title: clean(prompt, fallback: fallbackTitle),
-            context: clean(oneLiner, fallback: "这题不硬选 · 等懂的人来一句"),
+            title: clean(title, fallback: clean(prompt, fallback: fallbackTitle)),
+            context: clean(contextText, fallback: clean(oneLiner, fallback: "这题不硬选 · 等懂的人来一句")),
+            rewardLabel: reward?.label ?? "+10",
+            answerCount: answerCount ?? metadata?.answerCount ?? answers.count,
             status: helpRequestStatus(from: status),
             answers: answers
         )
@@ -533,6 +1023,12 @@ private struct V1HelpCardSummary: Decodable {
             .draft
         }
     }
+}
+
+private struct V1RewardPayload: Decodable {
+    let label: String?
+    let value: Int?
+    let status: String?
 }
 
 private struct V1HelpCardMetadata: Decodable {
@@ -564,11 +1060,17 @@ private struct V1HelpCardOneLinerRequest: Encodable {
 private struct V1HelpCardOneLinerResponse: Decodable {
     let helpCardId: String
     let answerId: UUID?
+    let reward: V1RewardPayload?
+    let toast: String?
+    let shouldAdvance: Bool?
     let metadata: V1OneLinerMetadata?
 
     enum CodingKeys: String, CodingKey {
         case helpCardId = "help_card_id"
         case answerId = "answer_id"
+        case reward
+        case toast
+        case shouldAdvance = "should_advance"
         case metadata
     }
 
@@ -656,6 +1158,7 @@ struct MockCloudRecommendationService: RecommendationService {
     func answer(_ text: String, for request: HelpRequest) async -> HelpRequest {
         var updated = request
         updated.answers.append(HumanAnswer(text: text, nickname: "路过的人", timeLabel: "刚刚"))
+        updated.answerCount += 1
         updated.status = .answered
         return updated
     }
@@ -757,7 +1260,7 @@ private struct RecommendationResponse: Decodable {
             }
             decision = .ask(helpRequest.model(fallbackTitle: query))
         default:
-            decision = .ask(MockData.backendFallbackHelpRequest(for: query))
+            decision = .none
         }
 
         return RecommendationResult(
@@ -819,7 +1322,7 @@ private struct TopPickResponse: Decodable {
             title: clean(title, fallback: "先选一个最稳的"),
             subtitle: clean(subtitle, fallback: "不用再比较。"),
             reason: clean(reason, fallback: "你已经给了位置和目的,这题先做一个低后悔选择。"),
-            bullets: cleanArray(bullets, fallback: MockData.topPick(for: fallbackQuery).bullets),
+            bullets: cleanArray(bullets, fallback: MockData.genericTopPick(for: fallbackQuery).bullets),
             warning: clean(warning, fallback: "如果你明确不喜欢这个类型,就别选。"),
             followups: resolvedFollowups.isEmpty ? ["为什么?", "换个小众的"] : resolvedFollowups,
             referenceImage: nil
@@ -892,7 +1395,7 @@ final class AppSession {
     }
 
     var topPick: TopPick {
-        currentTopPick ?? MockData.topPick(for: currentQuery.isEmpty ? MockData.query : currentQuery)
+        currentTopPick ?? MockData.genericTopPick(for: currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery)
     }
 
     var helpRequest: HelpRequest {
@@ -901,6 +1404,21 @@ final class AppSession {
 
     var answerRequest: HelpRequest? {
         answerTarget ?? answerQueue.first
+    }
+
+    var nextAnswerRequest: HelpRequest? {
+        guard let current = answerRequest else { return nil }
+        return answerQueue.first { $0.id != current.id }
+    }
+
+    func startNewConversation() {
+        sessionId = nil
+        currentQuestionId = nil
+        currentQuery = ""
+        currentTopPick = nil
+        currentHelpRequest = nil
+        serviceNotice = nil
+        submitState = .idle
     }
 
     func submit(query: String) async -> RecommendationDecision {
@@ -914,7 +1432,7 @@ final class AppSession {
         currentQuestionId = result.questionId ?? currentQuestionId
         if !result.history.isEmpty {
             history = result.history
-        } else {
+        } else if !result.decision.isEmpty {
             upsertLocalHistory(
                 query: trimmed,
                 status: status(for: result.decision),
@@ -943,12 +1461,12 @@ final class AppSession {
         }
 
         currentHelpRequest = nil
-        currentTopPick = item.topPick ?? MockData.topPick(for: item.query)
+        currentTopPick = item.topPick ?? MockData.genericTopPick(for: item.query)
         return .result
     }
 
     func makeHelpRequestFromCurrentTopPick() {
-        let query = currentQuery.isEmpty ? MockData.query : currentQuery
+        let query = currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery
         let pick = topPick
         currentHelpRequest = HelpRequest(
             title: query,
@@ -1006,11 +1524,17 @@ final class AppSession {
         guard let request = answerRequest else { return }
         let updated = await service.answer(answer, for: request)
 
-        answerTarget = updated
         if currentHelpRequest?.id == updated.id {
             currentHelpRequest = updated
         }
-        answerQueue.removeAll { $0.id == updated.id }
+        answerQueue.removeAll { $0.id == request.id }
+        answerTarget = answerQueue.first
+    }
+
+    func advanceAnswerRequest() {
+        guard let request = answerRequest else { return }
+        answerQueue.removeAll { $0.id == request.id }
+        answerTarget = answerQueue.first
     }
 
     func acceptCurrentTopPick() async {
@@ -1045,8 +1569,12 @@ final class AppSession {
 
     private func apply(_ decision: RecommendationDecision) {
         switch decision {
+        case .none:
+            currentTopPick = nil
+            currentHelpRequest = nil
         case .top1(let pick):
             currentTopPick = pick
+            currentHelpRequest = nil
         case .ask(let request):
             currentTopPick = nil
             currentHelpRequest = request
@@ -1055,7 +1583,7 @@ final class AppSession {
 
     private func ensureHelpRequest() {
         guard currentHelpRequest == nil else { return }
-        currentHelpRequest = MockData.helpRequest(for: currentQuery.isEmpty ? MockData.query : currentQuery)
+        currentHelpRequest = MockData.helpRequest(for: currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery)
     }
 
     private func upsertLocalHistory(query: String, status: String, helpRequestId: UUID?, topPick: TopPick?) {
@@ -1088,6 +1616,8 @@ final class AppSession {
 
     private func status(for decision: RecommendationDecision) -> String {
         switch decision {
+        case .none:
+            "completed"
         case .top1:
             "top1"
         case .ask:
@@ -1097,6 +1627,8 @@ final class AppSession {
 
     private func helpRequestId(for decision: RecommendationDecision) -> UUID? {
         switch decision {
+        case .none:
+            nil
         case .top1:
             nil
         case .ask(let request):
@@ -1106,6 +1638,8 @@ final class AppSession {
 
     private func topPick(for decision: RecommendationDecision) -> TopPick? {
         switch decision {
+        case .none:
+            nil
         case .top1(let pick):
             pick
         case .ask:
@@ -1152,7 +1686,7 @@ final class AppSession {
             return
         }
 
-        let query = currentQuery.isEmpty ? MockData.query : currentQuery
+        let query = currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery
         upsertLocalHistory(query: query, status: "completed", helpRequestId: currentHelpRequest?.id, topPick: currentTopPick)
     }
 
@@ -1162,8 +1696,8 @@ final class AppSession {
 
         switch demo {
         case "result":
-            currentQuery = MockData.query
-            currentTopPick = MockData.topPick(for: MockData.query)
+            currentQuery = MockData.demoQuery
+            currentTopPick = MockData.topPick(for: MockData.demoQuery)
         case "ask":
             currentQuery = "在韩国逛街，不想去明洞"
             currentHelpRequest = HelpRequest(
@@ -1189,19 +1723,43 @@ final class AppSession {
 }
 
 enum MockData {
-    static let query = "我现在在大同喜晋道,不知道吃什么"
-    static let backendUnavailableNotice = ServiceNotice(
-        title: "本地兜底",
-        detail: "后端未连接，先用本地规则给你一个选择。"
-    )
+    static let queryPlaceholder = "我在哪,想干什么?"
+    static let demoQuery = "我现在在大同喜晋道,不知道吃什么"
+    static func backendUnavailableNotice(error _: Error) -> ServiceNotice {
+        ServiceNotice(
+            title: "后端未连接",
+            detail: "服务恢复后再继续。"
+        )
+    }
 
     static let defaultHelpRequest = HelpRequest(
-        title: "韩国逛街,不去明洞,想小众",
-        context: "女生 · 小众品牌 · 美妆 · 不去游客区"
+        title: "这题先求一个",
+        context: "我先帮你发出去，等懂的人来一句。"
     )
 
+    static func genericTopPick(for query: String) -> TopPick {
+        let resolvedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? queryPlaceholder : query
+
+        return TopPick(
+            cardId: nil,
+            query: resolvedQuery,
+            preface: "先别纠结。",
+            title: "等一个更稳的选择",
+            subtitle: "这题我不硬选。",
+            reason: "现在还不够确定，先收一句真人建议更稳。",
+            bullets: [
+                "不硬凑推荐。",
+                "先等更多线索。",
+                "等有人补一句再给最终答案。"
+            ],
+            warning: "如果你已经有明确偏好，可以直接补一句。",
+            followups: ["补一句偏好", "问真人"],
+            referenceImage: nil
+        )
+    }
+
     static func topPick(for query: String) -> TopPick {
-        let resolvedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Self.query : query
+        let resolvedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Self.demoQuery : query
 
         return TopPick(
             cardId: nil,
@@ -1241,18 +1799,8 @@ enum MockData {
 
         return HelpRequest(
             title: resolvedQuery,
-            context: "云测暂时没给出一个足够稳的选择 · 发出去等懂的人来一句"
+            context: "现在还不够确定 · 发出去等懂的人来一句"
         )
-    }
-
-    static func backendUnavailableDecision(for query: String) -> RecommendationDecision {
-        let resolvedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if resolvedQuery.localizedCaseInsensitiveContains("大同")
-            || resolvedQuery.localizedCaseInsensitiveContains("喜晋道") {
-            return .top1(topPick(for: resolvedQuery))
-        }
-
-        return .ask(backendFallbackHelpRequest(for: resolvedQuery))
     }
 }
 
@@ -1268,6 +1816,13 @@ private func cleanArray(_ value: [String]?, fallback: [String]) -> [String] {
         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         .filter { !$0.isEmpty }
     return cleaned.isEmpty ? fallback : cleaned
+}
+
+private func cleanArrayAllowingEmpty(_ value: [String]?) -> [String] {
+    guard let value else { return [] }
+    return value
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
 }
 
 private func removeAskHuman(from values: [String]) -> [String] {

@@ -1,0 +1,1804 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>皮皮 Agent Admin</title>
+  <style>
+    :root {
+      --bg: #eef2f1;
+      --panel: #ffffff;
+      --panel-soft: #f7f8f6;
+      --line: #d7ddd9;
+      --text: #171b18;
+      --muted: #68716b;
+      --accent: #0f766e;
+      --accent-2: #2563eb;
+      --accent-3: #c2410c;
+      --accent-4: #7c3aed;
+      --danger: #b42318;
+      --warning: #a16207;
+      --good: #166534;
+      --code: #f0f2ef;
+      --shadow: 0 1px 2px rgba(23, 27, 24, 0.06), 0 10px 28px rgba(23, 27, 24, 0.05);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+    header {
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    h1 {
+      display: grid;
+      gap: 1px;
+      font-size: 18px;
+      margin: 0;
+      min-width: 180px;
+    }
+    h1 small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    nav { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    button, input, select, textarea {
+      font: inherit;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 6px;
+    }
+    button {
+      min-height: 32px;
+      padding: 0 10px;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(23, 27, 24, 0.03);
+      transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button.active, button.primary {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+    button.danger {
+      color: var(--danger);
+      border-color: #efb4ad;
+    }
+    input, select {
+      height: 34px;
+      padding: 0 10px;
+      min-width: 0;
+    }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      padding: 10px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      background: var(--code);
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(700px, 1.5fr) minmax(340px, 0.6fr);
+      min-height: calc(100vh - 60px);
+    }
+    body[data-view="overview"] main,
+    body[data-view="flow"] main {
+      grid-template-columns: minmax(760px, 1fr) 332px;
+    }
+    section {
+      border-right: 1px solid var(--line);
+      min-width: 0;
+    }
+    aside {
+      min-width: 0;
+      background: #f7f8f6;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr 120px 120px auto;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      position: sticky;
+      top: 60px;
+      z-index: 5;
+    }
+    .toolbar.tables { grid-template-columns: 180px 1fr 130px auto auto; }
+    .list { padding: 14px; }
+    body[data-view="overview"] .list,
+    body[data-view="flow"] .list { padding: 16px; }
+    .row {
+      width: 100%;
+      text-align: left;
+      display: block;
+      padding: 12px;
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      box-shadow: 0 1px 0 rgba(23, 27, 24, 0.02);
+    }
+    .row:hover { border-color: #aeb7bd; }
+    .row-title {
+      font-weight: 700;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .row-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: var(--panel-soft);
+      color: var(--muted);
+    }
+    .detail {
+      padding: 16px;
+      overflow: auto;
+      max-height: calc(100vh - 60px);
+    }
+    .detail h2 { margin: 0 0 10px; font-size: 18px; }
+    .detail h3 { margin: 18px 0 8px; font-size: 14px; color: var(--muted); }
+    .detail p {
+      color: var(--muted);
+      margin: 6px 0 0;
+    }
+    pre {
+      margin: 0;
+      padding: 12px;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: auto;
+      max-height: 520px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+      max-width: 240px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    th { color: var(--muted); font-size: 12px; background: #fafafa; }
+    .split-actions { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+    .empty { color: var(--muted); padding: 20px; }
+    .error { color: var(--danger); white-space: pre-wrap; }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 12px;
+      margin: 0 0 14px;
+    }
+    .metric {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 16px 14px 14px;
+      box-shadow: var(--shadow);
+    }
+    .metric::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 3px;
+      background: var(--accent);
+    }
+    .metric:nth-child(2)::before, .metric:nth-child(3)::before { background: var(--accent-2); }
+    .metric:nth-child(4)::before, .metric:nth-child(8)::before { background: var(--accent-3); }
+    .metric:nth-child(5)::before, .metric:nth-child(7)::before { background: var(--accent-4); }
+    .metric:nth-child(6)::before { background: var(--good); }
+    .metric-value { font-size: 26px; font-weight: 800; line-height: 1.1; }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-hint { color: var(--muted); font-size: 11px; margin-top: 4px; }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 1.4fr) minmax(260px, 0.9fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+    .panel h2, .panel h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .panel-caption {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: -4px;
+      margin-bottom: 10px;
+    }
+    .source-strip {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 11px 12px;
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      background: #fbfcf8;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .brief-card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .brief-card strong {
+      display: block;
+      font-size: 18px;
+      margin-top: 4px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .definition-list {
+      display: grid;
+      gap: 8px;
+    }
+    .definition-item {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .definition-item strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+    .mini-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .mini-metric {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcf8;
+    }
+    .mini-metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .mini-metric strong {
+      font-size: 18px;
+    }
+    .health-list {
+      display: grid;
+      gap: 8px;
+    }
+    .health-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .health-item strong { color: var(--text); }
+    .raw-details {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .raw-details summary {
+      cursor: pointer;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .raw-details pre {
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      max-height: 300px;
+    }
+    .sparkline {
+      width: 100%;
+      height: 190px;
+      display: block;
+    }
+    .bars {
+      display: grid;
+      gap: 8px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(90px, 0.9fr) minmax(120px, 2fr) 54px;
+      gap: 8px;
+      align-items: center;
+      min-height: 26px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .bar-track {
+      height: 10px;
+      background: #edf0ed;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      min-width: 2px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+    .funnel {
+      display: grid;
+      gap: 9px;
+    }
+    .funnel-step {
+      display: grid;
+      grid-template-columns: 132px 1fr 70px;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .funnel-fill {
+      height: 22px;
+      border-radius: 6px;
+      background: var(--accent-2);
+    }
+    .quality-list {
+      display: grid;
+      gap: 8px;
+    }
+    .quality-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .quality-item strong { color: var(--text); }
+    .flow-hero {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcf8;
+      box-shadow: var(--shadow);
+    }
+    .flow-hero h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .flow-hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 780px;
+    }
+    .flow-board {
+      display: grid;
+      gap: 12px;
+    }
+    .flow-row {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .flow-lane {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 78px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 12px;
+      writing-mode: vertical-rl;
+      letter-spacing: 0;
+    }
+    .flow-node {
+      position: relative;
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+    }
+    .flow-node::after {
+      content: "";
+      position: absolute;
+      left: 26px;
+      bottom: -13px;
+      width: 2px;
+      height: 13px;
+      background: var(--line);
+    }
+    .flow-row:last-child .flow-node::after { display: none; }
+    .flow-node:hover { border-color: #9aa7a2; }
+    .flow-node-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .flow-node-title {
+      font-weight: 800;
+      font-size: 15px;
+    }
+    .flow-node-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .flow-node-body {
+      color: var(--muted);
+      font-size: 12px;
+      max-width: 820px;
+    }
+    .flow-node-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .flow-prompt {
+      border-color: #b8d7d3;
+      color: var(--accent);
+      background: #eefaf8;
+    }
+    .flow-tool {
+      border-color: #c7d6f8;
+      color: var(--accent-2);
+      background: #f0f5ff;
+    }
+    .flow-guard {
+      border-color: #f2c6b4;
+      color: var(--accent-3);
+      background: #fff5ef;
+    }
+    .flow-detail-list {
+      display: grid;
+      gap: 8px;
+    }
+    .flow-detail-item {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .flow-detail-item strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+    .flow-prompt-list {
+      display: grid;
+      gap: 8px;
+    }
+    .flow-prompt-row {
+      width: 100%;
+      display: grid;
+      gap: 4px;
+      text-align: left;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .flow-prompt-row small {
+      color: var(--muted);
+    }
+    .thumb {
+      width: 92px;
+      height: 68px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #fafafa;
+    }
+    @media (max-width: 920px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-top: 1px solid var(--line); }
+      .toolbar, .toolbar.tables { grid-template-columns: 1fr 1fr; }
+      .metric-grid, .dashboard-grid, .flow-row { grid-template-columns: 1fr; }
+      .flow-lane { min-height: auto; writing-mode: horizontal-tb; justify-content: flex-start; padding: 8px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span>皮皮 Agent Admin</span><small>运营平台</small></h1>
+    <nav>
+      <button data-view="overview" class="active">Overview</button>
+      <button data-view="flow">Agent Studio</button>
+      <button data-view="activity">Activity</button>
+      <button data-view="content">Content</button>
+      <button data-view="images">Images</button>
+      <button data-view="helpCards">Help Cards</button>
+      <button data-view="replay">Replay</button>
+      <button data-view="sessions">Sessions</button>
+      <button data-view="traces">Traces</button>
+      <button data-view="prompts">Prompts</button>
+      <button data-view="tables">Tables</button>
+      <button data-view="audit">Audit</button>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <div id="toolbar" class="toolbar"></div>
+      <div id="list" class="list"></div>
+    </section>
+    <aside class="detail" id="detail">
+      <h2>选择一条记录</h2>
+      <p class="empty">左侧列表用于查看 session、trace 或数据库表记录。</p>
+    </aside>
+  </main>
+
+  <script>
+    const views = new Set(["overview", "flow", "activity", "content", "images", "helpCards", "replay", "sessions", "traces", "prompts", "tables", "audit"]);
+    const initialParams = new URLSearchParams(window.location.search);
+    const initialView = initialParams.get("view") || "overview";
+    const initialPromptKey = initialParams.get("prompt") || "";
+    const initialAbilityKey = initialParams.get("ability") || "";
+    const state = {
+      view: views.has(initialView) ? initialView : "overview",
+      page: 1,
+      pageSize: 30,
+      q: "",
+      status: "",
+      intent: "",
+      graphName: "",
+      promptKey: initialPromptKey,
+      directPromptKey: initialPromptKey,
+      directAbilityKey: initialAbilityKey,
+      days: 7,
+      scope: "product",
+      table: "conversations",
+      tables: [],
+      selected: null,
+      token: localStorage.getItem("ADMIN_TOKEN") || "",
+    };
+    if (state.token) localStorage.setItem("ADMIN_TOKEN", state.token);
+
+    const $ = (id) => document.getElementById(id);
+    const enc = encodeURIComponent;
+
+    function headers() {
+      return { "authorization": `Bearer ${state.token}`, "content-type": "application/json" };
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!response.ok) throw new Error(data.detail || text || response.statusText);
+      return data;
+    }
+
+    function json(data) {
+      return JSON.stringify(data, null, 2);
+    }
+
+    function short(value, n = 84) {
+      const s = value == null ? "" : String(value);
+      return s.length > n ? s.slice(0, n - 1) + "…" : s;
+    }
+
+    function setView(view) {
+      state.view = view;
+      state.page = 1;
+      state.selected = null;
+      if (view !== "flow" && ["editable", "tool", "guard", "runtime"].includes(state.status)) state.status = "";
+      syncNav();
+      const url = new URL(window.location.href);
+      url.searchParams.set("view", view);
+      url.searchParams.delete("prompt");
+      url.searchParams.delete("ability");
+      history.replaceState(null, "", url);
+      $("detail").innerHTML = "<h2>选择一条记录</h2><p class='empty'>左侧列表用于查看详情。</p>";
+      render();
+    }
+
+    document.querySelectorAll("nav button").forEach((button) => {
+      button.addEventListener("click", () => setView(button.dataset.view));
+    });
+    syncNav();
+
+    function syncNav() {
+      document.querySelectorAll("nav button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.view === state.view);
+      });
+    }
+
+    function renderToolbar() {
+      const toolbar = $("toolbar");
+      if (["overview", "activity"].includes(state.view)) {
+        toolbar.className = "toolbar";
+        toolbar.innerHTML = `
+          <input id="q" placeholder="查询" value="${state.q}">
+          <select id="days"><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option><option value="90">90 天</option></select>
+          <select id="scope"><option value="product">业务口径</option><option value="all">全量数据</option></select>
+          <button id="search">刷新</button>
+        `;
+        $("days").value = String(state.days);
+        $("scope").value = state.scope;
+      } else if (state.view === "flow") {
+        toolbar.className = "toolbar";
+        toolbar.innerHTML = `
+          <input id="q" placeholder="筛选链路 / prompt / 能力" value="${state.q}">
+          <select id="status"><option value="">全部</option><option value="editable">可调 prompt</option><option value="tool">Tool</option><option value="guard">Guard</option><option value="runtime">Runtime</option></select>
+          <input id="intent" placeholder="prompt / ability key" value="${state.promptKey}">
+          <button id="search">筛选</button>
+        `;
+        $("status").value = state.status;
+      } else if (state.view === "content") {
+        toolbar.className = "toolbar";
+        toolbar.innerHTML = `
+          <input id="q" placeholder="查询" value="${state.q}">
+          <select id="days"><option value="7">7 天</option><option value="14">14 天</option><option value="30">30 天</option><option value="90">90 天</option></select>
+          <input id="status" placeholder="status" value="${state.status}">
+          <button id="search">刷新</button>
+        `;
+        $("days").value = String(state.days);
+      } else if (state.view === "images" || state.view === "helpCards") {
+        toolbar.className = "toolbar";
+        toolbar.innerHTML = `
+          <input id="q" placeholder="查询 ${state.view === "images" ? "图片" : "求一个"}" value="${state.q}">
+          <input id="status" placeholder="status" value="${state.status}">
+          <select id="pageSize"><option>30</option><option>50</option><option>100</option><option>200</option></select>
+          <button id="search">查询</button>
+        `;
+        $("pageSize").value = String(state.pageSize);
+      } else if (state.view === "replay") {
+        toolbar.className = "toolbar";
+        toolbar.innerHTML = `
+          <input id="q" placeholder="查询 prompt / replay" value="${state.q}">
+          <input id="status" placeholder="prompt key" value="${state.promptKey}">
+          <input id="intent" placeholder="message" value="">
+          <button id="search">查询</button>
+        `;
+      } else if (state.view === "prompts") {
+        toolbar.className = "toolbar";
+        toolbar.innerHTML = `
+          <input id="q" placeholder="查询 prompt key / 内容" value="${state.q}">
+          <input id="status" placeholder="enabled" value="">
+          <input id="intent" placeholder="type" value="">
+          <button id="search">查询</button>
+        `;
+      } else if (state.view === "tables" || state.view === "audit") {
+        toolbar.className = "toolbar tables";
+        const options = state.tables.map((table) => `<option value="${table.name}" ${table.name === state.table ? "selected" : ""}>${table.name}</option>`).join("");
+        toolbar.innerHTML = `
+          <select id="tableSelect">${options}</select>
+          <input id="q" placeholder="查询表记录" value="${state.q}">
+          <select id="pageSize"><option>30</option><option>50</option><option>100</option><option>200</option></select>
+          <button id="search">查询</button>
+          <button id="newRow" class="primary">新增</button>
+        `;
+        $("pageSize").value = String(state.pageSize);
+        $("tableSelect").onchange = (event) => {
+          state.table = event.target.value;
+          state.page = 1;
+          state.selected = null;
+          render();
+        };
+        $("newRow").disabled = currentTable()?.read_only;
+        $("newRow").onclick = () => openEditor(null);
+      } else {
+        toolbar.className = "toolbar";
+        toolbar.innerHTML = `
+          <input id="q" placeholder="查询 id / 内容 / 设备" value="${state.q}">
+          <input id="status" placeholder="status" value="${state.status}">
+          <input id="intent" placeholder="intent / graph" value="${state.view === "sessions" ? state.intent : state.graphName}">
+          <button id="search">查询</button>
+        `;
+      }
+      $("search").onclick = () => {
+        state.q = $("q").value.trim();
+        const status = $("status");
+        if (status) state.status = status.value.trim();
+        const intent = $("intent");
+        if (intent && state.view === "sessions") state.intent = intent.value.trim();
+        if (intent && state.view === "traces") state.graphName = intent.value.trim();
+        if (status && state.view === "replay") state.promptKey = status.value.trim();
+        if (intent && state.view === "flow") state.promptKey = intent.value.trim();
+        const days = $("days");
+        if (days) state.days = Number(days.value);
+        const scope = $("scope");
+        if (scope) state.scope = scope.value;
+        const pageSize = $("pageSize");
+        if (pageSize) state.pageSize = Number(pageSize.value);
+        state.page = 1;
+        render();
+      };
+    }
+
+    function currentTable() {
+      return state.tables.find((table) => table.name === state.table);
+    }
+
+    async function ensureTables() {
+      if (state.tables.length) return;
+      const data = await api("/admin/api/tables");
+      state.tables = data.items;
+    }
+
+    async function render() {
+      try {
+        document.body.dataset.view = state.view;
+        if (!state.token) {
+          $("list").innerHTML = "<p class='error'>缺少 ADMIN_TOKEN。</p>";
+          return;
+        }
+        if (state.view === "tables" || state.view === "audit") await ensureTables();
+        if (state.view === "images") state.table = "image_assets";
+        if (state.view === "helpCards") state.table = "help_cards";
+        if (state.view === "audit") state.table = "admin_audit_logs";
+        renderToolbar();
+        if (state.view === "overview") await loadOverview();
+        if (state.view === "flow") await loadFlow();
+        if (state.view === "activity") await loadActivity();
+        if (state.view === "content") await loadContent();
+        if (state.view === "images") await loadImages();
+        if (state.view === "helpCards") await loadHelpCards();
+        if (state.view === "replay") await loadReplay();
+        if (state.view === "sessions") await loadSessions();
+        if (state.view === "traces") await loadTraces();
+        if (state.view === "prompts") await loadPrompts();
+        if (state.view === "tables" || state.view === "audit") await loadRows();
+      } catch (error) {
+        $("list").innerHTML = `<p class="error">${error.message}</p>`;
+      }
+    }
+
+    async function loadFlow() {
+      const [promptData, abilityData] = await Promise.all([
+        api("/admin/api/prompts"),
+        api("/admin/api/abilities"),
+      ]);
+      const prompts = promptData.items || [];
+      const abilities = abilityData.items || [];
+      const promptMap = new Map(prompts.map((item) => [item.key, item]));
+      const abilityMap = new Map(abilities.map((item) => [item.key, item]));
+      const allNodes = agentStudioNodes();
+      const keyFilter = state.promptKey.trim().toLowerCase();
+      const q = state.q.trim().toLowerCase();
+      const nodes = allNodes.filter((node) => {
+        const text = [
+          node.id,
+          node.lane,
+          node.kind,
+          node.title,
+          node.subtitle,
+          node.body,
+          ...(node.promptKeys || []),
+          ...(node.abilityKeys || []),
+        ].join(" ").toLowerCase();
+        if (q && !text.includes(q)) return false;
+        if (keyFilter) {
+          const keys = [...(node.promptKeys || []), ...(node.abilityKeys || [])].map((key) => key.toLowerCase());
+          if (!keys.some((key) => key.includes(keyFilter))) return false;
+        }
+        if (state.status === "editable" && !(node.promptKeys || []).length) return false;
+        if (state.status === "tool" && !(node.abilityKeys || []).length) return false;
+        if (state.status === "guard" && node.kind !== "guard") return false;
+        if (state.status === "runtime" && node.kind !== "runtime") return false;
+        return true;
+      });
+      $("list").innerHTML = `
+        <div class="flow-hero">
+          <h2>Agent Studio</h2>
+          <p>这里看的是皮皮 Agent 的业务链路：任务理解、策略 Prompt、能力选择、能力执行、质量策略和最终表达。工程 trace 在 Traces，这里只放运营可调的 Agent 结构。</p>
+          <div class="row-meta">
+            <span class="pill">Prompt 热更新</span>
+            <span class="pill">Ability Center</span>
+            <span class="pill">未知技能先登记，不自动绕过执行器</span>
+          </div>
+        </div>
+        <div class="flow-board">
+          ${nodes.map((node) => studioNodeHtml(node, promptMap, abilityMap)).join("")}
+        </div>
+      `;
+      $("detail").innerHTML = agentStudioDetail(prompts, abilities);
+      bindStudioInteractions(allNodes, promptMap, abilityMap);
+      if (state.directPromptKey) {
+        const prompt = promptMap.get(state.directPromptKey);
+        state.directPromptKey = "";
+        if (prompt) openPromptEditor(prompt);
+      }
+      if (state.directAbilityKey) {
+        const ability = abilityMap.get(state.directAbilityKey);
+        state.directAbilityKey = "";
+        if (ability) openAbilityEditor(ability);
+      }
+    }
+
+    function agentStudioNodes() {
+      return [
+        {
+          id: "mission",
+          lane: "角色",
+          kind: "runtime",
+          title: "皮皮 Agent 目标",
+          subtitle: "帮用户做一个选择，而不是解释一堆选项",
+          body: "Agent 的主目标是把用户问题收束成一个可执行的推荐、求一个、来一句或最终卡。",
+        },
+        {
+          id: "intent_router",
+          lane: "理解",
+          kind: "guard",
+          title: "任务理解与路由",
+          subtitle: "意图、缺口、可用能力",
+          body: "判断用户是在要推荐、补约束、发布求一个、来一句、最终汇总，还是普通问候。",
+          abilityKeys: ["search_knowledge", "draft_help_card", "finalize_help_card"],
+        },
+        {
+          id: "policy_prompts",
+          lane: "策略",
+          kind: "prompt",
+          title: "策略 Prompt / Config",
+          subtitle: "运营可调，下一次 turn 生效",
+          body: "当前真实热更新策略是 area_food_evidence_policy，用于到区域选店的证据偏好、搜索关键词和候选过滤。",
+          promptKeys: ["area_food_evidence_policy"],
+        },
+        {
+          id: "ability_selection",
+          lane: "能力选择",
+          kind: "tool",
+          title: "Ability Selector",
+          subtitle: "从能力中心挑一个下一步动作",
+          body: "Agent 只能从允许的能力里选择：先查证据，证据足够出推荐卡，不足就求一个。",
+          abilityKeys: ["search_knowledge", "create_recommendation_card", "draft_help_card"],
+        },
+        {
+          id: "help_loop",
+          lane: "求一个",
+          kind: "tool",
+          title: "Human Evidence Loop",
+          subtitle: "来一句只是人类证据",
+          body: "求一个发布后收集回答；来一句不会直接变最终答案，达到阈值后再进入 finalize。",
+          abilityKeys: ["publish_help_card", "submit_one_liner_answer", "update_help_card"],
+        },
+        {
+          id: "finalize",
+          lane: "汇总",
+          kind: "tool",
+          title: "Finalize 能力",
+          subtitle: "把 human evidence 汇成最终推荐卡",
+          body: "finalize_help_card、save_intent_answer、light_user 组合完成最终卡、证据沉淀和亮灯。",
+          abilityKeys: ["finalize_help_card", "save_intent_answer", "light_user"],
+        },
+        {
+          id: "quality_policy",
+          lane: "质量",
+          kind: "guard",
+          title: "质量与安全策略",
+          subtitle: "不能硬推、不能绕过工具",
+          body: "没有 verified 非 AI 图片、没有证据或低置信时，不直接出推荐卡；未知自定义技能不会自动执行。",
+        },
+      ];
+    }
+
+    function studioNodeHtml(node, promptMap, abilityMap) {
+      return `
+        <div class="flow-row">
+          <div class="flow-lane">${escapeHtml(node.lane)}</div>
+          <div class="flow-node" data-node-id="${escapeAttr(node.id)}">
+            <div class="flow-node-header">
+              <div>
+                <div class="flow-node-title">${escapeHtml(node.title)}</div>
+                <div class="flow-node-subtitle">${escapeHtml(node.subtitle || "")}</div>
+              </div>
+              <span class="pill ${node.kind === "guard" ? "flow-guard" : node.kind === "tool" ? "flow-tool" : node.kind === "prompt" ? "flow-prompt" : ""}">${escapeHtml(node.kind)}</span>
+            </div>
+            <div class="flow-node-body">${escapeHtml(node.body)}</div>
+            <div class="flow-node-tags">
+              ${(node.promptKeys || []).map((key) => {
+                const prompt = promptMap.get(key);
+                return `<button type="button" class="pill flow-prompt" data-prompt-key="${escapeAttr(key)}">Prompt ${escapeHtml(key)}${prompt ? ` · v${prompt.version}` : ""}</button>`;
+              }).join("")}
+              ${(node.abilityKeys || []).map((key) => {
+                const ability = abilityMap.get(key);
+                const status = ability?.runtime_status || "draft";
+                return `<button type="button" class="pill flow-tool" data-ability-key="${escapeAttr(key)}">${escapeHtml(key)} · ${escapeHtml(status)}</button>`;
+              }).join("")}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function agentStudioDetail(prompts, abilities) {
+      const businessPrompts = prompts.filter((prompt) => !isInternalPrompt(prompt));
+      const promptRows = businessPrompts.length ? businessPrompts : prompts.slice(0, 8);
+      return `
+        <h2>Agent 控制台</h2>
+        <div class="flow-detail-list">
+          <div class="flow-detail-item"><strong>调 Prompt</strong><span>编辑策略文本和 config_json，保存后下一次 /v1/chat/turn 热生效。</span></div>
+          <div class="flow-detail-item"><strong>管能力</strong><span>内置技能可以启停；自定义技能可先登记，等待工程绑定执行器。</span></div>
+          <div class="flow-detail-item"><strong>看效果</strong><span>用 Replay 做 dry-run，用 Traces 看真实单次选择了哪个能力。</span></div>
+        </div>
+        <div class="split-actions">
+          <button id="newAbility" class="primary">新增技能</button>
+          <button id="openReplay">打开 Replay</button>
+          <button id="openTraces">打开 Traces</button>
+        </div>
+        <h3>业务 Prompt</h3>
+        <div class="flow-prompt-list">
+          ${promptRows.map((prompt) => `
+            <button type="button" class="flow-prompt-row" data-prompt-key="${escapeAttr(prompt.key)}">
+              <strong>${escapeHtml(prompt.key)}</strong>
+              <small>${escapeHtml(prompt.name || prompt.prompt_type || "")} · v${escapeHtml(prompt.version)} · ${prompt.enabled ? "enabled" : "disabled"}</small>
+            </button>
+          `).join("") || "<p class='empty'>暂无 prompt。</p>"}
+        </div>
+        <h3>Ability Center</h3>
+        <div class="flow-prompt-list">
+          ${abilities.map((ability) => `
+            <button type="button" class="flow-prompt-row" data-ability-key="${escapeAttr(ability.key)}">
+              <strong>${escapeHtml(ability.name || ability.key)}</strong>
+              <small>${escapeHtml(ability.key)} · ${escapeHtml(ability.runtime_status)} · ${ability.enabled ? "enabled" : "disabled"}</small>
+            </button>
+          `).join("") || "<p class='empty'>暂无能力。</p>"}
+        </div>
+      `;
+    }
+
+    function openFlowNode(node, promptMap, abilityMap) {
+      $("detail").innerHTML = `
+        <h2>${escapeHtml(node.title)}</h2>
+        <p>${escapeHtml(node.body)}</p>
+        ${(node.promptKeys || []).length ? `
+          <h3>可调 Prompt</h3>
+          <div class="flow-prompt-list">
+            ${node.promptKeys.map((key) => promptButtonHtml(key, promptMap.get(key))).join("")}
+          </div>
+        ` : ""}
+        ${(node.abilityKeys || []).length ? `
+          <h3>关联能力</h3>
+          <div class="flow-prompt-list">
+            ${node.abilityKeys.map((key) => abilityButtonHtml(key, abilityMap.get(key))).join("")}
+          </div>
+        ` : ""}
+        <h3>运营说明</h3>
+        <div class="flow-detail-list">
+          <div class="flow-detail-item"><strong>可运营项</strong><span>Prompt、能力启停、能力说明、触发意图、输入 schema、guardrails。</span></div>
+          <div class="flow-detail-item"><strong>执行边界</strong><span>只有 runtime_registered=true 的技能会被真实 AbilityCenter 执行。</span></div>
+        </div>
+      `;
+      bindStudioButtons(promptMap, abilityMap);
+    }
+
+    function bindStudioInteractions(nodes, promptMap, abilityMap) {
+      const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+      $("list").querySelectorAll(".flow-node").forEach((element) => {
+        element.onclick = (event) => {
+          if (event.target.closest("[data-prompt-key]") || event.target.closest("[data-ability-key]")) return;
+          openFlowNode(nodeMap.get(element.dataset.nodeId), promptMap, abilityMap);
+        };
+      });
+      bindStudioButtons(promptMap, abilityMap);
+      const openTraces = $("openTraces");
+      if (openTraces) openTraces.onclick = () => setView("traces");
+      const openReplay = $("openReplay");
+      if (openReplay) openReplay.onclick = () => setView("replay");
+      const newAbility = $("newAbility");
+      if (newAbility) newAbility.onclick = () => openAbilityEditor(newAbilityDraft());
+    }
+
+    function bindStudioButtons(promptMap, abilityMap) {
+      bindPromptButtons(promptMap);
+      document.querySelectorAll("[data-ability-key]").forEach((button) => {
+        button.onclick = (event) => {
+          event.stopPropagation();
+          const key = button.dataset.abilityKey;
+          openAbilityEditor(abilityMap.get(key) || newAbilityDraft(key));
+        };
+      });
+    }
+
+    function bindPromptButtons(promptMap) {
+      document.querySelectorAll("[data-prompt-key]").forEach((button) => {
+        button.onclick = (event) => {
+          event.stopPropagation();
+          const key = button.dataset.promptKey;
+          const prompt = promptMap.get(key) || {
+            key,
+            name: key,
+            prompt_type: "policy",
+            content: "",
+            config_json: {},
+            enabled: true,
+            version: 0,
+            source: "default",
+          };
+          openPromptEditor(prompt);
+        };
+      });
+    }
+
+    function promptButtonHtml(key, prompt) {
+      return `
+        <button type="button" class="flow-prompt-row" data-prompt-key="${escapeAttr(key)}">
+          <strong>${escapeHtml(key)}</strong>
+          <small>${prompt ? `${escapeHtml(prompt.name || prompt.prompt_type)} · v${escapeHtml(prompt.version)} · 保存后热生效` : "默认配置，保存后写入数据库"}</small>
+        </button>
+      `;
+    }
+
+    function abilityButtonHtml(key, ability) {
+      return `
+        <button type="button" class="flow-prompt-row" data-ability-key="${escapeAttr(key)}">
+          <strong>${escapeHtml(ability?.name || key)}</strong>
+          <small>${escapeHtml(key)} · ${escapeHtml(ability?.runtime_status || "draft")} · ${ability?.enabled ? "enabled" : "disabled"}</small>
+        </button>
+      `;
+    }
+
+    function openAbilityEditor(ability) {
+      const payload = {
+        name: ability.name || ability.key,
+        ability_type: ability.ability_type || "custom_skill",
+        tool_name: ability.tool_name || null,
+        description: ability.description || "",
+        enabled: ability.enabled !== false,
+        runtime_enabled: ability.runtime_enabled === true,
+        trigger_intents_json: ability.trigger_intents_json || [],
+        input_schema_json: ability.input_schema_json || {},
+        output_contract_json: ability.output_contract_json || {},
+        guardrails_json: ability.guardrails_json || {},
+        prompt_keys_json: ability.prompt_keys_json || [],
+        config_json: ability.config_json || {},
+        notes: ability.notes || "",
+      };
+      $("detail").innerHTML = `
+        <h2>${escapeHtml(ability.key || "new_skill")}</h2>
+        <div class="row-meta">
+          <span class="pill">${escapeHtml(ability.runtime_status || "draft")}</span>
+          <span class="pill">${ability.runtime_registered ? "runtime registered" : "needs binding"}</span>
+          <span class="pill">热更新：下一次 /v1/chat/turn 生效</span>
+        </div>
+        <div class="split-actions">
+          <button id="saveAbility" class="primary">保存能力</button>
+          <button id="newAbilityAgain">新增技能</button>
+        </div>
+        <input id="abilityKey" placeholder="ability key" value="${escapeAttr(ability.key || "")}">
+        <textarea id="abilityJson">${escapeHtml(json(payload))}</textarea>
+        <h3>说明</h3>
+        <pre>${escapeHtml("builtin_tool 且 tool_name 是已注册工具时，启停会影响下一次 turn 的 allowed_tools。custom_skill 可以先登记运营说明和 schema，但不会自动执行未知代码。")}</pre>
+      `;
+      $("saveAbility").onclick = saveAbility;
+      $("newAbilityAgain").onclick = () => openAbilityEditor(newAbilityDraft());
+    }
+
+    function newAbilityDraft(key = "") {
+      return {
+        key: key || `custom_skill_${Date.now()}`,
+        name: "新技能",
+        ability_type: "custom_skill",
+        tool_name: null,
+        description: "",
+        enabled: true,
+        runtime_enabled: false,
+        runtime_registered: false,
+        runtime_status: "draft",
+        trigger_intents_json: ["decision_request"],
+        input_schema_json: {"type": "object", "properties": {}},
+        output_contract_json: {},
+        guardrails_json: {"runtime": "requires_engineering_binding"},
+        prompt_keys_json: [],
+        config_json: {},
+        version: 0,
+      };
+    }
+
+    async function saveAbility() {
+      const key = $("abilityKey").value.trim();
+      if (!key) throw new Error("ability key is required");
+      const payload = JSON.parse($("abilityJson").value);
+      const data = await api(`/admin/api/abilities/${enc(key)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      await loadFlow();
+      openAbilityEditor(data.item);
+    }
+
+    function isInternalPrompt(prompt) {
+      const key = String(prompt.key || "").toLowerCase();
+      const actor = String(prompt.updated_by || "").toLowerCase();
+      return key.startsWith("pytest-") || key.startsWith("test-") || key.startsWith("eval-") || actor.includes("pytest");
+    }
+
+    async function loadOverview() {
+      const [overview, activity, funnel, failures] = await Promise.all([
+        api(`/admin/api/metrics/overview?days=${state.days}&scope=${enc(state.scope)}`),
+        api(`/admin/api/metrics/activity?days=${state.days}&scope=${enc(state.scope)}`),
+        api(`/admin/api/metrics/funnel?days=${state.days}&scope=${enc(state.scope)}`),
+        api(`/admin/api/metrics/failures?days=${state.days}&scope=${enc(state.scope)}`),
+      ]);
+      const metrics = [
+        { label: "注册用户", value: overview.users.total, hint: `${state.days} 天新增 ${overview.users.new}` },
+        { label: "活跃用户", value: overview.users.active, hint: `今日 ${overview.users.dau}，按 last_seen_at` },
+        { label: "对话 Turn", value: overview.runtime.turns, hint: `${overview.runtime.agent_runs} 次 Agent Run` },
+        { label: "卡片产出", value: overview.outcomes.recommendation_cards, hint: `${overview.outcomes.help_cards} 个求一个` },
+        { label: "最终推荐", value: overview.outcomes.final_cards, hint: `${percent(funnel.rates.final_per_help_card)} 求一个完成率` },
+        { label: "接受", value: overview.outcomes.accepted_cards, hint: `${percent(funnel.rates.accept_per_recommendation)} 推荐接受率` },
+        { label: "亮灯", value: overview.outcomes.light_events, hint: `${overview.outcomes.seen_light_events} seen` },
+        { label: "风险项", value: failures.items.reduce((sum, item) => sum + Number(item.count || 0), 0), hint: "失败 / 缺图 / 低置信" },
+      ];
+      $("list").innerHTML = `
+        <div class="source-strip">
+          <span class="pill">实时 PostgreSQL</span>
+          <span class="pill">${state.scope === "product" ? "业务口径" : "全量数据"}</span>
+          <span>生成时间 ${formatDateTime(overview.generated_at)}</span>
+          <span>${escapeHtml(overview.data_source?.note || "No synthetic dashboard data.")}</span>
+        </div>
+        ${metricGrid(metrics)}
+        <div class="dashboard-grid">
+          <div class="panel">
+            <h2>活跃趋势</h2>
+            <div class="panel-caption">真实用户 last_seen_at、用户 turn、agent run 近 ${state.days} 天变化</div>
+            ${lineChart(activity.items, [
+              { key: "active_users", label: "活跃用户", color: "var(--accent)" },
+              { key: "turns", label: "Turns", color: "var(--accent-2)" },
+              { key: "agent_runs", label: "Agent Runs", color: "var(--accent-4)" },
+            ])}
+          </div>
+          <div class="panel">
+            <h2>运营漏斗</h2>
+            <div class="panel-caption">从用户输入到卡片、求一个、最终推荐与接受</div>
+            ${funnelChart(funnel.counts)}
+          </div>
+        </div>
+        <div class="dashboard-grid">
+          <div class="panel">
+            <h2>产出结构</h2>
+            <div class="panel-caption">推荐卡、求一个、最终卡、亮灯的实时数据库计数</div>
+            ${barChart([
+              ["推荐卡", overview.outcomes.recommendation_cards, "var(--accent)"],
+              ["求一个", overview.outcomes.help_cards, "var(--accent-3)"],
+              ["最终卡", overview.outcomes.final_cards, "var(--accent-2)"],
+              ["已接受", overview.outcomes.accepted_cards, "var(--good)"],
+              ["亮灯", overview.outcomes.light_events, "var(--accent-4)"],
+            ])}
+          </div>
+          <div class="panel">
+            <h2>风险队列</h2>
+            <div class="panel-caption">只展示真实失败/缺口，没有就显示空态</div>
+            ${qualityList(failures.items)}
+          </div>
+        </div>
+      `;
+      $("detail").innerHTML = `
+        <h2>数据口径</h2>
+        <div class="brief-card">
+          <span class="eyebrow">Live Metrics</span>
+          <strong>实时 PostgreSQL</strong>
+          <p>${escapeHtml(overview.data_source?.note || "当前 dashboard 使用数据库实时聚合。")}</p>
+          <div class="mini-metrics">
+            <div class="mini-metric"><span>当前口径</span><strong>${state.scope === "product" ? "业务" : "全量"}</strong></div>
+            <div class="mini-metric"><span>窗口</span><strong>${state.days} 天</strong></div>
+            <div class="mini-metric"><span>新增用户</span><strong>${formatNumber(overview.users.new)}</strong></div>
+            <div class="mini-metric"><span>今日 DAU</span><strong>${formatNumber(overview.users.dau)}</strong></div>
+          </div>
+        </div>
+        <h3>关键定义</h3>
+        <div class="definition-list">
+          <div class="definition-item"><strong>注册用户</strong><span>users 表实时计数。</span></div>
+          <div class="definition-item"><strong>新增用户</strong><span>users.created_at 落在所选时间窗口。</span></div>
+          <div class="definition-item"><strong>活跃用户</strong><span>users.last_seen_at 落在所选时间窗口。</span></div>
+          <div class="definition-item"><strong>业务口径</strong><span>过滤 eval、pytest、admin、smoke、debug 等内部设备前缀。</span></div>
+        </div>
+        <h3>健康摘要</h3>
+        <div class="health-list">
+          <div class="health-item"><span>推荐卡率</span><strong>${percent(funnel.rates.recommendation_per_question)}</strong></div>
+          <div class="health-item"><span>求一个率</span><strong>${percent(funnel.rates.help_per_question)}</strong></div>
+          <div class="health-item"><span>求一个完成率</span><strong>${percent(funnel.rates.final_per_help_card)}</strong></div>
+          <div class="health-item"><span>推荐接受率</span><strong>${percent(funnel.rates.accept_per_recommendation)}</strong></div>
+        </div>
+        <details class="raw-details">
+          <summary>查看原始响应</summary>
+          <pre>${escapeHtml(json({ overview, activity, funnel, failures }))}</pre>
+        </details>
+      `;
+    }
+
+    async function loadActivity() {
+      const data = await api(`/admin/api/metrics/activity?days=${state.days}&scope=${enc(state.scope)}`);
+      $("list").innerHTML = data.items.map((item) => `
+        <button class="row" data-date="${item.date}">
+          <div class="row-title">${item.date}</div>
+          <div class="row-meta">
+            <span class="pill">${item.active_users} active</span>
+            <span class="pill">${item.turns} turns</span>
+            <span class="pill">${item.agent_runs} runs</span>
+            <span class="pill">${item.recommendation_cards} cards</span>
+            <span class="pill">${item.help_cards} help</span>
+          </div>
+        </button>
+      `).join("") || "<p class='empty'>暂无活动</p>";
+      $("list").querySelectorAll(".row").forEach((row) => {
+        const item = data.items.find((candidate) => candidate.date === row.dataset.date);
+        row.onclick = () => $("detail").innerHTML = `<h2>${item.date}</h2><pre>${escapeHtml(json(item))}</pre>`;
+      });
+    }
+
+    async function loadContent() {
+      const params = new URLSearchParams({ limit: state.pageSize });
+      if (state.status) params.set("status", state.status);
+      const data = await api(`/admin/api/content/tasks?${params}`);
+      $("list").innerHTML = data.items.map((item) => `
+        <button class="row" data-key="${item.task_type}:${item.target_record_id}">
+          <div class="row-title">${short(item.title, 120)}</div>
+          <div class="row-meta">
+            <span class="pill">${item.task_type}</span>
+            <span class="pill">${item.status}</span>
+            <span class="pill">P${item.priority}</span>
+            <span class="pill">${item.source}</span>
+            <span>${item.target_table}/${short(item.target_record_id, 12)}</span>
+          </div>
+        </button>
+      `).join("") || "<p class='empty'>暂无内容任务</p>";
+      $("list").querySelectorAll(".row").forEach((row, index) => {
+        const item = data.items[index];
+        row.onclick = () => {
+          $("detail").innerHTML = `
+            <h2>${short(item.title, 120)}</h2>
+            <div class="split-actions">
+              <button id="openTarget" class="primary">打开目标表</button>
+            </div>
+            <pre>${escapeHtml(json(item))}</pre>
+          `;
+          $("openTarget").onclick = async () => {
+            state.view = "tables";
+            state.table = item.target_table;
+            state.q = item.target_record_id;
+            state.page = 1;
+            document.querySelectorAll("nav button").forEach((button) => button.classList.toggle("active", false));
+            await render();
+          };
+        };
+      });
+    }
+
+    async function loadImages() {
+      await ensureTables();
+      const params = new URLSearchParams({ page: state.page, page_size: state.pageSize });
+      if (state.q) params.set("q", state.q);
+      const data = await api(`/admin/api/tables/image_assets/rows?${params}`);
+      $("list").innerHTML = data.items.map((item) => `
+        <button class="row" data-id="${item.id}">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <img class="thumb" src="${escapeAttr(item.thumbnail_url || item.url)}" alt="">
+            <div style="min-width:0;">
+              <div class="row-title">${short(item.source_domain || item.source_type || item.id)}</div>
+              <div class="row-meta">
+                <span class="pill">${item.verification_status}</span>
+                <span class="pill">${item.verified ? "verified" : "unverified"}</span>
+                <span class="pill">${item.displayable ? "displayable" : "not displayable"}</span>
+                <span class="pill">${item.is_ai_generated ? "AI risk" : "non-AI"}</span>
+              </div>
+            </div>
+          </div>
+        </button>
+      `).join("") + pager(data.pagination);
+      $("list").querySelectorAll(".row").forEach((row) => {
+        const item = data.items.find((candidate) => String(candidate.id) === row.dataset.id);
+        row.onclick = () => openEditor(item);
+      });
+    }
+
+    async function loadHelpCards() {
+      await ensureTables();
+      const params = new URLSearchParams({ page: state.page, page_size: state.pageSize });
+      if (state.q) params.set("q", state.q);
+      const data = await api(`/admin/api/tables/help_cards/rows?${params}`);
+      $("list").innerHTML = data.items.map((item) => `
+        <button class="row" data-id="${item.id}">
+          <div class="row-title">${short(item.title, 120)}</div>
+          <div class="row-meta">
+            <span class="pill">${item.status}</span>
+            <span class="pill">${item.answer_count}/${item.min_answers_required}</span>
+            <span class="pill">${item.final_recommendation_card_id ? "final" : "no final"}</span>
+          </div>
+        </button>
+      `).join("") + pager(data.pagination);
+      $("list").querySelectorAll(".row").forEach((row) => {
+        const item = data.items.find((candidate) => String(candidate.id) === row.dataset.id);
+        row.onclick = async () => {
+          const answers = await api(`/admin/api/tables/help_answers/rows?q=${enc(item.id)}&page_size=20`);
+          $("detail").innerHTML = `
+            <h2>${short(item.title, 120)}</h2>
+            <div class="split-actions"><button id="editHelp" class="primary">编辑 Help Card</button></div>
+            <h3>Answers</h3><pre>${escapeHtml(json(answers.items))}</pre>
+            <h3>Raw</h3><pre>${escapeHtml(json(item))}</pre>
+          `;
+          $("editHelp").onclick = () => openEditor(item);
+        };
+      });
+    }
+
+    async function loadReplay() {
+      const prompts = await api("/admin/api/prompts");
+      const q = (state.promptKey || state.q || "").toLowerCase();
+      const items = q ? prompts.items.filter((item) => item.key.toLowerCase().includes(q)) : prompts.items;
+      $("list").innerHTML = items.map((item) => `
+        <button class="row" data-key="${item.key}">
+          <div class="row-title">${item.key}</div>
+          <div class="row-meta">
+            <span class="pill">v${item.version}</span>
+            <span class="pill">${item.prompt_type}</span>
+            <span class="pill">${item.enabled ? "enabled" : "disabled"}</span>
+          </div>
+        </button>
+      `).join("") || "<p class='empty'>暂无 prompt</p>";
+      $("list").querySelectorAll(".row").forEach((row) => {
+        const item = items.find((candidate) => candidate.key === row.dataset.key);
+        row.onclick = () => openReplayEditor(item);
+      });
+    }
+
+    async function openReplayEditor(prompt) {
+      const versions = await api(`/admin/api/prompts/${enc(prompt.key)}/versions`);
+      const payload = {
+        cases: [{ case_id: "manual-1", message: "我是广东人，到了三里屯，吃什么" }],
+        candidate: {
+          content: prompt.content,
+          config_json: prompt.config_json || {},
+          enabled: prompt.enabled
+        }
+      };
+      $("detail").innerHTML = `
+        <h2>Replay · ${prompt.key}</h2>
+        <div class="split-actions">
+          <button id="runReplay" class="primary">运行 Replay</button>
+          <button id="rollbackPrompt">回滚到所选版本</button>
+          <select id="rollbackVersion">${versions.items.map((item) => `<option value="${item.version}">v${item.version} · ${short(item.change_reason || item.notes || "", 32)}</option>`).join("")}</select>
+        </div>
+        <textarea id="replayJson">${escapeHtml(json(payload))}</textarea>
+        <h3>Versions</h3><pre>${escapeHtml(json(versions.items))}</pre>
+      `;
+      $("runReplay").onclick = async () => {
+        const data = await api(`/admin/api/prompts/${enc(prompt.key)}/replay`, {
+          method: "POST",
+          body: JSON.stringify(JSON.parse($("replayJson").value)),
+        });
+        $("detail").innerHTML += `<h3>Replay Result</h3><pre>${escapeHtml(json(data.item))}</pre>`;
+      };
+      $("rollbackPrompt").onclick = async () => {
+        const version = Number($("rollbackVersion").value);
+        const data = await api(`/admin/api/prompts/${enc(prompt.key)}/rollback`, {
+          method: "POST",
+          body: JSON.stringify({ version, notes: `rollback from admin UI to v${version}` }),
+        });
+        $("detail").innerHTML += `<h3>Rollback Result</h3><pre>${escapeHtml(json(data))}</pre>`;
+      };
+    }
+
+    async function loadSessions() {
+      const params = new URLSearchParams({ page: state.page, page_size: state.pageSize });
+      if (state.q) params.set("q", state.q);
+      if (state.status) params.set("status", state.status);
+      if (state.intent) params.set("intent", state.intent);
+      const data = await api(`/admin/api/sessions?${params}`);
+      $("list").innerHTML = data.items.map((item) => `
+        <button class="row" data-id="${item.id}">
+          <div class="row-title">${short(item.title || item.id)}</div>
+          <div class="row-meta">
+            <span>${short(item.latest_message || "")}</span>
+            <span class="pill">${item.latest_intent || "no-intent"}</span>
+            <span class="pill">${item.counts.turns} turns</span>
+            <span class="pill">${item.counts.traces} traces</span>
+          </div>
+        </button>
+      `).join("") + pager(data.pagination);
+      $("list").querySelectorAll(".row").forEach((row) => row.onclick = () => openSession(row.dataset.id));
+    }
+
+    async function openSession(id) {
+      const data = await api(`/admin/api/sessions/${id}`);
+      $("detail").innerHTML = `
+        <h2>${short(data.session.title || data.session.id, 120)}</h2>
+        <div class="row-meta"><span class="pill">${data.session.id}</span><span class="pill">${data.session.latest_intent || "no-intent"}</span></div>
+        <h3>Turns</h3>
+        ${data.turns.map((turn) => `<pre>${turn.turn_index} ${turn.role}: ${escapeHtml(turn.content)}</pre>`).join("<br>")}
+        <h3>Traces</h3>
+        ${data.traces.map((trace) => `<button class="row trace-link" data-id="${trace.id}"><div class="row-title">${trace.graph_name} · ${trace.status}</div><div class="row-meta"><span>${trace.intent || ""}</span><span>${short(trace.assistant_message || "")}</span></div></button>`).join("")}
+        <h3>Raw</h3><pre>${escapeHtml(json(data))}</pre>
+      `;
+      $("detail").querySelectorAll(".trace-link").forEach((row) => row.onclick = () => openTrace(row.dataset.id));
+    }
+
+    async function loadTraces() {
+      const params = new URLSearchParams({ page: state.page, page_size: state.pageSize });
+      if (state.q) params.set("q", state.q);
+      if (state.status) params.set("status", state.status);
+      if (state.graphName) params.set("graph_name", state.graphName);
+      const data = await api(`/admin/api/traces?${params}`);
+      $("list").innerHTML = data.items.map((item) => `
+        <button class="row" data-id="${item.id}">
+          <div class="row-title">${item.graph_name} · ${item.status}</div>
+          <div class="row-meta"><span>${item.intent || ""}</span><span>${short(item.assistant_message || item.error_message || "")}</span></div>
+        </button>
+      `).join("") + pager(data.pagination);
+      $("list").querySelectorAll(".row").forEach((row) => row.onclick = () => openTrace(row.dataset.id));
+    }
+
+    async function openTrace(id) {
+      const data = await api(`/admin/api/traces/${id}`);
+      const trace = data.trace;
+      $("detail").innerHTML = `
+        <h2>${trace.graph_name} · ${trace.status}</h2>
+        <div class="row-meta"><span class="pill">${trace.id}</span><span class="pill">${trace.intent || "no-intent"}</span></div>
+        <h3>Graph Nodes</h3>
+        ${trace.graph_nodes.map((node) => `<pre>${node.name}\n${escapeHtml(json(node.data))}</pre>`).join("<br>")}
+        <h3>Tool Calls</h3><pre>${escapeHtml(json(trace.tool_calls))}</pre>
+        <h3>Retrieval Runs</h3><pre>${escapeHtml(json(trace.retrieval_runs))}</pre>
+        <h3>Full Trace</h3><pre>${escapeHtml(json(trace))}</pre>
+      `;
+    }
+
+    async function loadPrompts() {
+      const data = await api("/admin/api/prompts");
+      const q = state.q.toLowerCase();
+      const items = q
+        ? data.items.filter((item) => JSON.stringify(item).toLowerCase().includes(q))
+        : data.items;
+      $("list").innerHTML = items.map((item) => `
+        <button class="row" data-key="${item.key}">
+          <div class="row-title">${item.key}</div>
+          <div class="row-meta">
+            <span>${short(item.name || "")}</span>
+            <span class="pill">${item.prompt_type}</span>
+            <span class="pill">v${item.version}</span>
+            <span class="pill">${item.enabled ? "enabled" : "disabled"}</span>
+            <span class="pill">${item.source}</span>
+          </div>
+        </button>
+      `).join("") || "<p class='empty'>没有 prompt 配置</p>";
+      $("list").querySelectorAll(".row").forEach((row) => {
+        const item = items.find((candidate) => candidate.key === row.dataset.key);
+        row.onclick = () => openPromptEditor(item);
+      });
+    }
+
+    function openPromptEditor(prompt) {
+      const payload = {
+        name: prompt.name,
+        prompt_type: prompt.prompt_type,
+        content: prompt.content,
+        config_json: prompt.config_json || {},
+        enabled: prompt.enabled,
+        notes: prompt.notes || ""
+      };
+      $("detail").innerHTML = `
+        <h2>${prompt.key}</h2>
+        <div class="row-meta">
+          <span class="pill">v${prompt.version}</span>
+          <span class="pill">${prompt.source}</span>
+          <span class="pill">热更新：下一次 /v1/chat/turn 生效</span>
+        </div>
+        <div class="split-actions">
+          <button id="savePrompt" class="primary">保存并热更新</button>
+          <button id="reloadPrompt">重新读取</button>
+        </div>
+        <textarea id="promptJson">${escapeHtml(json(payload))}</textarea>
+        <h3>说明</h3>
+        <pre>${escapeHtml("content 是给皮皮/评估器看的策略文本；config_json 是运行时真正读取的结构化策略。保存后不需要重启。")}</pre>
+      `;
+      $("savePrompt").onclick = () => savePrompt(prompt.key);
+      $("reloadPrompt").onclick = () => render();
+    }
+
+    async function savePrompt(key) {
+      const previousView = state.view;
+      const payload = JSON.parse($("promptJson").value);
+      const data = await api(`/admin/api/prompts/${enc(key)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      if (previousView === "flow") {
+        await loadFlow();
+        openPromptEditor({ ...data.item, source: "db" });
+        return;
+      }
+      await loadPrompts();
+      openPromptEditor({ ...data.item, source: "db" });
+    }
+
+    async function loadRows() {
+      const params = new URLSearchParams({ page: state.page, page_size: state.pageSize });
+      if (state.q) params.set("q", state.q);
+      const data = await api(`/admin/api/tables/${state.table}/rows?${params}`);
+      const columns = data.table.columns.slice(0, 6).map((column) => column.name);
+      $("list").innerHTML = `
+        <table>
+          <thead><tr>${columns.map((name) => `<th>${name}</th>`).join("")}<th></th></tr></thead>
+          <tbody>
+          ${data.items.map((row) => `<tr data-id="${row[data.table.primary_key]}">${columns.map((name) => `<td>${short(renderCell(row[name]), 60)}</td>`).join("")}<td><button data-id="${row[data.table.primary_key]}">打开</button></td></tr>`).join("")}
+          </tbody>
+        </table>
+        ${pager(data.pagination)}
+      `;
+      $("list").querySelectorAll("tbody button").forEach((button) => {
+        const row = data.items.find((item) => String(item[data.table.primary_key]) === button.dataset.id);
+        button.onclick = () => openEditor(row);
+      });
+    }
+
+    function openEditor(row) {
+      const table = currentTable();
+      const readOnly = table?.read_only;
+      const payload = row || {};
+      $("detail").innerHTML = `
+        <h2>${state.table}${row ? " · " + row[table.primary_key] : " · 新增"}</h2>
+        <div class="split-actions">
+          <button id="saveRow" class="primary">${row ? "保存" : "插入"}</button>
+          ${row && !readOnly ? "<button id='deleteRow' class='danger'>删除</button>" : ""}
+        </div>
+        <textarea id="rowJson">${escapeHtml(json(payload))}</textarea>
+        <h3>Columns</h3><pre>${escapeHtml(json(table.columns))}</pre>
+      `;
+      $("saveRow").disabled = readOnly;
+      $("saveRow").onclick = () => saveRow(row);
+      const deleteButton = $("deleteRow");
+      if (deleteButton) deleteButton.onclick = () => deleteRow(row);
+    }
+
+    async function saveRow(row) {
+      const table = currentTable();
+      const payload = JSON.parse($("rowJson").value);
+      if (row) {
+        await api(`/admin/api/tables/${state.table}/rows/${row[table.primary_key]}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await api(`/admin/api/tables/${state.table}/rows`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      await render();
+    }
+
+    async function deleteRow(row) {
+      const table = currentTable();
+      if (!confirm(`删除 ${state.table}/${row[table.primary_key]} ?`)) return;
+      await api(`/admin/api/tables/${state.table}/rows/${row[table.primary_key]}`, { method: "DELETE" });
+      $("detail").innerHTML = "<h2>已删除</h2>";
+      await render();
+    }
+
+    function pager(pagination) {
+      return `<div class="split-actions">
+        <button id="prevPage" ${pagination.page <= 1 ? "disabled" : ""}>上一页</button>
+        <span class="pill">第 ${pagination.page} 页 / ${pagination.total} 条</span>
+        <button id="nextPage" ${!pagination.has_next ? "disabled" : ""}>下一页</button>
+      </div>`;
+    }
+
+    document.addEventListener("click", (event) => {
+      if (event.target.id === "prevPage") { state.page -= 1; render(); }
+      if (event.target.id === "nextPage") { state.page += 1; render(); }
+    });
+
+    function renderCell(value) {
+      if (value == null) return "";
+      if (typeof value === "object") return JSON.stringify(value);
+      return value;
+    }
+
+    function metricGrid(metrics) {
+      return `<div class="metric-grid">${metrics.map((metric) => `
+        <div class="metric">
+          <div class="metric-value">${escapeHtml(formatNumber(metric.value))}</div>
+          <div class="metric-label">${escapeHtml(metric.label)}</div>
+          <div class="metric-hint">${escapeHtml(metric.hint || "")}</div>
+        </div>
+      `).join("")}</div>`;
+    }
+
+    function lineChart(items, series) {
+      const width = 720;
+      const height = 190;
+      const padding = { top: 14, right: 18, bottom: 28, left: 36 };
+      const values = [];
+      items.forEach((item) => series.forEach((part) => values.push(Number(item[part.key] || 0))));
+      const max = Math.max(1, ...values);
+      const span = Math.max(1, items.length - 1);
+      const x = (index) => padding.left + (index / span) * (width - padding.left - padding.right);
+      const y = (value) => height - padding.bottom - (Number(value || 0) / max) * (height - padding.top - padding.bottom);
+      const grid = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        const gy = y(max * ratio);
+        return `<line x1="${padding.left}" y1="${gy}" x2="${width - padding.right}" y2="${gy}" stroke="#e3e7e1" />`;
+      }).join("");
+      const paths = series.map((part) => {
+        const points = items.map((item, index) => `${x(index)},${y(item[part.key])}`).join(" ");
+        return `<polyline points="${points}" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="stroke:${part.color}" />`;
+      }).join("");
+      const dots = series.map((part) => items.map((item, index) => (
+        `<circle cx="${x(index)}" cy="${y(item[part.key])}" r="3" style="fill:${part.color}" />`
+      )).join("")).join("");
+      const labels = items.length ? `
+        <text x="${padding.left}" y="${height - 8}" fill="#68716b" font-size="11">${escapeHtml(short(items[0].date || "", 10))}</text>
+        <text x="${width - padding.right - 74}" y="${height - 8}" fill="#68716b" font-size="11">${escapeHtml(short(items[items.length - 1].date || "", 10))}</text>
+        <text x="${padding.left}" y="12" fill="#68716b" font-size="11">${formatNumber(max)}</text>
+      ` : "";
+      const legend = series.map((part) => `
+        <span class="pill"><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:${part.color};margin-right:5px;"></span>${escapeHtml(part.label)}</span>
+      `).join("");
+      return `
+        <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="activity chart">
+          ${grid}
+          ${paths}
+          ${dots}
+          ${labels}
+        </svg>
+        <div class="row-meta">${legend}</div>
+      `;
+    }
+
+    function funnelChart(counts) {
+      const steps = [
+        ["用户输入", counts.user_turns],
+        ["进入问题", counts.questions],
+        ["Agent Run", counts.agent_runs],
+        ["检索", counts.retrieval_runs],
+        ["Tool Call", counts.tool_calls],
+        ["推荐卡", counts.recommendation_cards],
+        ["求一个", counts.help_cards],
+        ["最终推荐", counts.final_cards],
+        ["接受", counts.accepted_cards],
+      ];
+      const max = Math.max(1, ...steps.map((item) => Number(item[1] || 0)));
+      return `<div class="funnel">${steps.map(([label, value], index) => {
+        const ratio = Math.max(0.03, Number(value || 0) / max);
+        const color = index < 5 ? "var(--accent-2)" : index < 7 ? "var(--accent-3)" : "var(--good)";
+        return `
+          <div class="funnel-step">
+            <span>${escapeHtml(label)}</span>
+            <div class="bar-track"><div class="funnel-fill" style="width:${Math.round(ratio * 100)}%;background:${color};"></div></div>
+            <strong>${escapeHtml(formatNumber(value))}</strong>
+          </div>
+        `;
+      }).join("")}</div>`;
+    }
+
+    function barChart(rows) {
+      const max = Math.max(1, ...rows.map((row) => Number(row[1] || 0)));
+      return `<div class="bars">${rows.map(([label, value, color]) => {
+        const ratio = Math.max(0.03, Number(value || 0) / max);
+        return `
+          <div class="bar-row">
+            <span>${escapeHtml(label)}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.round(ratio * 100)}%;background:${color};"></div></div>
+            <strong>${escapeHtml(formatNumber(value))}</strong>
+          </div>
+        `;
+      }).join("")}</div>`;
+    }
+
+    function qualityList(items) {
+      if (!items.length) return "<p class='empty'>当前窗口没有失败或内容缺口。</p>";
+      return `<div class="quality-list">${items.map((item) => `
+        <div class="quality-item">
+          <span>${escapeHtml(readableMetric(item.key))}</span>
+          <strong>${escapeHtml(formatNumber(item.count))}</strong>
+        </div>
+      `).join("")}</div>`;
+    }
+
+    function readableMetric(key) {
+      return {
+        failed_agent_runs: "Agent Run 失败",
+        failed_tool_calls: "Tool Call 失败",
+        failed_retrieval_runs: "检索失败",
+        missing_image_cards: "推荐卡缺图",
+        low_confidence_cards: "低置信卡",
+        pending_or_blocked_images: "待审核/不可用图片",
+        answer_gate_rejections: "Answer Gate 拒绝",
+        evaluator_rejections: "Evaluator 拒绝",
+        shadow_mismatches: "Shadow 分歧",
+      }[key] || key;
+    }
+
+    function percent(value) {
+      return `${Math.round(Number(value || 0) * 100)}%`;
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString("zh-CN");
+    }
+
+    function formatDateTime(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString("zh-CN", { hour12: false });
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replaceAll("'", "&#39;");
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    render();
+  </script>
+</body>
+</html>

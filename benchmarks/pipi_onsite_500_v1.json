@@ -1,0 +1,5037 @@
+{
+  "suite_id": "pipi_onsite_500_v1",
+  "target_case_count": 500,
+  "is_minimal_seed": false,
+  "description": "Hybrid Harness quality benchmark distribution for Pipi onsite/runtime evaluation.",
+  "expected_distribution": {
+    "by_category": {
+      "area_food": 100,
+      "edge_adversarial": 20,
+      "help_card_update": 60,
+      "one_liner_finalize": 40,
+      "product_decision": 60,
+      "smalltalk_app_help_unknown": 50,
+      "travel_shopping": 80,
+      "venue_order": 90
+    },
+    "by_expected_kind": {
+      "chitchat": 50,
+      "clarification": 20,
+      "help_card_draft": 140,
+      "recommendation_card": 290
+    },
+    "by_location_state": {
+      "in_area": 160,
+      "in_venue": 90,
+      "unknown": 250
+    },
+    "by_target_type": {
+      "none": 210,
+      "ordering_bundle": 90,
+      "product": 60,
+      "restaurant": 140
+    }
+  },
+  "cases": [
+    {
+      "id": "smalltalk_app_help_unknown_001",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你好",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_002",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你是谁",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_003",
+      "category": "smalltalk_app_help_unknown",
+      "message": "怎么用",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_004",
+      "category": "smalltalk_app_help_unknown",
+      "message": "谢谢你",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_005",
+      "category": "smalltalk_app_help_unknown",
+      "message": "讲个短笑话",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_006",
+      "category": "smalltalk_app_help_unknown",
+      "message": "晚安",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_007",
+      "category": "smalltalk_app_help_unknown",
+      "message": "哈哈",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_008",
+      "category": "smalltalk_app_help_unknown",
+      "message": "嗨",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_009",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你好",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_010",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你是谁",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_011",
+      "category": "smalltalk_app_help_unknown",
+      "message": "怎么用",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_012",
+      "category": "smalltalk_app_help_unknown",
+      "message": "谢谢你",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_013",
+      "category": "smalltalk_app_help_unknown",
+      "message": "讲个短笑话",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_014",
+      "category": "smalltalk_app_help_unknown",
+      "message": "晚安",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_015",
+      "category": "smalltalk_app_help_unknown",
+      "message": "哈哈",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_016",
+      "category": "smalltalk_app_help_unknown",
+      "message": "嗨",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_017",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你好",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_018",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你是谁",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_019",
+      "category": "smalltalk_app_help_unknown",
+      "message": "怎么用",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_020",
+      "category": "smalltalk_app_help_unknown",
+      "message": "谢谢你",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_021",
+      "category": "smalltalk_app_help_unknown",
+      "message": "讲个短笑话",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_022",
+      "category": "smalltalk_app_help_unknown",
+      "message": "晚安",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_023",
+      "category": "smalltalk_app_help_unknown",
+      "message": "哈哈",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_024",
+      "category": "smalltalk_app_help_unknown",
+      "message": "嗨",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_025",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你好",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_026",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你是谁",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_027",
+      "category": "smalltalk_app_help_unknown",
+      "message": "怎么用",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_028",
+      "category": "smalltalk_app_help_unknown",
+      "message": "谢谢你",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_029",
+      "category": "smalltalk_app_help_unknown",
+      "message": "讲个短笑话",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_030",
+      "category": "smalltalk_app_help_unknown",
+      "message": "晚安",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_031",
+      "category": "smalltalk_app_help_unknown",
+      "message": "哈哈",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_032",
+      "category": "smalltalk_app_help_unknown",
+      "message": "嗨",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_033",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你好",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_034",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你是谁",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_035",
+      "category": "smalltalk_app_help_unknown",
+      "message": "怎么用",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_036",
+      "category": "smalltalk_app_help_unknown",
+      "message": "谢谢你",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_037",
+      "category": "smalltalk_app_help_unknown",
+      "message": "讲个短笑话",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_038",
+      "category": "smalltalk_app_help_unknown",
+      "message": "晚安",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_039",
+      "category": "smalltalk_app_help_unknown",
+      "message": "哈哈",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_040",
+      "category": "smalltalk_app_help_unknown",
+      "message": "嗨",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_041",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你好",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_042",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你是谁",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_043",
+      "category": "smalltalk_app_help_unknown",
+      "message": "怎么用",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_044",
+      "category": "smalltalk_app_help_unknown",
+      "message": "谢谢你",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_045",
+      "category": "smalltalk_app_help_unknown",
+      "message": "讲个短笑话",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_046",
+      "category": "smalltalk_app_help_unknown",
+      "message": "晚安",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_047",
+      "category": "smalltalk_app_help_unknown",
+      "message": "哈哈",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_048",
+      "category": "smalltalk_app_help_unknown",
+      "message": "嗨",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_049",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你好",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "smalltalk_app_help_unknown_050",
+      "category": "smalltalk_app_help_unknown",
+      "message": "你是谁",
+      "expected": {
+        "response_kind": "chitchat",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "area_food_001",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_002",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_003",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_004",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_005",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_006",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_007",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_008",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_009",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_010",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_011",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_012",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_013",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_014",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_015",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_016",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_017",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_018",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_019",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_020",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_021",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_022",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_023",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_024",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_025",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_026",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_027",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_028",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_029",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_030",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_031",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_032",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_033",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_034",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_035",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_036",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_037",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_038",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_039",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_040",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_041",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_042",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_043",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_044",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_045",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_046",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_047",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_048",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_049",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_050",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_051",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_052",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_053",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_054",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_055",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_056",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_057",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_058",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_059",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_060",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_061",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_062",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_063",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_064",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_065",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_066",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_067",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_068",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_069",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_070",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_071",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_072",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_073",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_074",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_075",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_076",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_077",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_078",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_079",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_080",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_081",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_082",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_083",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_084",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_085",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_086",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_087",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_088",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_089",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_090",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_091",
+      "category": "area_food",
+      "message": "我在北京三里屯，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_092",
+      "category": "area_food",
+      "message": "我在北京工体，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_093",
+      "category": "area_food",
+      "message": "我在北京国贸，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_094",
+      "category": "area_food",
+      "message": "我在北京望京，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_095",
+      "category": "area_food",
+      "message": "我在北京五道口，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_096",
+      "category": "area_food",
+      "message": "我在北京鼓楼，想吃川菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_097",
+      "category": "area_food",
+      "message": "我在北京西单，想吃烤肉，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_098",
+      "category": "area_food",
+      "message": "我在北京亮马桥，想吃火锅，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_099",
+      "category": "area_food",
+      "message": "我在北京朝阳大悦城，想吃粤菜，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "area_food_100",
+      "category": "area_food",
+      "message": "我在北京望京SOHO，想吃北京小吃，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_area",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "venue_order_001",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_002",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_003",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_004",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_005",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_006",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_007",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_008",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_009",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_010",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_011",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_012",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_013",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_014",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_015",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_016",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_017",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_018",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_019",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_020",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_021",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_022",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_023",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_024",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_025",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_026",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_027",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_028",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_029",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_030",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_031",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_032",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_033",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_034",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_035",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_036",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_037",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_038",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_039",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_040",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_041",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_042",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_043",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_044",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_045",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_046",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_047",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_048",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_049",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_050",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_051",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_052",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_053",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_054",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_055",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_056",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_057",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_058",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_059",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_060",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_061",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_062",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_063",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_064",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_065",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_066",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_067",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_068",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_069",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_070",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_071",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_072",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_073",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_074",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_075",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_076",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_077",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_078",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_079",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_080",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_081",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_082",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_083",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_084",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_085",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_086",
+      "category": "venue_order",
+      "message": "我在四季民福，帮我点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_087",
+      "category": "venue_order",
+      "message": "我在海底捞，怎么点",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_088",
+      "category": "venue_order",
+      "message": "我在四季民福故宫店，两个人不太能吃辣",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_089",
+      "category": "venue_order",
+      "message": "我在海底捞三里屯店，第一次来你决定",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "venue_order_090",
+      "category": "venue_order",
+      "message": "我在四季民福烤鸭店，想快点点完",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "in_venue",
+        "target_type": "ordering_bundle"
+      }
+    },
+    {
+      "id": "travel_shopping_001",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_002",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_003",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_004",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_005",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_006",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_007",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_008",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_009",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_010",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_011",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_012",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_013",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_014",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_015",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_016",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_017",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_018",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_019",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_020",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_021",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_022",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_023",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_024",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_025",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_026",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_027",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_028",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_029",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_030",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_031",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_032",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_033",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_034",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_035",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_036",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_037",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_038",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_039",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_040",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_041",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_042",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_043",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_044",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_045",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_046",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_047",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_048",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_049",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_050",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_051",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_052",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_053",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_054",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_055",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_056",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_057",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_058",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_059",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_060",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_061",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_062",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_063",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_064",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_065",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_066",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_067",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_068",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_069",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_070",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_071",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_072",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_073",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_074",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_075",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_076",
+      "category": "travel_shopping",
+      "message": "韩国逛街不去明洞想小众，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_077",
+      "category": "travel_shopping",
+      "message": "首尔想买小众美妆，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_078",
+      "category": "travel_shopping",
+      "message": "东京逛街想避开游客区，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_079",
+      "category": "travel_shopping",
+      "message": "上海买设计师品牌，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "travel_shopping_080",
+      "category": "travel_shopping",
+      "message": "成都想逛小众店，帮我求一个懂的人",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "product_decision_001",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_002",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_003",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_004",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_005",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_006",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_007",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_008",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_009",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_010",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_011",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_012",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_013",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_014",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_015",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_016",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_017",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_018",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_019",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_020",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_021",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_022",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_023",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_024",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_025",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_026",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_027",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_028",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_029",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_030",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_031",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_032",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_033",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_034",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_035",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_036",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_037",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_038",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_039",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_040",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_041",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_042",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_043",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_044",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_045",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_046",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_047",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_048",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_049",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_050",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_051",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_052",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_053",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_054",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_055",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_056",
+      "category": "product_decision",
+      "message": "我想买降噪耳机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_057",
+      "category": "product_decision",
+      "message": "我想买咖啡机，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_058",
+      "category": "product_decision",
+      "message": "我想买电动牙刷，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_059",
+      "category": "product_decision",
+      "message": "我想买旅行箱，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "product_decision_060",
+      "category": "product_decision",
+      "message": "我想买投影仪，预算中等，你直接帮我选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "product"
+      }
+    },
+    {
+      "id": "help_card_update_001",
+      "category": "help_card_update",
+      "message": "我在三里屯，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_002",
+      "category": "help_card_update",
+      "message": "我在工体，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_003",
+      "category": "help_card_update",
+      "message": "我在国贸，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_004",
+      "category": "help_card_update",
+      "message": "我在望京，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_005",
+      "category": "help_card_update",
+      "message": "我在五道口，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_006",
+      "category": "help_card_update",
+      "message": "我在鼓楼，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_007",
+      "category": "help_card_update",
+      "message": "我在西单，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_008",
+      "category": "help_card_update",
+      "message": "我在亮马桥，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_009",
+      "category": "help_card_update",
+      "message": "我在朝阳大悦城，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_010",
+      "category": "help_card_update",
+      "message": "我在望京SOHO，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_011",
+      "category": "help_card_update",
+      "message": "我在三里屯，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_012",
+      "category": "help_card_update",
+      "message": "我在工体，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_013",
+      "category": "help_card_update",
+      "message": "我在国贸，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_014",
+      "category": "help_card_update",
+      "message": "我在望京，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_015",
+      "category": "help_card_update",
+      "message": "我在五道口，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_016",
+      "category": "help_card_update",
+      "message": "我在鼓楼，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_017",
+      "category": "help_card_update",
+      "message": "我在西单，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_018",
+      "category": "help_card_update",
+      "message": "我在亮马桥，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_019",
+      "category": "help_card_update",
+      "message": "我在朝阳大悦城，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_020",
+      "category": "help_card_update",
+      "message": "我在望京SOHO，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_021",
+      "category": "help_card_update",
+      "message": "我在三里屯，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_022",
+      "category": "help_card_update",
+      "message": "我在工体，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_023",
+      "category": "help_card_update",
+      "message": "我在国贸，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_024",
+      "category": "help_card_update",
+      "message": "我在望京，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_025",
+      "category": "help_card_update",
+      "message": "我在五道口，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_026",
+      "category": "help_card_update",
+      "message": "我在鼓楼，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_027",
+      "category": "help_card_update",
+      "message": "我在西单，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_028",
+      "category": "help_card_update",
+      "message": "我在亮马桥，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_029",
+      "category": "help_card_update",
+      "message": "我在朝阳大悦城，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_030",
+      "category": "help_card_update",
+      "message": "我在望京SOHO，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_031",
+      "category": "help_card_update",
+      "message": "我在三里屯，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_032",
+      "category": "help_card_update",
+      "message": "我在工体，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_033",
+      "category": "help_card_update",
+      "message": "我在国贸，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_034",
+      "category": "help_card_update",
+      "message": "我在望京，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_035",
+      "category": "help_card_update",
+      "message": "我在五道口，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_036",
+      "category": "help_card_update",
+      "message": "我在鼓楼，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_037",
+      "category": "help_card_update",
+      "message": "我在西单，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_038",
+      "category": "help_card_update",
+      "message": "我在亮马桥，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_039",
+      "category": "help_card_update",
+      "message": "我在朝阳大悦城，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_040",
+      "category": "help_card_update",
+      "message": "我在望京SOHO，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_041",
+      "category": "help_card_update",
+      "message": "我在三里屯，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_042",
+      "category": "help_card_update",
+      "message": "我在工体，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_043",
+      "category": "help_card_update",
+      "message": "我在国贸，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_044",
+      "category": "help_card_update",
+      "message": "我在望京，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_045",
+      "category": "help_card_update",
+      "message": "我在五道口，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_046",
+      "category": "help_card_update",
+      "message": "我在鼓楼，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_047",
+      "category": "help_card_update",
+      "message": "我在西单，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_048",
+      "category": "help_card_update",
+      "message": "我在亮马桥，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_049",
+      "category": "help_card_update",
+      "message": "我在朝阳大悦城，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_050",
+      "category": "help_card_update",
+      "message": "我在望京SOHO，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_051",
+      "category": "help_card_update",
+      "message": "我在三里屯，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_052",
+      "category": "help_card_update",
+      "message": "我在工体，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_053",
+      "category": "help_card_update",
+      "message": "我在国贸，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_054",
+      "category": "help_card_update",
+      "message": "我在望京，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_055",
+      "category": "help_card_update",
+      "message": "我在五道口，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_056",
+      "category": "help_card_update",
+      "message": "我在鼓楼，之前那个求一个补充一下：预算不高",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_057",
+      "category": "help_card_update",
+      "message": "我在西单，之前那个求一个补充一下：不要游客区",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_058",
+      "category": "help_card_update",
+      "message": "我在亮马桥，之前那个求一个补充一下：别太远",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_059",
+      "category": "help_card_update",
+      "message": "我在朝阳大悦城，之前那个求一个补充一下：也想买美妆",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "help_card_update_060",
+      "category": "help_card_update",
+      "message": "我在望京SOHO，之前那个求一个补充一下：不要排队太久",
+      "expected": {
+        "response_kind": "help_card_draft",
+        "location_state": "in_area",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "one_liner_finalize_001",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第1条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_002",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第2条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_003",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第3条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_004",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第4条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_005",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第5条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_006",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第6条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_007",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第7条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_008",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第8条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_009",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第9条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_010",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第10条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_011",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第11条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_012",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第12条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_013",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第13条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_014",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第14条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_015",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第15条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_016",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第16条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_017",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第17条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_018",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第18条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_019",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第19条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_020",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第20条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_021",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第21条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_022",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第22条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_023",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第23条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_024",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第24条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_025",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第25条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_026",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第26条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_027",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第27条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_028",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第28条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_029",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第29条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_030",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第30条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_031",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第31条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_032",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第32条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_033",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第33条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_034",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第34条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_035",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第35条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_036",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第36条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_037",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第37条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_038",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第38条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_039",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第39条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "one_liner_finalize_040",
+      "category": "one_liner_finalize",
+      "message": "来一句证据第40条，帮她最终选一个",
+      "expected": {
+        "response_kind": "recommendation_card",
+        "location_state": "unknown",
+        "target_type": "restaurant"
+      }
+    },
+    {
+      "id": "edge_adversarial_001",
+      "category": "edge_adversarial",
+      "message": "随便",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_002",
+      "category": "edge_adversarial",
+      "message": "你猜",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_003",
+      "category": "edge_adversarial",
+      "message": "给我来个最强的",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_004",
+      "category": "edge_adversarial",
+      "message": "不要问了",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_005",
+      "category": "edge_adversarial",
+      "message": "我也不知道在哪",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_006",
+      "category": "edge_adversarial",
+      "message": "随便",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_007",
+      "category": "edge_adversarial",
+      "message": "你猜",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_008",
+      "category": "edge_adversarial",
+      "message": "给我来个最强的",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_009",
+      "category": "edge_adversarial",
+      "message": "不要问了",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_010",
+      "category": "edge_adversarial",
+      "message": "我也不知道在哪",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_011",
+      "category": "edge_adversarial",
+      "message": "随便",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_012",
+      "category": "edge_adversarial",
+      "message": "你猜",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_013",
+      "category": "edge_adversarial",
+      "message": "给我来个最强的",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_014",
+      "category": "edge_adversarial",
+      "message": "不要问了",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_015",
+      "category": "edge_adversarial",
+      "message": "我也不知道在哪",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_016",
+      "category": "edge_adversarial",
+      "message": "随便",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_017",
+      "category": "edge_adversarial",
+      "message": "你猜",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_018",
+      "category": "edge_adversarial",
+      "message": "给我来个最强的",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_019",
+      "category": "edge_adversarial",
+      "message": "不要问了",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    },
+    {
+      "id": "edge_adversarial_020",
+      "category": "edge_adversarial",
+      "message": "我也不知道在哪",
+      "expected": {
+        "response_kind": "clarification",
+        "location_state": "unknown",
+        "target_type": "none"
+      }
+    }
+  ]
+}

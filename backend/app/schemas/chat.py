@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
@@ -28,9 +29,16 @@ class BootstrapRequest(ApiModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class BootstrapUser(ApiModel):
+    id: str
+    device_uid: str
+    display_name: str = "路过的人"
+
+
 class BootstrapResponse(ApiModel):
     conversation_id: str
     user_id: str | None = None
+    user: BootstrapUser | None = None
     help_feed: list[HelpCardSummary] = Field(default_factory=list)
     light_events: list[LightEvent] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -45,6 +53,7 @@ class ChatTurnRequest(ApiModel):
     )
     user_id: str | None = None
     client_turn_id: str | None = None
+    client_context: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -57,11 +66,24 @@ class ToolCallView(ApiModel):
     error: str | None = None
 
 
+class ResponseKind(str, Enum):
+    CHITCHAT = "chitchat"
+    CLARIFICATION = "clarification"
+    RECOMMENDATION_CARD = "recommendation_card"
+    HELP_CARD_DRAFT = "help_card_draft"
+
+
 class ChatTurnResponse(ApiModel):
     conversation_id: str
+    turn_id: str | None = None
     user_turn_id: str | None = None
     assistant_turn_id: str | None = None
     assistant_message: str | None = None
+    response_kind: ResponseKind | None = None
+    location_state: Literal["in_area", "in_venue", "unknown"] = "unknown"
+    ui_events: list[dict[str, Any]] = Field(default_factory=list)
+    data: dict[str, Any] = Field(default_factory=dict)
+    debug: dict[str, Any] | None = None
     cards: list[CardSummary] = Field(default_factory=list)
     help_cards: list[HelpCardSummary] = Field(default_factory=list)
     light_events: list[LightEvent] = Field(default_factory=list)

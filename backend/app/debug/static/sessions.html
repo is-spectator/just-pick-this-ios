@@ -1,0 +1,1048 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>皮皮 Trace Console</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f5;
+      --panel: #ffffff;
+      --panel-soft: #fbfbfa;
+      --text: #111111;
+      --muted: #707070;
+      --faint: #9a9a9a;
+      --border: #e8e8e5;
+      --border-strong: #d7d7d2;
+      --green: #16814a;
+      --red: #d83b45;
+      --amber: #9a6400;
+      --blue: #1769aa;
+      --code: #20231f;
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    .brand {
+      padding: 22px 20px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 700;
+    }
+
+    .brand p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel-soft);
+    }
+
+    .search {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 0 11px;
+      outline: none;
+    }
+
+    .search:focus {
+      border-color: var(--text);
+    }
+
+    .icon-button {
+      width: 38px;
+      height: 38px;
+      flex: 0 0 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+    }
+
+    .session-list {
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .session-item {
+      width: 100%;
+      text-align: left;
+      padding: 12px;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid transparent;
+      display: block;
+    }
+
+    .session-item:hover {
+      background: var(--panel-soft);
+      border-color: var(--border);
+    }
+
+    .session-item.active {
+      background: #eef7f1;
+      border-color: #cce7d6;
+    }
+
+    .session-title {
+      font-size: 14px;
+      font-weight: 650;
+      line-height: 1.35;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .session-meta,
+    .session-counts {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+      min-width: 0;
+    }
+
+    .session-counts {
+      color: var(--faint);
+      flex-wrap: wrap;
+    }
+
+    .dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--border-strong);
+      flex: 0 0 4px;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 22px 24px 36px;
+    }
+
+    .detail-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 22px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .detail-header h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.25;
+      font-weight: 750;
+    }
+
+    .detail-subtitle {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(70px, 1fr));
+      gap: 8px;
+      min-width: min(560px, 100%);
+    }
+
+    .stat {
+      padding: 10px 11px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 20px;
+      line-height: 1;
+      font-weight: 750;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.88fr) minmax(420px, 1.12fr);
+      gap: 18px;
+      margin-top: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel-soft);
+    }
+
+    .panel-title h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .panel-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .timeline {
+      padding: 14px 16px 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .turn {
+      display: grid;
+      grid-template-columns: 80px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+
+    .turn-role {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 26px;
+      border-radius: 999px;
+      background: var(--panel-soft);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .turn.user .turn-role {
+      background: #efefec;
+      color: var(--text);
+    }
+
+    .turn.assistant .turn-role {
+      background: #edf8f1;
+      color: var(--green);
+    }
+
+    .turn-content {
+      padding: 11px 13px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      line-height: 1.55;
+      font-size: 14px;
+      background: var(--panel);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .turn-time {
+      margin-top: 6px;
+      color: var(--faint);
+      font-size: 11px;
+    }
+
+    .trace-list {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .trace {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .trace-head {
+      padding: 13px 14px;
+      background: var(--panel-soft);
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .trace-title {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .trace-title strong {
+      font-size: 14px;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .status.succeeded {
+      background: #edf8f1;
+      border-color: #cce7d6;
+      color: var(--green);
+    }
+
+    .status.failed {
+      background: #fff0f1;
+      border-color: #f0c6ca;
+      color: var(--red);
+    }
+
+    .status.running {
+      background: #fff8e8;
+      border-color: #efdfb8;
+      color: var(--amber);
+    }
+
+    .trace-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .trace-body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .node-row {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 10px;
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .node-row:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .node-name {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .summary-line {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .subsection {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+
+    .subsection h4 {
+      margin: 0 0 9px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .call,
+    .hit {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px;
+      background: var(--panel-soft);
+      margin-top: 8px;
+    }
+
+    .call:first-of-type,
+    .hit:first-of-type {
+      margin-top: 0;
+    }
+
+    .call-head,
+    .hit-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .hit-head {
+      align-items: flex-start;
+    }
+
+    .hit-title {
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    details {
+      margin-top: 10px;
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 650;
+      user-select: none;
+    }
+
+    pre {
+      margin: 9px 0 0;
+      max-height: 360px;
+      overflow: auto;
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--code);
+      color: #f4f4ef;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .empty {
+      padding: 52px 20px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .empty strong {
+      display: block;
+      color: var(--text);
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    .toast {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--text);
+      color: #fff;
+      font-size: 13px;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 980px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: relative;
+        height: auto;
+        max-height: 46vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .main {
+        padding: 14px;
+      }
+
+      .detail-header,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-header {
+        display: grid;
+      }
+
+      .stats {
+        min-width: 0;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .turn,
+      .node-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>皮皮 Trace Console</h1>
+        <p>Session、对话 turn、Graph trace、Tool call、Retrieval hit。</p>
+      </div>
+      <div class="toolbar">
+        <input id="search" class="search" placeholder="搜索 session / device / intent" />
+        <button id="refresh" class="icon-button" title="刷新" aria-label="刷新">↻</button>
+      </div>
+      <div id="sessionList" class="session-list"></div>
+    </aside>
+
+    <main class="main">
+      <section id="detail"></section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast">已刷新</div>
+
+  <script>
+    const state = {
+      sessions: [],
+      selectedId: null,
+      search: ""
+    };
+    const accessToken = (() => {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token") || sessionStorage.getItem("pipi_debug_token") || "";
+      if (token) sessionStorage.setItem("pipi_debug_token", token);
+      return token;
+    })();
+
+    const $ = (id) => document.getElementById(id);
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatTime(value) {
+      if (!value) return "—";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString("zh-CN", { hour12: false });
+    }
+
+    function shortId(value) {
+      if (!value) return "—";
+      return String(value).slice(0, 8);
+    }
+
+    function jsonBlock(value) {
+      return `<pre>${escapeHtml(JSON.stringify(value ?? {}, null, 2))}</pre>`;
+    }
+
+    function details(label, value) {
+      return `<details><summary>${escapeHtml(label)}</summary>${jsonBlock(value)}</details>`;
+    }
+
+    function statusClass(status) {
+      return String(status || "").toLowerCase().replaceAll("_", "-");
+    }
+
+    function statusBadge(status) {
+      return `<span class="status ${escapeHtml(statusClass(status))}">${escapeHtml(status || "unknown")}</span>`;
+    }
+
+    function toast(message) {
+      const el = $("toast");
+      el.textContent = message;
+      el.classList.add("visible");
+      window.setTimeout(() => el.classList.remove("visible"), 1100);
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(withToken(url), {
+        headers: {
+          "Accept": "application/json",
+          ...(accessToken ? { "X-Debug-Token": accessToken } : {})
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    }
+
+    function withToken(url) {
+      if (!accessToken) return url;
+      const next = new URL(url, window.location.origin);
+      next.searchParams.set("token", accessToken);
+      return next.pathname + next.search;
+    }
+
+    async function loadSessions({ keepSelection = false } = {}) {
+      const data = await fetchJson("/debug/api/sessions?limit=120");
+      state.sessions = data.sessions || [];
+      if (!keepSelection || !state.sessions.some((item) => item.id === state.selectedId)) {
+        state.selectedId = state.sessions[0]?.id || null;
+      }
+      renderSessionList();
+      if (state.selectedId) {
+        await loadDetail(state.selectedId);
+      } else {
+        renderEmptyDetail();
+      }
+    }
+
+    function filteredSessions() {
+      const query = state.search.trim().toLowerCase();
+      if (!query) return state.sessions;
+      return state.sessions.filter((item) => {
+        const blob = [
+          item.title,
+          item.latest_message,
+          item.latest_intent,
+          item.user?.device_uid,
+          item.user?.display_name,
+          item.id
+        ].join(" ").toLowerCase();
+        return blob.includes(query);
+      });
+    }
+
+    function renderSessionList() {
+      const sessions = filteredSessions();
+      if (!sessions.length) {
+        $("sessionList").innerHTML = `<div class="empty"><strong>没有 session</strong><span>换个搜索词试试。</span></div>`;
+        return;
+      }
+
+      $("sessionList").innerHTML = sessions.map((item) => {
+        const counts = item.counts || {};
+        return `
+          <button class="session-item ${item.id === state.selectedId ? "active" : ""}" data-session-id="${escapeHtml(item.id)}">
+            <div class="session-title">${escapeHtml(item.title || "未命名 session")}</div>
+            <div class="session-meta">
+              <span>${escapeHtml(item.latest_intent || "unknown")}</span>
+              <span class="dot"></span>
+              <span>${escapeHtml(formatTime(item.updated_at))}</span>
+            </div>
+            <div class="session-counts">
+              <span>${counts.turns || 0} turns</span>
+              <span>${counts.traces || 0} traces</span>
+              <span>${counts.tools || 0} tools</span>
+              <span>${counts.retrievals || 0} retrievals</span>
+            </div>
+          </button>
+        `;
+      }).join("");
+
+      document.querySelectorAll("[data-session-id]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const id = button.getAttribute("data-session-id");
+          state.selectedId = id;
+          renderSessionList();
+          await loadDetail(id);
+        });
+      });
+    }
+
+    function renderEmptyDetail() {
+      $("detail").innerHTML = `<div class="panel"><div class="empty"><strong>还没有 session</strong><span>从 iOS 发一轮对话后，这里会出现 trace。</span></div></div>`;
+    }
+
+    async function loadDetail(id) {
+      $("detail").innerHTML = `<div class="panel"><div class="empty"><strong>加载中</strong><span>${escapeHtml(shortId(id))}</span></div></div>`;
+      const data = await fetchJson(`/debug/api/sessions/${id}`);
+      renderDetail(data);
+    }
+
+    function renderDetail(data) {
+      const session = data.session || {};
+      const counts = session.counts || {};
+      $("detail").innerHTML = `
+        <section class="detail-header">
+          <div>
+            <h2>${escapeHtml(session.title || "未命名 session")}</h2>
+            <div class="detail-subtitle">
+              <div>ID ${escapeHtml(session.id)}</div>
+              <div>${escapeHtml(session.user?.device_uid || "unknown device")} · ${escapeHtml(formatTime(session.created_at))}</div>
+            </div>
+          </div>
+          <div class="stats">
+            ${stat(counts.turns, "Turns")}
+            ${stat(counts.traces, "Traces")}
+            ${stat(counts.tools, "Tools")}
+            ${stat(counts.retrievals, "Retrievals")}
+            ${stat(counts.cards, "Cards")}
+            ${stat(counts.help_cards, "Help")}
+          </div>
+        </section>
+        <section class="grid">
+          <div class="panel">
+            <div class="panel-title">
+              <h3>完整对话</h3>
+              <span>${(data.turns || []).length} turns</span>
+            </div>
+            <div class="timeline">
+              ${(data.turns || []).map(renderTurn).join("") || emptyInline("没有 turn")}
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">
+              <h3>Trace 调用明细</h3>
+              <span>${(data.traces || []).length} traces</span>
+            </div>
+            <div class="trace-list">
+              ${(data.traces || []).map(renderTrace).join("") || emptyInline("没有 trace")}
+            </div>
+          </div>
+        </section>
+        ${renderArtifacts(data)}
+      `;
+    }
+
+    function stat(value, label) {
+      return `<div class="stat"><strong>${Number(value || 0)}</strong><span>${escapeHtml(label)}</span></div>`;
+    }
+
+    function emptyInline(text) {
+      return `<div class="empty"><strong>${escapeHtml(text)}</strong></div>`;
+    }
+
+    function renderTurn(turn) {
+      return `
+        <article class="turn ${escapeHtml(turn.role)}">
+          <div>
+            <span class="turn-role">${escapeHtml(turn.role)}</span>
+            <div class="turn-time">#${escapeHtml(turn.turn_index)} · ${escapeHtml(formatTime(turn.created_at))}</div>
+          </div>
+          <div>
+            <div class="turn-content">${escapeHtml(turn.content)}</div>
+            ${turn.content_json && Object.keys(turn.content_json).length ? details("content_json", turn.content_json) : ""}
+          </div>
+        </article>
+      `;
+    }
+
+    function renderTrace(trace) {
+      return `
+        <article class="trace">
+          <div class="trace-head">
+            <div>
+              <div class="trace-title">
+                ${statusBadge(trace.status)}
+                <strong>${escapeHtml(trace.graph_name)} · ${escapeHtml(trace.run_type)}</strong>
+              </div>
+              <div class="trace-meta">
+                <span>intent: ${escapeHtml(trace.intent || "—")}</span>
+                <span>action: ${escapeHtml(trace.next_action || "—")}</span>
+                <span>model: ${escapeHtml(trace.model_provider)} / ${escapeHtml(trace.model_name)}</span>
+                <span>turn: ${escapeHtml(shortId(trace.turn_id))}</span>
+              </div>
+            </div>
+            <span class="pill">${escapeHtml(formatTime(trace.started_at))}</span>
+          </div>
+          <div class="trace-body">
+            ${trace.assistant_message ? `<div class="summary-line"><strong>assistant:</strong> ${escapeHtml(trace.assistant_message)}</div>` : ""}
+            ${renderGraphNodes(trace.graph_nodes || [])}
+            ${renderToolCalls(trace.tool_calls || [])}
+            ${renderRetrievalRuns(trace.retrieval_runs || [])}
+            ${trace.error_message ? `<div class="summary-line"><strong>error:</strong> ${escapeHtml(trace.error_message)}</div>` : ""}
+            <div class="subsection">
+              ${details("input_json", trace.input_json)}
+              ${details("output_json", trace.output_json)}
+              ${details("metadata_json", trace.metadata_json)}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderGraphNodes(nodes) {
+      if (!nodes.length) return "";
+      return `
+        <div class="subsection">
+          <h4>Graph nodes</h4>
+          ${nodes.map((node) => `
+            <div class="node-row">
+              <div class="node-name">${escapeHtml(node.name)}</div>
+              <div>
+                <div class="summary-line">${escapeHtml(summarizeNode(node.name, node.data))}</div>
+                ${details("node data", node.data)}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function summarizeNode(name, data) {
+      if (!data || typeof data !== "object") return "—";
+      if (name === "classify_intent") return data.intent || "—";
+      if (name === "retrieve_knowledge") return `${data.query || "query"} · ${(data.hits || []).length} hits`;
+      if (name === "evaluate_evidence") {
+        return `${data.can_recommend ? "can recommend" : "blocked"} · confidence ${data.confidence ?? "—"} · ${data.reason || ""}`;
+      }
+      if (name === "decide_next_action") {
+        return `${data.next_action || "—"} ${data.tool_call?.name ? "· " + data.tool_call.name : ""}`;
+      }
+      if (name === "execute_tool") return `${data.name || "tool"} · ${data.status || "—"}`;
+      if (name === "respond") return data.assistant_message || "—";
+      if (name === "build_context") return `${(data.recent_turns || []).length} recent turns`;
+      return Object.keys(data).join(", ") || "—";
+    }
+
+    function renderToolCalls(calls) {
+      if (!calls.length) return "";
+      return `
+        <div class="subsection">
+          <h4>Tool calls</h4>
+          ${calls.map((call) => `
+            <div class="call">
+              <div class="call-head">
+                <span>#${escapeHtml(call.sequence_index)} ${escapeHtml(call.tool_name)}</span>
+                ${statusBadge(call.status)}
+              </div>
+              <div class="trace-meta">
+                <span>${escapeHtml(formatTime(call.started_at))}</span>
+                <span>ID ${escapeHtml(shortId(call.id))}</span>
+              </div>
+              ${call.error_message ? `<div class="summary-line"><strong>error:</strong> ${escapeHtml(call.error_message)}</div>` : ""}
+              ${details("arguments", call.arguments_json)}
+              ${details("result", call.result_json)}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderRetrievalRuns(runs) {
+      if (!runs.length) return "";
+      return `
+        <div class="subsection">
+          <h4>Retrieval runs</h4>
+          ${runs.map((run) => `
+            <div class="call">
+              <div class="call-head">
+                <span>${escapeHtml(run.source)} · ${escapeHtml(run.query)}</span>
+                ${statusBadge(run.status)}
+              </div>
+              <div class="trace-meta">
+                <span>${(run.hits || []).length} hits</span>
+                <span>top_k ${escapeHtml(run.top_k ?? "—")}</span>
+                <span>ID ${escapeHtml(shortId(run.id))}</span>
+              </div>
+              ${(run.hits || []).map(renderHit).join("")}
+              ${details("filters", run.filters_json)}
+              ${details("metadata", run.metadata_json)}
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderHit(hit) {
+      const payload = hit.payload_json || {};
+      return `
+        <div class="hit">
+          <div class="hit-head">
+            <div class="hit-title">#${escapeHtml(hit.rank)} ${escapeHtml(hit.title || hit.source_id || hit.id)}</div>
+            <span class="pill">${escapeHtml(hit.source_type)} · ${escapeHtml(hit.score ?? "—")}</span>
+          </div>
+          ${hit.snippet ? `<div class="summary-line">${escapeHtml(hit.snippet)}</div>` : ""}
+          <div class="trace-meta">
+            ${hit.source_uri ? `<span>${escapeHtml(hit.source_uri)}</span>` : ""}
+            ${payload.image_asset_id ? `<span>image ${escapeHtml(shortId(payload.image_asset_id))}</span>` : ""}
+            ${payload.intent_answer_id ? `<span>answer ${escapeHtml(shortId(payload.intent_answer_id))}</span>` : ""}
+          </div>
+          ${details("payload", payload)}
+        </div>
+      `;
+    }
+
+    function renderArtifacts(data) {
+      const cards = data.cards || [];
+      const helpCards = data.help_cards || [];
+      if (!cards.length && !helpCards.length) return "";
+      return `
+        <section class="grid">
+          <div class="panel">
+            <div class="panel-title"><h3>Recommendation cards</h3><span>${cards.length}</span></div>
+            <div class="trace-list">${cards.map(renderCard).join("") || emptyInline("没有推荐卡")}</div>
+          </div>
+          <div class="panel">
+            <div class="panel-title"><h3>Help cards</h3><span>${helpCards.length}</span></div>
+            <div class="trace-list">${helpCards.map(renderHelpCard).join("") || emptyInline("没有求一个")}</div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderCard(card) {
+      return `
+        <div class="call">
+          <div class="call-head">
+            <span>${escapeHtml(card.title)}</span>
+            ${statusBadge(card.status)}
+          </div>
+          <div class="summary-line">${escapeHtml(card.one_liner || card.decision_factor?.text || "")}</div>
+          <div class="trace-meta">
+            <span>ID ${escapeHtml(shortId(card.id))}</span>
+            <span>image ${escapeHtml(card.image_status || "—")}</span>
+            <span>confidence ${escapeHtml(card.metadata?.confidence ?? "—")}</span>
+          </div>
+          ${details("card", card)}
+        </div>
+      `;
+    }
+
+    function renderHelpCard(card) {
+      return `
+        <div class="call">
+          <div class="call-head">
+            <span>${escapeHtml(card.prompt || card.title)}</span>
+            ${statusBadge(card.status)}
+          </div>
+          <div class="summary-line">${escapeHtml(card.one_liner || "")}</div>
+          <div class="trace-meta">
+            <span>ID ${escapeHtml(shortId(card.id))}</span>
+            <span>${escapeHtml(card.metadata?.answer_count ?? 0)} / ${escapeHtml(card.metadata?.min_answers_required ?? 3)} answers</span>
+          </div>
+          ${details("help_card", card)}
+        </div>
+      `;
+    }
+
+    $("refresh").addEventListener("click", async () => {
+      await loadSessions({ keepSelection: true });
+      toast("已刷新");
+    });
+
+    $("search").addEventListener("input", (event) => {
+      state.search = event.target.value || "";
+      renderSessionList();
+    });
+
+    loadSessions().catch((error) => {
+      $("sessionList").innerHTML = `<div class="empty"><strong>加载失败</strong><span>${escapeHtml(error.message)}</span></div>`;
+      $("detail").innerHTML = `<div class="panel"><div class="empty"><strong>加载失败</strong><span>${escapeHtml(error.message)}</span></div></div>`;
+    });
+  </script>
+</body>
+</html>

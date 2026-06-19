@@ -1,7 +1,16 @@
-from fastapi import FastAPI
+from typing import Any
 
+from fastapi import FastAPI, HTTPException
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.admin import router as admin_router
 from app.api import api_router
 from app.config import Settings, get_settings
+from app.debug import router as debug_router
+from app.harness.middleware import install_hybrid_harness_middleware
+from app.ops import router as ops_router
+from app.schemas.health import HealthResponse
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -14,14 +23,103 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         debug=resolved_settings.debug,
     )
     app.state.settings = resolved_settings
+    _assert_startup_runtime_guards(resolved_settings)
+    install_hybrid_harness_middleware(app)
 
-    @app.get("/health", tags=["health"])
-    async def health() -> dict[str, bool]:
+    @app.get("/health", response_model=HealthResponse, tags=["health"])
+    async def health() -> HealthResponse:
+        return {
+            "ok": True,
+            "service": "just-pick-this-ios-backend",
+            "version": resolved_settings.app_version,
+            "env": resolved_settings.app_env,
+            "eval_mode": resolved_settings.pipi_eval_mode,
+        }
+
+    @app.get("/health/live", tags=["health"])
+    async def health_live() -> dict[str, bool]:
         return {"ok": True}
 
+    @app.get("/health/ready", tags=["health"])
+    async def health_ready() -> dict[str, Any]:
+        status = _readiness_status(resolved_settings)
+        if not status["ok"]:
+            raise HTTPException(status_code=503, detail=status)
+        return status
+
     app.include_router(api_router)
+    if resolved_settings.enable_admin_routes:
+        app.include_router(admin_router)
+        app.include_router(ops_router)
+    if resolved_settings.enable_debug_routes:
+        app.include_router(debug_router)
 
     return app
 
 
+def _assert_startup_runtime_guards(settings: Settings) -> None:
+    if (
+        settings.app_env in {"production", "staging"}
+        and settings.langgraph_checkpoint_required
+    ):
+        raise RuntimeError("LANGGRAPH_CHECKPOINT_REQUIRED must be false in production/staging for V0")
+
+
 app = create_app()
+
+
+def _readiness_status(settings: Settings) -> dict[str, Any]:
+    checks: dict[str, Any] = {
+        "ok": True,
+        "database": "not_configured",
+        "migrations": "not_checked",
+        "checkpoint": "not_required",
+        "config": "ok",
+    }
+    if settings.database_url is None:
+        checks.update({"ok": False, "database": "missing_database_url"})
+        return checks
+    try:
+        engine = create_engine(str(settings.database_url), pool_pre_ping=True)
+        with engine.connect() as connection:
+            connection.execute(text("select 1"))
+            checks["database"] = "ok"
+            migration_status = _migration_status(connection)
+            checks["migrations"] = migration_status
+            if migration_status != "ok":
+                checks["ok"] = False
+    except SQLAlchemyError as exc:
+        checks.update({"ok": False, "database": "error", "error": exc.__class__.__name__})
+        return checks
+    except Exception as exc:
+        checks.update({"ok": False, "database": "error", "error": exc.__class__.__name__})
+        return checks
+
+    if settings.langgraph_checkpoint_required:
+        checks.update({"ok": False, "checkpoint": "unsupported_v0"})
+    return checks
+
+
+def _migration_status(connection: Any) -> str:
+    try:
+        from alembic.migration import MigrationContext
+        from alembic.script import ScriptDirectory
+
+        from app.db import Base
+
+        del Base
+        script = ScriptDirectory.from_config(_alembic_config())
+        heads = set(script.get_heads())
+        current = set(MigrationContext.configure(connection).get_current_heads())
+        return "ok" if heads == current and heads else "out_of_date"
+    except Exception:
+        return "unknown"
+
+
+def _alembic_config() -> Any:
+    from pathlib import Path
+
+    from alembic.config import Config
+
+    backend_dir = Path(__file__).resolve().parents[1]
+    return Config(str(backend_dir / "alembic.ini"))

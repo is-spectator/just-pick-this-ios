@@ -1,0 +1,119 @@
+name: backend-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: just_pick_this
+          POSTGRES_PASSWORD: just_pick_this
+          POSTGRES_DB: just_pick_this_agent_v0
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U just_pick_this -d just_pick_this_agent_v0"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql+psycopg://just_pick_this:just_pick_this@localhost:5432/just_pick_this_agent_v0
+      APP_ENV: test
+      WEB_SEARCH_PROVIDER: disabled
+      PIPI_MODEL_PROVIDER: deterministic
+      PIPI_CARD_COMPOSER: deterministic
+      LLM_SHADOW_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync --extra dev
+      - name: Run migrations
+        working-directory: backend
+        run: uv run --extra dev alembic upgrade head
+      - name: Run tests
+        working-directory: backend
+        run: uv run --extra dev pytest -q -rx
+      - name: Ruff
+        working-directory: backend
+        run: uv run --extra dev ruff check app tests
+      - name: Benchmark report and quality gate smoke
+        working-directory: backend
+        run: |
+          uv run --extra dev python ../scripts/run_product_benchmark.py \
+            --benchmark ../benchmarks/pipi_onsite_500_v1.json \
+            --out .ci-artifacts/quality-gate-smoke \
+            --limit 20
+          uv run --extra dev python ../scripts/quality_gate.py \
+            --report-dir .ci-artifacts/quality-gate-smoke \
+            --min-pass-rate 0 \
+            --min-average-quality 0 \
+            --max-p0 0 \
+            --max-p1 0
+      - name: Upload quality gate smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-smoke-report
+          path: |
+            backend/.ci-artifacts/quality-gate-smoke/quality_gate_report.md
+            backend/.ci-artifacts/quality-gate-smoke/quality_gate_report.json
+            backend/.ci-artifacts/quality-gate-smoke/quality_report.md
+            backend/.ci-artifacts/quality-gate-smoke/quality_report.json
+            backend/.ci-artifacts/quality-gate-smoke/results.jsonl
+            backend/.ci-artifacts/quality-gate-smoke/results_guard_report.md
+            backend/.ci-artifacts/quality-gate-smoke/results_guard_report.json
+            backend/.ci-artifacts/quality-gate-smoke/product_benchmark_summary.md
+            backend/.ci-artifacts/quality-gate-smoke/product_benchmark_summary.json
+            backend/.ci-artifacts/quality-gate-smoke/seed_gap_report.md
+            backend/.ci-artifacts/quality-gate-smoke/pipi_agent_improvement_report.md
+            backend/.ci-artifacts/quality-gate-smoke/low_quality_cases.md
+            backend/.ci-artifacts/quality-gate-smoke/generated/
+          if-no-files-found: warn
+      - name: Strict quality gate on checked-in benchmark results
+        if: ${{ hashFiles('benchmarks/reports/latest/results.jsonl') != '' }}
+        working-directory: backend
+        run: |
+          uv run --extra dev python ../scripts/validate_benchmark_results.py \
+            --results ../benchmarks/reports/latest/results.jsonl \
+            --require-latency-ms \
+            --out ../benchmarks/reports/latest
+          uv run --extra dev python ../scripts/benchmark_quality_report.py \
+            --results ../benchmarks/reports/latest/results.jsonl \
+            --benchmark ../benchmarks/pipi_onsite_500_v1.json \
+            --out ../benchmarks/reports/latest
+          uv run --extra dev python ../scripts/quality_gate.py \
+            --report-dir ../benchmarks/reports/latest \
+            --min-pass-rate 0.95 \
+            --min-average-quality 0.82 \
+            --max-p50-latency-ms 3500 \
+            --max-p95-latency-ms 6000 \
+            --max-p0 0 \
+            --max-p1 0
+      - name: Upload strict quality gate report
+        if: ${{ always() && hashFiles('benchmarks/reports/latest/results.jsonl') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-strict-report
+          path: |
+            benchmarks/reports/latest/quality_gate_report.md
+            benchmarks/reports/latest/quality_gate_report.json
+            benchmarks/reports/latest/quality_report.md
+            benchmarks/reports/latest/quality_report.json
+            benchmarks/reports/latest/results_guard_report.md
+            benchmarks/reports/latest/results_guard_report.json
+            benchmarks/reports/latest/seed_gap_report.md
+            benchmarks/reports/latest/pipi_agent_improvement_report.md
+            benchmarks/reports/latest/low_quality_cases.md
+            benchmarks/reports/latest/generated/
+          if-no-files-found: warn

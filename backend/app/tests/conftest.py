@@ -10,6 +10,7 @@ from app.main import create_app
 
 
 NOT_IMPLEMENTED_STATUSES = {404, 501}
+_BOOTSTRAP_DEVICE_BY_CONVERSATION: dict[str, str] = {}
 
 
 @pytest.fixture
@@ -48,7 +49,10 @@ async def bootstrap(client: AsyncClient, *, device_id: str, user_id: str | None 
     if user_id is not None:
         payload["user_id"] = user_id
     response = await client.post("/v1/bootstrap", json=payload)
-    return require_ready_response(response)
+    body = require_ready_response(response)
+    if body.get("conversation_id"):
+        _BOOTSTRAP_DEVICE_BY_CONVERSATION[str(body["conversation_id"])] = device_id
+    return body
 
 
 async def chat_turn(
@@ -56,10 +60,14 @@ async def chat_turn(
     *,
     message: str,
     conversation_id: str | None = None,
+    device_id: str | None = None,
     client_turn_id: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
+        "device_id": device_id
+        or (conversation_id and _BOOTSTRAP_DEVICE_BY_CONVERSATION.get(str(conversation_id)))
+        or "pytest-chat-device",
         "message": message,
         "metadata": metadata or {},
     }
@@ -77,3 +85,7 @@ def extract_tool_names(body: dict[str, Any]) -> set[str]:
         for tool in body.get("tool_calls", [])
         if tool.get("name") or tool.get("tool_name")
     }
+
+
+def device_for_conversation(conversation_id: str) -> str | None:
+    return _BOOTSTRAP_DEVICE_BY_CONVERSATION.get(str(conversation_id))

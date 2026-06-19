@@ -64,12 +64,12 @@ def compose_card_draft(
     )
     web_hits: list[dict[str, str]] = []
 
-    if settings.pipi_card_composer == "deepseek" and settings.deepseek_api_key is not None:
+    if settings.pipi_card_composer == "openai" and settings.openai_api_key is not None:
         try:
-            return _compose_with_deepseek(reference=reference, web_hits=web_hits)
-        except (httpx.HTTPError, KeyError, TypeError, ValueError, ValidationError, json.JSONDecodeError) as exc:
+            return _compose_with_openai(reference=reference, web_hits=web_hits)
+        except (httpx.HTTPError, KeyError, TypeError, ValueError, ValidationError, json.JSONDecodeError):
             draft = _compose_deterministically(reference=reference, web_hits=web_hits)
-            draft.metadata["composer_fallback_reason"] = str(exc)
+            draft.metadata["composer_fallback"] = "provider_error"
             return draft
 
     return _compose_deterministically(reference=reference, web_hits=web_hits)
@@ -154,21 +154,21 @@ def _compose_deterministically(reference: dict[str, Any], web_hits: list[dict[st
     elif place_key == "datong-xijindao":
         title = "喜晋道 · 刀削面加肉丸子"
         subtitle = "在大同喜晋道别纠结，先点这个组合。"
-        reason = "数据库参考答案指向刀削面，但皮皮按你“到店不知道吃什么”的场景，把它收敛成更稳的点单组合。"
+        reason = "你已经到店了，这组比继续翻菜单更省心：有地方感，也不容易点偏。"
         bullets = ["刀削面是店里的低后悔主线", "肉丸子补足香气和满足感", "第一次到店不用比较菜单"]
         warning = "不想吃面或想吃清淡的，就别选这个。"
         followups = ["为什么这样点?", "能不能换清淡点?"]
     else:
         fallback_title = reference["primary_hit"].get("title") or "就选这个"
         title = _card_title_from_web_reference(str(fallback_title), message)
-        subtitle = "屏幕候选，买一个就行。" if _looks_like_screen_query(message) else "皮皮按检索证据和你这句话，先收敛成一个低后悔选择。"
+        subtitle = "屏幕候选，买一个就行。" if _looks_like_screen_query(message) else "先给你收成一个低后悔选择。"
         reason = _short_reason_from_reference(reference, message)
-        bullets = ["已检索真实网页参考", "只输出一个选择", "有可信引用图才展示图片"]
-        warning = "如果你的偏好和这条参考相反，就别选。"
+        bullets = ["不用继续横向比较", "更适合马上做决定", "有明确反感就别选"]
+        warning = "如果你明确不喜欢这个类型，就别选。"
         followups = ["为什么选这个?", "有没有别的选择?"]
 
     if web_hits:
-        bullets = [*bullets[:2], "已参考实时网页摘要，但没有让网页绕过数据库图片约束"]
+        bullets = [*bullets[:2], "信息够用，先收成一个选择"]
 
     return CardDraft(
         title=title,
@@ -205,16 +205,16 @@ def _short_reason_from_reference(reference: dict[str, Any], message: str) -> str
     text = str(reference["reference_answer"].get("text") or "")
     compact = re.sub(r"\s+", " ", text).strip()
     if not compact:
-        return "皮皮拿到了一条可追溯网页参考，所以先给你收敛成一个选择。"
-    if len(compact) > 180:
-        compact = compact[:177].rstrip() + "..."
-    return f"皮皮把检索到的参考信息压缩成一个选择：{compact}"
+        return "这条参考还不够完整，所以这里只保留一个谨慎选择。"
+    if len(compact) > 96:
+        compact = compact[:93].rstrip() + "..."
+    return compact
 
 
-def _compose_with_deepseek(*, reference: dict[str, Any], web_hits: list[dict[str, str]]) -> CardDraft:
+def _compose_with_openai(*, reference: dict[str, Any], web_hits: list[dict[str, str]]) -> CardDraft:
     settings = get_settings()
-    if settings.deepseek_api_key is None:
-        raise ValueError("DEEPSEEK_API_KEY is required")
+    if settings.openai_api_key is None:
+        raise ValueError("OPENAI_API_KEY is required")
 
     prompt = {
         "reference": reference,
@@ -228,14 +228,14 @@ def _compose_with_deepseek(*, reference: dict[str, Any], web_hits: list[dict[str
         ],
     }
     response = httpx.post(
-        f"{settings.deepseek_base_url.rstrip('/')}/chat/completions",
+        f"{settings.openai_base_url.rstrip('/')}/chat/completions",
         headers={
-            "Authorization": f"Bearer {settings.deepseek_api_key.get_secret_value()}",
+            "Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}",
             "Content-Type": "application/json",
         },
-        timeout=settings.deepseek_timeout_seconds,
+        timeout=settings.openai_timeout_seconds,
         json={
-            "model": settings.deepseek_model,
+            "model": settings.openai_model,
             "messages": [
                 {
                     "role": "system",
@@ -247,6 +247,7 @@ def _compose_with_deepseek(*, reference: dict[str, Any], web_hits: list[dict[str
                 },
                 {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
             ],
+            "response_format": {"type": "json_object"},
         },
     )
     response.raise_for_status()
@@ -255,12 +256,12 @@ def _compose_with_deepseek(*, reference: dict[str, Any], web_hits: list[dict[str
     draft = CardDraft.model_validate(data)
     return draft.model_copy(
         update={
-            "model_provider": "deepseek",
-            "model_name": settings.deepseek_model,
+            "model_provider": "openai",
+            "model_name": settings.openai_model,
             "used_web_search": bool(web_hits),
             "metadata": {
                 **draft.metadata,
-                "composition": "deepseek_reference_adapted",
+                "composition": "openai_reference_adapted",
                 "reference_answer_id": reference["reference_answer"].get("id"),
             },
         }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
 from app.api._service import call_service, dump_model, resolve_service_handler
 from app.schemas.chat import (
@@ -22,7 +22,13 @@ async def bootstrap(payload: BootstrapRequest) -> BootstrapResponse:
     return await call_service(handler, dump_model(payload))
 
 
-@router.post("/chat/turn", response_model=ChatTurnResponse)
-async def chat_turn(payload: ChatTurnRequest) -> ChatTurnResponse:
+@router.post("/chat/turn", response_model=ChatTurnResponse, response_model_exclude_none=True)
+async def chat_turn(
+    payload: ChatTurnRequest,
+    authorization: str | None = Header(default=None),
+) -> ChatTurnResponse:
     handler = resolve_service_handler("app.services.chat", "run_chat_turn")
-    return await call_service(handler, dump_model(payload))
+    data = dump_model(payload)
+    if authorization:
+        data["authorization"] = authorization
+    return await call_service(handler, data)

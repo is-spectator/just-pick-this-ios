@@ -1,11 +1,13 @@
-# 就选这个 Backend V0
+# 就选这个 Backend V0 Legacy
+
+这是早期 Node/Fastify 后端，仅作历史参考；当前产品后端在 `backend/`。
 
 Fastify + Prisma + PostgreSQL 后端。正式接口是 `/v1/*`，旧 `/api/*` 只为当前 iOS 版本临时兼容。
 
 ## 安装
 
 ```sh
-cd backend
+cd backend-node-legacy
 npm install
 cp .env.example .env
 ```
@@ -15,8 +17,8 @@ cp .env.example .env
 `.env`:
 
 ```sh
-DATABASE_URL=postgresql://fangnaoke@localhost:5432/just_pick_this_v0
-DEEPSEEK_API_KEY=sk-...
+DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/just_pick_this_v0
+DEEPSEEK_API_KEY=sk-YOUR_API_KEY
 DEEPSEEK_MODEL=deepseek-reasoner
 MODEL_PROVIDER=deepseek
 PORT=8787

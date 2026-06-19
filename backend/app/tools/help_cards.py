@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+import json
+from uuid import uuid4
+
 from app.schemas.tools import (
     DraftHelpCardInput,
     HelpCardOutput,
     PublishHelpCardInput,
     SubmitOneLinerAnswerInput,
     SubmitOneLinerAnswerOutput,
+    UpdateHelpCardInput,
 )
 from app.tools.errors import ToolConflictError, ToolForbiddenError, ToolNotFoundError
 from app.tools.session import SessionLike, commit, execute, first_mapping, rollback
-from app.tools.tool_call_logger import ToolCallLogger, finish_tool_call, start_tool_call
+from app.tools.tool_call_logger import (
+    ToolCallLogger,
+    ensure_tool_call_logger,
+    finish_tool_call,
+    start_tool_call,
+)
 
 
 async def draft_help_card(
@@ -19,6 +28,11 @@ async def draft_help_card(
     tool_call_logger: ToolCallLogger | None = None,
     agent_run_id: str | None = None,
 ) -> HelpCardOutput:
+    tool_call_logger = ensure_tool_call_logger(
+        db,
+        tool_call_logger,
+        agent_run_id=agent_run_id,
+    )
     tool_call_id = await start_tool_call(
         tool_call_logger,
         tool_name="draft_help_card",
@@ -32,6 +46,7 @@ async def draft_help_card(
             db,
             """
             INSERT INTO help_cards (
+                id,
                 question_id,
                 conversation_id,
                 owner_user_id,
@@ -46,6 +61,7 @@ async def draft_help_card(
                 updated_at
             )
             VALUES (
+                :id,
                 :question_id,
                 :conversation_id,
                 :owner_user_id,
@@ -63,9 +79,22 @@ async def draft_help_card(
             """,
             {
                 **input_data.model_dump(),
+                "id": str(uuid4()),
                 "conversation_id": question["conversation_id"],
                 "prompt": input_data.title,
-                "payload_json": "{}",
+                "context_text": input_data.context_text,
+                "payload_json": json.dumps(
+                    {
+                        "context": input_data.context,
+                        "wants": input_data.wants,
+                        "avoids": input_data.avoids,
+                        "constraints": input_data.constraints,
+                        "revision": input_data.revision,
+                        "reward": input_data.reward,
+                        "answer_stats": input_data.answer_stats,
+                    },
+                    ensure_ascii=False,
+                ),
             },
         )
         row = first_mapping(result)
@@ -109,6 +138,108 @@ async def draft_help_card(
         raise
 
 
+async def update_help_card(
+    db: SessionLike,
+    input_data: UpdateHelpCardInput,
+    *,
+    tool_call_logger: ToolCallLogger | None = None,
+    agent_run_id: str | None = None,
+) -> HelpCardOutput:
+    tool_call_logger = ensure_tool_call_logger(
+        db,
+        tool_call_logger,
+        agent_run_id=agent_run_id,
+    )
+    tool_call_id = await start_tool_call(
+        tool_call_logger,
+        tool_name="update_help_card",
+        input_json=input_data.model_dump(mode="json"),
+        agent_run_id=agent_run_id,
+        help_request_id=input_data.help_card_id,
+    )
+    try:
+        help_card = await _get_help_card(db, input_data.help_card_id)
+        if (
+            input_data.owner_user_id is not None
+            and str(help_card["owner_user_id"]) != input_data.owner_user_id
+        ):
+            raise ToolForbiddenError("Only the help card owner can update it.")
+        if help_card["status"] != "draft":
+            raise ToolConflictError("Only draft help cards can be updated.")
+
+        result = await execute(
+            db,
+            """
+            UPDATE help_cards
+            SET title = COALESCE(:title, title),
+                prompt = COALESCE(:title, prompt),
+                context_text = COALESCE(:context_text, context_text),
+                min_answers_required = COALESCE(:min_answers_required, min_answers_required),
+                updated_at = NOW()
+            WHERE id = :help_card_id
+            RETURNING
+                id,
+                question_id,
+                owner_user_id,
+                title,
+                context_text,
+                status,
+                answer_count,
+                min_answers_required,
+                published_at
+            """,
+            {
+                "help_card_id": input_data.help_card_id,
+                "title": input_data.title,
+                "context_text": input_data.context_text,
+                "min_answers_required": input_data.min_answers_required,
+            },
+        )
+        updated = first_mapping(result)
+        if updated is None:
+            raise ToolNotFoundError("Help card not found.")
+        await execute(
+            db,
+            """
+            UPDATE questions
+            SET current_help_card_id = :help_card_id,
+                status = 'ask_draft_ready',
+                updated_at = NOW()
+            WHERE id = :question_id
+            """,
+            {"help_card_id": input_data.help_card_id, "question_id": updated["question_id"]},
+        )
+        await commit(db)
+
+        output = HelpCardOutput(
+            help_card_id=str(updated["id"]),
+            question_id=str(updated["question_id"]),
+            owner_user_id=str(updated["owner_user_id"]),
+            title=updated["title"],
+            context_text=updated["context_text"],
+            status=updated["status"],
+            answer_count=updated["answer_count"],
+            min_answers_required=updated["min_answers_required"],
+            published_at=updated.get("published_at"),
+        )
+        await finish_tool_call(
+            tool_call_logger,
+            tool_call_id=tool_call_id,
+            status="succeeded",
+            output_json=output.model_dump(mode="json"),
+        )
+        return output
+    except Exception as error:
+        await rollback(db)
+        await finish_tool_call(
+            tool_call_logger,
+            tool_call_id=tool_call_id,
+            status="failed",
+            error_message=str(error),
+        )
+        raise
+
+
 async def publish_help_card(
     db: SessionLike,
     input_data: PublishHelpCardInput,
@@ -116,6 +247,11 @@ async def publish_help_card(
     tool_call_logger: ToolCallLogger | None = None,
     agent_run_id: str | None = None,
 ) -> HelpCardOutput:
+    tool_call_logger = ensure_tool_call_logger(
+        db,
+        tool_call_logger,
+        agent_run_id=agent_run_id,
+    )
     tool_call_id = await start_tool_call(
         tool_call_logger,
         tool_name="publish_help_card",
@@ -127,7 +263,7 @@ async def publish_help_card(
         help_request = await _get_help_card(db, input_data.help_card_id)
         if (
             input_data.owner_user_id is not None
-            and help_request["owner_user_id"] != input_data.owner_user_id
+            and str(help_request["owner_user_id"]) != input_data.owner_user_id
         ):
             raise ToolForbiddenError("Only the help card owner can publish it.")
         if help_request["status"] != "draft":
@@ -164,8 +300,8 @@ async def publish_help_card(
 
         output = HelpCardOutput(
             help_card_id=input_data.help_card_id,
-            question_id=help_request["question_id"],
-            owner_user_id=help_request["owner_user_id"],
+            question_id=str(help_request["question_id"]),
+            owner_user_id=str(help_request["owner_user_id"]),
             title=help_request["title"],
             context_text=help_request["context_text"],
             status="published",
@@ -198,6 +334,11 @@ async def submit_one_liner_answer(
     tool_call_logger: ToolCallLogger | None = None,
     agent_run_id: str | None = None,
 ) -> SubmitOneLinerAnswerOutput:
+    tool_call_logger = ensure_tool_call_logger(
+        db,
+        tool_call_logger,
+        agent_run_id=agent_run_id,
+    )
     tool_call_id = await start_tool_call(
         tool_call_logger,
         tool_name="submit_one_liner_answer",
@@ -207,7 +348,7 @@ async def submit_one_liner_answer(
     )
     try:
         help_request = await _get_help_card(db, input_data.help_card_id)
-        if help_request["owner_user_id"] == input_data.answer_user_id:
+        if str(help_request["owner_user_id"]) == input_data.answer_user_id:
             raise ToolForbiddenError("Owner cannot answer their own help card.")
         if help_request["status"] not in {"published", "collecting"}:
             raise ToolConflictError("Help card is not accepting answers.")
@@ -218,6 +359,7 @@ async def submit_one_liner_answer(
             db,
             """
             INSERT INTO help_answers (
+                id,
                 help_card_id,
                 answer_user_id,
                 raw_text,
@@ -228,6 +370,7 @@ async def submit_one_liner_answer(
                 created_at
             )
             VALUES (
+                :id,
                 :help_card_id,
                 :answer_user_id,
                 :raw_text,
@@ -239,7 +382,11 @@ async def submit_one_liner_answer(
             )
             RETURNING id
             """,
-            {**input_data.model_dump(), "evidence_json": "{}"},
+            {
+                **input_data.model_dump(),
+                "id": str(uuid4()),
+                "evidence_json": '{"evidence_type": "human_one_liner"}',
+            },
         )
         row = first_mapping(result)
         answer_id = str(row["id"]) if row else ""

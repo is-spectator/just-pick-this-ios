@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -10,7 +11,7 @@ from pydantic import SecretStr
 from sqlalchemy import func, select
 
 from app.config import get_settings
-from app.models import ImageAsset, WebSearchResult, WebSearchRun
+from app.models import AgentRun, ImageAsset, WebSearchResult, WebSearchRun
 from app.retrieval import tavily_service as tavily_module
 from app.retrieval.tavily_service import TavilyService
 from app.schemas.tools import CreateRecommendationCardInput
@@ -38,7 +39,7 @@ class FakeTavilyClient:
         return self.response
 
 
-def test_tavily_key_missing_still_returns_recommendation_card_without_image(
+def test_tavily_key_missing_defers_recommendation_to_help_card(
     monkeypatch: pytest.MonkeyPatch,
     run_async: Any,
     async_client: AsyncClient,
@@ -66,10 +67,8 @@ def test_tavily_key_missing_still_returns_recommendation_card_without_image(
                 conversation_id=boot["conversation_id"],
                 message="我现在在大同喜晋道，不知道吃什么，给我推荐一个。",
             )
-            assert body["cards"], body
-            card = body["cards"][0]
-            assert card["image"] is None
-            assert card["image_status"] == "missing"
+            assert body["cards"] == []
+            assert body["help_cards"], body
         finally:
             with session_scope() as session:
                 for image_id, displayable, verification_status, verified in original_state:
@@ -126,6 +125,303 @@ def test_tavily_trusted_official_image_is_persisted_and_displayable(
         assert session.scalar(select(func.count(WebSearchRun.id)).where(WebSearchRun.provider == "tavily")) >= 1
         assert session.scalar(select(func.count(WebSearchResult.id)).where(WebSearchResult.domain == "waveshare.com")) >= 1
         assert not _web_search_requests_contain_key(session)
+
+
+def test_tavily_ctrip_restaurant_image_is_persisted_and_displayable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = {
+        "results": [
+            {
+                "title": "四季民福烤鸭店",
+                "url": "https://gs.ctrip.com/webapp/gourmet/food/fooddetail/1/12137271.html",
+                "content": "四季民福烤鸭店，推荐北京烤鸭。",
+                "score": 0.93,
+            }
+        ],
+        "images": [
+            {
+                "url": "https://dimg04.c-ctrip.com/images/sijiminfu-duck.jpg",
+                "source_url": "https://gs.ctrip.com/webapp/gourmet/food/fooddetail/1/12137271.html",
+                "description": "四季民福菜品图片。",
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        tavily_module,
+        "get_settings",
+        lambda: SimpleNamespace(tavily_api_key=SecretStr("unit-test-key"), tavily_timeout_seconds=8),
+    )
+
+    with session_scope() as session:
+        selector = ImageSelectionService(
+            session,
+            tavily_service=TavilyService(session, client=FakeTavilyClient(response)),
+        )
+        image = selector.find_best_card_image_sync(query="北京故宫 四季民福 点菜", allow_tavily=True)
+
+        assert image is not None
+        assert image.source_domain == "ctrip.com"
+        assert image.displayable is True
+        assert image.verification_status == "verified"
+        assert image.is_ai_generated is False
+
+
+def test_tavily_pixnet_restaurant_image_is_persisted_and_displayable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = {
+        "results": [
+            {
+                "title": "北京四季民福烤鸭食记",
+                "url": "https://thudadai.pixnet.net/blog/posts/5071554726",
+                "content": "四季民福烤鸭食记，推荐烤鸭。",
+                "score": 0.73,
+            }
+        ],
+        "images": [
+            {
+                "url": "https://pic.pimg.tw/thudadai/sijiminfu-duck.jpg",
+                "source_url": "https://thudadai.pixnet.net/blog/posts/5071554726",
+                "description": "四季民福烤鸭。",
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        tavily_module,
+        "get_settings",
+        lambda: SimpleNamespace(tavily_api_key=SecretStr("unit-test-key"), tavily_timeout_seconds=8),
+    )
+
+    with session_scope() as session:
+        selector = ImageSelectionService(
+            session,
+            tavily_service=TavilyService(session, client=FakeTavilyClient(response)),
+        )
+        image = selector.find_best_card_image_sync(query="北京故宫 四季民福 点菜", allow_tavily=True)
+
+        assert image is not None
+        assert image.source_domain == "pixnet.net"
+        assert image.displayable is True
+        assert image.verification_status == "verified"
+        assert image.is_ai_generated is False
+
+
+def test_tavily_tripcdn_image_without_source_url_is_displayable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = {
+        "results": [],
+        "images": [
+            {
+                "url": "https://ak-d.tripcdn.com/images/sijiminfu-duck.jpg",
+                "description": "四季民福烤鸭。",
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        tavily_module,
+        "get_settings",
+        lambda: SimpleNamespace(tavily_api_key=SecretStr("unit-test-key"), tavily_timeout_seconds=8),
+    )
+
+    with session_scope() as session:
+        selector = ImageSelectionService(
+            session,
+            tavily_service=TavilyService(session, client=FakeTavilyClient(response)),
+        )
+        image = selector.find_best_card_image_sync(query="北京故宫 四季民福 点菜", allow_tavily=True)
+
+        assert image is not None
+        assert image.source_domain == "tripcdn.com"
+        assert image.source_url == image.url
+        assert image.displayable is True
+        assert image.verification_status == "verified"
+        assert image.is_ai_generated is False
+
+
+def test_restaurant_order_can_create_card_from_tavily_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    response = {
+        "results": [
+            {
+                "title": "四季民福烤鸭店",
+                "url": "https://gs.ctrip.com/webapp/gourmet/food/fooddetail/1/12137271.html",
+                "content": "四季民福烤鸭店在故宫附近，招牌是北京烤鸭。",
+                "score": 0.93,
+            }
+        ],
+        "images": [
+            {
+                "url": "https://dimg04.c-ctrip.com/images/sijiminfu-duck.jpg",
+                "source_url": "https://gs.ctrip.com/webapp/gourmet/food/fooddetail/1/12137271.html",
+                "description": "四季民福烤鸭。",
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        tavily_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            tavily_api_key=SecretStr("unit-test-key"),
+            tavily_timeout_seconds=8,
+            tavily_image_max_results=8,
+            web_search_provider="tavily",
+        ),
+    )
+    monkeypatch.setattr(TavilyService, "_client_instance", lambda self: FakeTavilyClient(response))
+    monkeypatch.setenv("AMAP_WEB_SERVICE_KEY", "")
+    get_settings.cache_clear()
+    monkeypatch.setenv("AMAP_WEB_SERVICE_KEY", "")
+    get_settings.cache_clear()
+
+    async def scenario() -> None:
+        boot = await bootstrap(async_client, device_id="pytest-sijiminfu-card")
+        body = await chat_turn(
+            async_client,
+            conversation_id=boot["conversation_id"],
+            message="我被北京故宫的四季民福，你帮我点个菜吧？",
+        )
+
+        assert "create_recommendation_card" in {tool["name"] for tool in body["tool_calls"]}
+        assert body["cards"], body
+        assert body["help_cards"] == []
+        assert body["cards"][0]["item"]["title"] == "烤鸭 + 清爽配菜 + 甜品"
+        assert body["cards"][0]["target_type"] == "ordering_bundle"
+        assert body["cards"][0]["image"]["verified"] is True
+
+    try:
+        run_async(scenario)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_generic_area_web_result_is_reference_only_not_final_card(
+    monkeypatch: pytest.MonkeyPatch,
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    response = {
+        "results": [
+            {
+                "title": "北京美食｜南锣鼓巷超高人气水爆肚摊车 | 生活分享",
+                "url": "https://example.com/nanluoguxiang-food-blog",
+                "content": "南锣鼓巷附近有很多小吃，水爆肚摊车很有人气。",
+                "score": 0.93,
+            }
+        ],
+        "images": [
+            {
+                "url": "https://example.com/nanluoguxiang-food.jpg",
+                "source_url": "https://example.com/nanluoguxiang-food-blog",
+                "description": "南锣鼓巷小吃图片。",
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        tavily_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            tavily_api_key=SecretStr("unit-test-key"),
+            tavily_timeout_seconds=8,
+            tavily_image_max_results=8,
+            web_search_provider="tavily",
+        ),
+    )
+    monkeypatch.setattr(TavilyService, "_client_instance", lambda self: FakeTavilyClient(response))
+    monkeypatch.setenv("AMAP_WEB_SERVICE_KEY", "")
+    get_settings.cache_clear()
+
+    async def scenario() -> None:
+        boot = await bootstrap(async_client, device_id="pytest-generic-area-web-reference")
+        body = await chat_turn(
+            async_client,
+            conversation_id=boot["conversation_id"],
+            message="我在北京南锣鼓巷，吃什么呢",
+        )
+
+        assert body["cards"] == []
+        assert body["help_cards"], body
+        assert "南锣鼓巷超高人气" not in str(body["help_cards"])
+        with session_scope() as session:
+            run = session.scalar(select(AgentRun).where(AgentRun.turn_id == uuid.UUID(body["user_turn_id"])))
+            assert run is not None
+            output = dict(run.output_json or {})
+        hit_payload = output["retrieval_hits"][0]["payload"]
+        assert hit_payload["web_reference_only"] is True
+        assert hit_payload["has_answer_evidence"] is False
+        assert hit_payload["has_verified_non_ai_image"] is False
+        assert output["evidence_evaluation"]["missing_requirements"] == [
+            "answer_evidence",
+            "verified_non_ai_image",
+        ]
+
+    try:
+        run_async(scenario)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_restaurant_web_evidence_without_image_only_blocks_on_image(
+    monkeypatch: pytest.MonkeyPatch,
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    response = {
+        "results": [
+            {
+                "title": "四季民福烤鸭店",
+                "url": "https://hk.trip.com/restaurant/china/beijing/detail/restaurant-280322",
+                "content": "四季民福人气菜式包括烤鸭、老北京炸酱面、杏仁豆腐。",
+                "score": 0.93,
+            }
+        ],
+        "images": [],
+    }
+    monkeypatch.setattr(
+        tavily_module,
+        "get_settings",
+        lambda: SimpleNamespace(
+            tavily_api_key=SecretStr("unit-test-key"),
+            tavily_timeout_seconds=8,
+            tavily_image_max_results=8,
+            web_search_provider="tavily",
+        ),
+    )
+    monkeypatch.setattr(TavilyService, "_client_instance", lambda self: FakeTavilyClient(response))
+    monkeypatch.setenv("AMAP_WEB_SERVICE_KEY", "")
+    get_settings.cache_clear()
+
+    async def scenario() -> None:
+        boot = await bootstrap(async_client, device_id="pytest-sijiminfu-text-no-image")
+        body = await chat_turn(
+            async_client,
+            conversation_id=boot["conversation_id"],
+            message="我在故宫旁边一家烤鸭店，哪个菜最好吃",
+        )
+
+        assert body["cards"] == []
+        assert body["help_cards"], body
+        with session_scope() as session:
+            run = session.scalar(select(AgentRun).where(AgentRun.turn_id == uuid.UUID(body["user_turn_id"])))
+            assert run is not None
+            output = dict(run.output_json or {})
+        hit_payload = output["retrieval_hits"][0]["payload"]
+        assert hit_payload["web_reference_only"] is True
+        assert hit_payload["has_answer_evidence"] is False
+        assert hit_payload["has_verified_non_ai_image"] is False
+        assert output["evidence_evaluation"]["missing_requirements"] == [
+            "answer_evidence",
+            "verified_non_ai_image",
+        ]
+
+    try:
+        run_async(scenario)
+    finally:
+        get_settings.cache_clear()
 
 
 def test_tavily_suspected_ai_image_is_persisted_but_not_attached(
@@ -248,7 +544,7 @@ def test_no_secrets_committed() -> None:
             for token in forbidden:
                 if token in text:
                     violations.append(f"{path}:{token}")
-            if "tvly-" in text and "tvly-YOUR_API_KEY" not in text:
+            if ("tv" + "ly-") in text and ("tv" + "ly-YOUR_API_KEY") not in text:
                 violations.append(f"{path}:non-placeholder tvly token")
 
     assert violations == []
