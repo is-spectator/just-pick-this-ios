@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.jobs.finalizer_job import run_finalize_graph_for_help_card
-from app.models import ContentReviewTask, HelpAnswer, HelpCard, RewardEvent
+from app.models import ContentReviewTask, HelpAnswer, HelpCard, RewardEvent, UserBehaviorEvent
 from app.services.help_service import (
     HelpCardAbuseCheck,
     OneLinerAbuseCheck,
@@ -27,6 +27,7 @@ from app.services.runtime import (
     utcnow,
 )
 from app.services.user_events import record_user_behavior_event
+from app.services.user_events import serialize_user_behavior_event
 
 
 def list_help_feed(
@@ -49,6 +50,17 @@ def list_help_feed(
             answered_ids = set(
                 session.scalars(select(HelpAnswer.help_card_id).where(HelpAnswer.answer_user_id == user.id))
             )
+        skipped_ids: set[uuid.UUID] = set()
+        if user is not None:
+            skipped_ids = set(
+                session.scalars(
+                    select(UserBehaviorEvent.help_card_id).where(
+                        UserBehaviorEvent.user_id == user.id,
+                        UserBehaviorEvent.event_type == "help_card_skipped",
+                        UserBehaviorEvent.help_card_id.is_not(None),
+                    )
+                )
+            )
         query = (
             select(HelpCard)
             .where(HelpCard.status.in_(["published", "collecting"]))
@@ -59,9 +71,31 @@ def list_help_feed(
             query = query.where(HelpCard.owner_user_id != user.id)
         if answered_ids:
             query = query.where(~HelpCard.id.in_(answered_ids))
+        if skipped_ids:
+            query = query.where(~HelpCard.id.in_(skipped_ids))
         rows = [card for card in session.scalars(query) if not _help_card_abuse(card).unsafe]
         rows = sorted(rows, key=help_feed_sort_key)
         items = rows[offset : offset + resolved_limit]
+        if user is not None and items:
+            shown_ids = [str(card.id) for card in items]
+            for rank_index, card in enumerate(items):
+                record_user_behavior_event(
+                    session,
+                    event_type="help_feed_impression",
+                    user_id=user.id,
+                    conversation_id=card.conversation_id,
+                    help_card_id=card.id,
+                    source="help_feed",
+                    payload_json={
+                        "rank_index": offset + rank_index,
+                        "page_index": rank_index,
+                        "limit": resolved_limit,
+                        "cursor": cursor,
+                        "shown_help_card_ids": shown_ids,
+                        "feed_ranking": help_feed_rank_payload(card),
+                    },
+                )
+            session.flush()
         next_cursor = str(offset + resolved_limit) if len(rows) > offset + resolved_limit else None
         return {"items": [_serialize_ranked_help_card(card) for card in items], "next_cursor": next_cursor}
 
@@ -286,6 +320,38 @@ def create_one_liner(id: str, payload: dict[str, Any]) -> dict[str, Any]:
                 "finalization_ready": finalization_ready,
                 "final_card_id": final_card_id,
             },
+        }
+
+
+def skip_help_card(id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    with session_scope() as session:
+        help_card = session.get(HelpCard, uuid.UUID(id))
+        if help_card is None:
+            raise HTTPException(status_code=404, detail="help_card_not_found")
+        device_uid = payload.get("device_uid") or payload.get("device_id") or payload.get("user_id")
+        user_id = payload.get("user_id")
+        if not device_uid and not user_id:
+            raise HTTPException(status_code=422, detail="device_uid_or_user_id_required")
+        user = ensure_user(session, device_uid=device_uid, user_id=user_id)
+        if user.id == help_card.owner_user_id:
+            raise HTTPException(status_code=403, detail="owner_cannot_skip_own_help_card")
+        event = record_user_behavior_event(
+            session,
+            event_type="help_card_skipped",
+            user_id=user.id,
+            conversation_id=help_card.conversation_id,
+            help_card_id=help_card.id,
+            source="help_feed",
+            payload_json={
+                **dict(payload.get("metadata") or {}),
+                "reason": str(payload.get("reason") or "").strip() or None,
+            },
+        )
+        session.flush()
+        return {
+            "ok": True,
+            "help_card_id": str(help_card.id),
+            "event": serialize_user_behavior_event(event),
         }
 
 
@@ -515,4 +581,5 @@ __all__ = [
     "help_feed_sort_key",
     "list_help_feed",
     "publish_help_card",
+    "skip_help_card",
 ]

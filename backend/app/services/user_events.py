@@ -19,6 +19,8 @@ CORE_USER_EVENT_TYPES = {
     "recommendation_card_changed",
     "ask_human_requested",
     "help_card_published",
+    "help_feed_impression",
+    "help_card_skipped",
     "one_liner_submitted",
     "one_liner_reward_granted",
     "one_liner_reward_rejected",

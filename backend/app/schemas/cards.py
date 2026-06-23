@@ -180,6 +180,20 @@ class HelpCardOneLinerResponse(ApiModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class HelpCardSkipRequest(ApiModel):
+    user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
+    reason: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class HelpCardSkipResponse(ApiModel):
+    ok: bool = True
+    help_card_id: str
+    event: dict[str, Any]
+
+
 class RewardsMeResponse(ApiModel):
     device_uid: str | None = None
     pending_value: int = 0

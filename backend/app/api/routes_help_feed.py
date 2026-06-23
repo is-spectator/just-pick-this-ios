@@ -11,6 +11,8 @@ from app.schemas.cards import (
     HelpCardOneLinerResponse,
     HelpCardPublishRequest,
     HelpCardPublishResponse,
+    HelpCardSkipRequest,
+    HelpCardSkipResponse,
     HelpFeedResponse,
     RewardsMeResponse,
 )
@@ -58,6 +60,15 @@ async def help_card_one_liner(
     payload: HelpCardOneLinerRequest,
 ) -> HelpCardOneLinerResponse:
     handler = resolve_service_handler("app.services.help_feed", "create_one_liner")
+    return await call_service(handler, help_card_id, dump_model(payload))
+
+
+@router.post("/help-cards/{help_card_id}/skip", response_model=HelpCardSkipResponse)
+async def skip_help_card(
+    help_card_id: str,
+    payload: HelpCardSkipRequest,
+) -> HelpCardSkipResponse:
+    handler = resolve_service_handler("app.services.help_feed", "skip_help_card")
     return await call_service(handler, help_card_id, dump_model(payload))
 
 

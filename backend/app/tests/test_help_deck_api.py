@@ -173,6 +173,36 @@ def _behavior_event_count_for_answer(*, answer_id: str, event_type: str) -> int:
         )
 
 
+def _behavior_event_count_for_help_card(*, help_card_id: str, event_type: str) -> int:
+    with session_scope() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(UserBehaviorEvent)
+                .where(
+                    UserBehaviorEvent.help_card_id == uuid.UUID(help_card_id),
+                    UserBehaviorEvent.event_type == event_type,
+                )
+            )
+            or 0
+        )
+
+
+def _latest_behavior_event_for_help_card(*, help_card_id: str, event_type: str) -> UserBehaviorEvent | None:
+    with session_scope() as session:
+        event = session.scalar(
+            select(UserBehaviorEvent)
+            .where(
+                UserBehaviorEvent.help_card_id == uuid.UUID(help_card_id),
+                UserBehaviorEvent.event_type == event_type,
+            )
+            .order_by(UserBehaviorEvent.created_at.desc())
+        )
+        if event is not None:
+            session.expunge(event)
+        return event
+
+
 def _seed_answers_with_rewards(
     *,
     help_card_id: str,
@@ -256,6 +286,88 @@ def test_help_feed_filters_owner_and_answered_cards(run_async: Any, async_client
         assert visible[visible_card_id]["context_text"] == "晚上想吃本地味道。"
         assert visible[visible_card_id]["reward"]["label"] == "+10"
         assert isinstance(visible[visible_card_id]["answer_count"], int)
+
+    run_async(scenario)
+
+
+def test_help_feed_records_impressions_for_visible_cards(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        reader_device = f"pytest-help-deck-reader-impression-{suffix}"
+        visible_card_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-owner-impression-{suffix}",
+            title="五道口韩餐，求一句",
+            context_text="想吃韩餐，不想排太久。",
+            reward_value=20,
+        )
+
+        feed = await _get_feed(async_client, device_id=reader_device, limit=20)
+
+        assert visible_card_id in {item["id"] for item in feed["items"]}
+        assert _behavior_event_count_for_help_card(
+            help_card_id=visible_card_id,
+            event_type="help_feed_impression",
+        ) >= 1
+        event = _latest_behavior_event_for_help_card(
+            help_card_id=visible_card_id,
+            event_type="help_feed_impression",
+        )
+        assert event is not None
+        assert event.source == "help_feed"
+        assert event.payload_json["known_core_event"] is True
+        assert isinstance(event.payload_json["rank_index"], int)
+        assert event.payload_json["limit"] == 20
+        assert visible_card_id in event.payload_json["shown_help_card_ids"]
+        assert event.payload_json["feed_ranking"]["reward_value"] == 20
+
+    run_async(scenario)
+
+
+def test_skip_help_card_records_signal_and_hides_for_same_user(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        reader_device = f"pytest-help-deck-reader-skip-{suffix}"
+        other_reader_device = f"pytest-help-deck-reader-skip-other-{suffix}"
+        help_card_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-owner-skip-{suffix}",
+            title="国贸午饭，求一句",
+            context_text="想找现在能直接去的一家。",
+        )
+
+        before_skip = await _get_feed(async_client, device_id=reader_device, limit=100)
+        assert help_card_id in {item["id"] for item in before_skip["items"]}
+
+        skipped = await async_client.post(
+            f"/v1/help-cards/{help_card_id}/skip",
+            json={
+                "device_id": reader_device,
+                "reason": "not_relevant",
+                "metadata": {"surface": "help_feed"},
+            },
+        )
+
+        assert skipped.status_code == 200, skipped.text
+        body = skipped.json()
+        assert body["ok"] is True
+        assert body["help_card_id"] == help_card_id
+        assert body["event"]["event_type"] == "help_card_skipped"
+        assert body["event"]["metadata"]["reason"] == "not_relevant"
+        assert _behavior_event_count_for_help_card(
+            help_card_id=help_card_id,
+            event_type="help_card_skipped",
+        ) == 1
+
+        same_user_feed = await _get_feed(async_client, device_id=reader_device, limit=100)
+        assert help_card_id not in {item["id"] for item in same_user_feed["items"]}
+
+        other_user_feed = await _get_feed(async_client, device_id=other_reader_device, limit=100)
+        assert help_card_id in {item["id"] for item in other_user_feed["items"]}
 
     run_async(scenario)
 
