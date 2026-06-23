@@ -135,6 +135,81 @@ def test_finalize_graph_waits_for_min_required_before_tools() -> None:
     assert tools.calls == []
 
 
+def test_finalize_graph_requires_useful_unique_human_evidence() -> None:
+    tools = RecordingTools()
+    state = PipiFinalizeGraph(retriever=StaticRetriever(), tools=tools).invoke(
+        {
+            "help_card_id": "help-duplicates",
+            "help_card": {
+                "id": "help-duplicates",
+                "answer_count": 4,
+                "min_answers_required": 3,
+                "status": "collecting",
+            },
+            "help_answers": [
+                {"id": "answer-1", "raw_text": "去圣水更稳，小店密度高 1"},
+                {"id": "answer-2", "raw_text": "去圣水更稳，小店密度高 2"},
+                {"id": "answer-3", "raw_text": "随便"},
+                {"id": "answer-4", "raw_text": "都行"},
+            ],
+        }
+    )
+
+    assert state["status"] == "needs_more_answers"
+    assert tools.calls == []
+    final_answer = state["final_answer"]
+    assert final_answer["evidence_answer_ids"] == ["answer-1"]
+    metadata = final_answer["metadata"]
+    assert metadata["human_answer_count"] == 4
+    assert metadata["unique_human_evidence_count"] == 1
+    assert metadata["excluded_answer_reasons"] == {
+        "answer-2": "duplicate",
+        "answer-3": "not_useful",
+        "answer-4": "not_useful",
+    }
+
+
+def test_finalize_graph_records_excluded_answer_metadata_when_final_ready() -> None:
+    tools = RecordingTools()
+    state = PipiFinalizeGraph(retriever=StaticRetriever(), tools=tools).invoke(
+        {
+            "help_card_id": "help-extra-evidence",
+            "question_id": "question-extra",
+            "conversation_id": "conversation-extra",
+            "user_id": "owner-extra",
+            "help_card": {
+                "id": "help-extra-evidence",
+                "question_id": "question-extra",
+                "conversation_id": "conversation-extra",
+                "user_id": "owner-extra",
+                "title": "韩国小众逛街求一个",
+                "context_text": "不想去明洞",
+                "answer_count": 5,
+                "min_answers_required": 3,
+                "status": "collecting",
+            },
+            "help_answers": [
+                {"id": "answer-1", "raw_text": "去圣水，小店多，也适合买美妆。"},
+                {"id": "answer-2", "raw_text": "圣水比明洞更小众，咖啡店也密集。"},
+                {"id": "answer-3", "raw_text": "预算不高也能逛圣水，路线轻松。"},
+                {"id": "answer-4", "raw_text": "预算不高也能逛圣水，路线轻松 2"},
+                {"id": "answer-5", "raw_text": "都行"},
+            ],
+        }
+    )
+
+    assert state["status"] == "final_ready"
+    save_metadata = tools.calls[2][1]["metadata"]
+    assert save_metadata["evidence_answer_ids"] == ["answer-1", "answer-2", "answer-3"]
+    assert save_metadata["human_answer_count"] == 5
+    assert save_metadata["unique_human_evidence_count"] == 3
+    assert save_metadata["excluded_answer_ids"] == ["answer-4", "answer-5"]
+    assert save_metadata["excluded_answer_reasons"] == {
+        "answer-4": "duplicate",
+        "answer-5": "not_useful",
+    }
+
+
 def test_save_intent_answer_adapter_canonicalizes_help_final_metadata() -> None:
     payload = adapt_save_intent_answer_input(
         {

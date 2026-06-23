@@ -335,9 +335,14 @@ def test_one_liner_reward_becomes_granted_after_finalization(
         answer_devices = [f"pytest-help-deck-grant-answer-{index}-{suffix}" for index in range(3)]
         last_body: dict[str, Any] = {}
         for index, device_id in enumerate(answer_devices, start=1):
+            text = [
+                "去圣水更稳，小店密度高。",
+                "圣水比明洞更小众，也适合买美妆。",
+                "预算不高也能逛圣水，路线轻松。",
+            ][index - 1]
             response = await async_client.post(
                 f"/v1/help-cards/{help_card_id}/one-liner",
-                json={"device_id": device_id, "text": f"去圣水更稳，小店密度高 {index}"},
+                json={"device_id": device_id, "text": text},
             )
             assert response.status_code == 200, response.text
             last_body = response.json()

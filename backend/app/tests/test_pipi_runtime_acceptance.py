@@ -354,10 +354,17 @@ def test_final_recommendation_writes_intent_answer(
             device_id="pytest-final-intent-answer",
         )
 
-        for index in range(1, 4):
+        for index, text in enumerate(
+            [
+                "圣水比明洞更小众，适合这次逛街。",
+                "圣水咖啡店和小店更密，路线轻松。",
+                "预算不高也能在圣水慢慢逛。",
+            ],
+            start=1,
+        ):
             response = await async_client.post(
                 f"/v1/help-cards/{help_card_id}/one-liner",
-                json={"user_id": f"pytest-final-intent-answerer-{index}", "text": f"圣水更适合 {index}"},
+                json={"user_id": f"pytest-final-intent-answerer-{index}", "text": text},
             )
             require_ready_response(response)
 
@@ -384,10 +391,17 @@ def test_finalization_writes_light_event(
             device_id="pytest-light-event-owner",
         )
 
-        for index in range(1, 4):
+        for index, text in enumerate(
+            [
+                "圣水比明洞更小众，适合这次逛街。",
+                "圣水咖啡店和小店更密，路线轻松。",
+                "预算不高也能在圣水慢慢逛。",
+            ],
+            start=1,
+        ):
             response = await async_client.post(
                 f"/v1/help-cards/{help_card_id}/one-liner",
-                json={"user_id": f"pytest-light-answerer-{index}", "text": f"圣水更适合小众逛街 {index}"},
+                json={"user_id": f"pytest-light-answerer-{index}", "text": text},
             )
             require_ready_response(response)
 
