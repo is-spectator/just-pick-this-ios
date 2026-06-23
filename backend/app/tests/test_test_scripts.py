@@ -18,6 +18,8 @@ def test_test_scripts_are_executable() -> None:
         "scripts/quality_gate.py",
         "scripts/validate_benchmark_results.py",
         "scripts/run_product_benchmark.py",
+        "scripts/build_ios_sim.sh",
+        "scripts/check_db_ready.sh",
     ):
         path = ROOT / script
         assert path.exists()
@@ -58,3 +60,16 @@ def test_prod_start_script_does_not_use_dev_extra() -> None:
     text = (ROOT / "scripts/start_prod.sh").read_text()
     assert "uv run --extra dev" not in text
     assert "uv run uvicorn" in text
+
+
+def test_ios_sim_build_script_uses_destination_id() -> None:
+    text = (ROOT / "scripts/build_ios_sim.sh").read_text()
+    assert "-showdestinations" in text
+    assert "-destination \"id=$destination_id\"" in text
+    assert "platform=iOS Simulator,name=" not in text
+
+
+def test_db_ready_script_has_clear_database_message() -> None:
+    text = (ROOT / "scripts/check_db_ready.sh").read_text()
+    assert "DATABASE_URL is not configured" in text
+    assert "DATABASE_URL is configured but unreachable" in text

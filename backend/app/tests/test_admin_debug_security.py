@@ -28,6 +28,15 @@ def test_admin_requires_bearer_token_only() -> None:
         assert client.get("/admin/api/sessions", headers={"x-admin-token": "secret-admin"}).status_code == 401
 
 
+def test_admin_missing_token_still_returns_unauthorized_without_database() -> None:
+    app = create_app(Settings(_env_file=None, ADMIN_TOKEN=None, DATABASE_URL=None))
+    app.dependency_overrides[get_db_session] = _raise_if_db_session_is_touched
+    with TestClient(app, raise_server_exceptions=True) as client:
+        response = client.get("/admin/api/sessions")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "admin token required"
+
+
 def test_debug_routes_default_404() -> None:
     app = create_app(Settings(_env_file=None, ADMIN_TOKEN="admin"))
     with TestClient(app) as client:

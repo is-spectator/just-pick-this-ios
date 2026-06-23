@@ -1,6 +1,7 @@
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -25,6 +26,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved_settings
     _assert_startup_runtime_guards(resolved_settings)
     install_hybrid_harness_middleware(app)
+
+    @app.exception_handler(SQLAlchemyError)
+    async def database_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+        del request
+        return _database_unavailable_response(exc)
+
+    @app.exception_handler(RuntimeError)
+    async def runtime_exception_handler(request: Request, exc: RuntimeError) -> JSONResponse:
+        del request
+        if _is_database_config_error(exc):
+            return _database_unavailable_response(exc)
+        raise exc
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     async def health() -> HealthResponse:
@@ -63,6 +76,23 @@ def _assert_startup_runtime_guards(settings: Settings) -> None:
         and settings.langgraph_checkpoint_required
     ):
         raise RuntimeError("LANGGRAPH_CHECKPOINT_REQUIRED must be false in production/staging for V0")
+
+
+def _database_unavailable_response(exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": {
+                "code": "database_unavailable",
+                "message": "Database is unavailable. Please check DATABASE_URL and database readiness.",
+                "error": exc.__class__.__name__,
+            }
+        },
+    )
+
+
+def _is_database_config_error(exc: RuntimeError) -> bool:
+    return "DATABASE_URL is required" in str(exc)
 
 
 app = create_app()

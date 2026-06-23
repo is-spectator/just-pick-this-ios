@@ -83,6 +83,25 @@ DATABASE_URL=postgresql+psycopg://fangnaoke@localhost:5432/just_pick_this_agent_
 uv run alembic upgrade head
 ```
 
+Local test commands are split by database need:
+
+```sh
+./scripts/test_security_gate.sh   # no Docker and no DATABASE_URL required
+./scripts/test_unit.sh            # no DB integration tests
+uv run --extra dev pytest -q -rx  # skips DB integration tests if DATABASE_URL is unreachable
+./scripts/test.sh                 # full integration path, requires Docker/PostgreSQL
+```
+
+Use `uv run --extra dev pytest --require-db -q -rx` when a CI or release check
+must fail fast if `DATABASE_URL` is configured but unreachable.
+
+`uv run alembic heads` does not require a live database. `uv run alembic current`
+does; for local diagnostics run this first to avoid a long connection stack:
+
+```sh
+../scripts/check_db_ready.sh && uv run alembic current
+```
+
 Seed 数据不会在请求路径自动写入。开发环境如需初始化 seed，显式运行：
 
 ```sh
@@ -455,6 +474,9 @@ uv run python ../scripts/run_product_benchmark.py \
 This writes `results.jsonl`, `results_guard_report.*`, `quality_report.*`, and
 the other eval reports. The runner forces product mode:
 `ALLOW_EVAL_BYPASS=false`, `PIPI_EVAL_MODE=false`, and shadow disabled.
+It requires a reachable `DATABASE_URL`; if the database is missing or
+unreachable it writes a blocked `product_benchmark_summary.*` instead of a
+partial result set.
 
 For schema/coverage-only checks:
 

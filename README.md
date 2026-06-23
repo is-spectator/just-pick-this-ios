@@ -285,13 +285,11 @@ Tavily 的用途：
 ## iOS 运行
 
 ```sh
-xcodebuild \
-  -project JustPickThisIOS.xcodeproj \
-  -scheme JustPickThisIOS \
-  -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-  build
+./scripts/build_ios_sim.sh
 ```
+
+`scripts/build_ios_sim.sh` 会自动选择一个可用 iPhone Simulator 的
+destination id；如果要固定设备，可设置 `IOS_SIMULATOR_ID=<device-id>`。
 
 也可以直接用 Xcode 打开：
 

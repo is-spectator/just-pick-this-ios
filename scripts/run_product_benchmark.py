@@ -24,6 +24,8 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy.exc import SQLAlchemyError  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
 from app.eval.reporting import generate_quality_reports_from_files, load_benchmark_cases  # noqa: E402
@@ -49,6 +51,10 @@ async def run_product_benchmark(config: ProductBenchmarkConfig) -> dict[str, Any
 
     with _product_env():
         get_settings.cache_clear()
+        blocker = _database_readiness_blocker()
+        if blocker is not None:
+            _write_blocked_benchmark_summary(config, run_id=run_id, blocker=blocker)
+            raise RuntimeError(str(blocker["message"]))
         app = create_app()
         async with AsyncClient(
             transport=ASGITransport(app=app),
@@ -379,6 +385,71 @@ def _write_latest_pointer(output_dir: Path, summary: Mapping[str, Any]) -> None:
     )
 
 
+def _database_readiness_blocker() -> dict[str, str] | None:
+    settings = get_settings()
+    if settings.database_url is None:
+        return {
+            "code": "missing_database_url",
+            "message": "DATABASE_URL is not configured; product benchmark requires a database.",
+        }
+
+    engine = None
+    try:
+        engine = create_engine(str(settings.database_url), pool_pre_ping=True)
+        with engine.connect() as connection:
+            connection.execute(text("select 1"))
+    except (SQLAlchemyError, OSError) as exc:
+        return {
+            "code": "database_unreachable",
+            "message": (
+                "DATABASE_URL is configured but unreachable; start Postgres/Docker "
+                "or run ./scripts/test.sh for a managed integration database."
+            ),
+            "error": exc.__class__.__name__,
+        }
+    finally:
+        if engine is not None:
+            engine.dispose()
+    return None
+
+
+def _write_blocked_benchmark_summary(
+    config: ProductBenchmarkConfig,
+    *,
+    run_id: str,
+    blocker: Mapping[str, str],
+) -> None:
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    results_path = config.output_dir / "results.jsonl"
+    results_path.write_text("", encoding="utf-8")
+    summary = {
+        "ok": False,
+        "status": "blocked",
+        "run_id": run_id,
+        "benchmark": str(config.benchmark_path),
+        "output_dir": str(config.output_dir),
+        "results_path": str(results_path),
+        "evaluated_cases": 0,
+        "blocker": dict(blocker),
+        "stats": {
+            "latency": {"count": 0, "p50_ms": None, "p95_ms": None, "max_ms": None},
+            "status_code_counts": {},
+            "response_kind_counts": {},
+            "runtime_path_counts": {},
+            "slowest_cases": [],
+        },
+    }
+    (config.output_dir / "product_benchmark_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (config.output_dir / "product_benchmark_summary.md").write_text(
+        _render_blocked_summary_markdown(summary),
+        encoding="utf-8",
+    )
+    _write_latest_pointer(config.output_dir, summary)
+
+
 def _safe_response_json(response: Any) -> dict[str, Any]:
     try:
         payload = response.json()
@@ -460,6 +531,26 @@ def _render_summary_markdown(summary: Mapping[str, Any]) -> str:
             f"{row.get('status_code')} |"
         )
     return "\n".join(lines)
+
+
+def _render_blocked_summary_markdown(summary: Mapping[str, Any]) -> str:
+    blocker = summary.get("blocker") if isinstance(summary.get("blocker"), Mapping) else {}
+    lines = [
+        "# Product Benchmark Summary",
+        "",
+        "- Status: `blocked`",
+        f"- Evaluated cases: `{int(summary.get('evaluated_cases') or 0)}`",
+        f"- Results path: `{summary.get('results_path')}`",
+        f"- Blocker code: `{blocker.get('code')}`",
+        f"- Blocker message: {blocker.get('message')}",
+    ]
+    if blocker.get("error"):
+        lines.append(f"- Error: `{blocker.get('error')}`")
+    lines += [
+        "",
+        "Start the database or use `./scripts/test.sh` for the managed integration test path, then rerun the benchmark.",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def _display(value: Any) -> str:

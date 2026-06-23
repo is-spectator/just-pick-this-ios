@@ -41,7 +41,7 @@ def _settings(request: Request) -> Any:
 def _require_ops_admin(request: Request) -> str:
     configured = _settings(request).admin_token
     if configured is None:
-        raise HTTPException(status_code=503, detail="ADMIN_TOKEN is not configured")
+        raise HTTPException(status_code=401, detail="admin token required")
     expected = configured.get_secret_value()
     authorization = request.headers.get("authorization") or ""
     bearer = authorization.removeprefix("Bearer ").strip() if authorization.startswith("Bearer ") else ""
