@@ -35,6 +35,8 @@ from app.services.seed_service import (
     SEONGSU_IMAGE_ASSET_ID,
     SHOPPING_INTENT_ANSWER_ID,
     SHOPPING_INTENT_ID,
+    SEED_PACK_MIN_ANSWER_COUNT,
+    seed_pack_answer_count,
     seed_initial_data,
 )
 
@@ -69,6 +71,7 @@ def ensure_seed_data(session: Session) -> None:
         or session.get(IntentAnswer, FOOD_INTENT_ANSWER_ID) is None
         or session.get(IntentAnswer, SHOPPING_INTENT_ANSWER_ID) is None
         or session.get(IntentAnswer, SIJIMINFU_INTENT_ANSWER_ID) is None
+        or seed_pack_answer_count(session) < SEED_PACK_MIN_ANSWER_COUNT
     )
     if seed_required:
         seed_initial_data(session)
