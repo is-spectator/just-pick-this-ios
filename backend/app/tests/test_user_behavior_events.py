@@ -6,7 +6,7 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.models import UserBehaviorEvent
+from app.models import RecommendationCard, UserBehaviorEvent
 from app.services.runtime import session_scope
 
 from .conftest import bootstrap, chat_turn, require_ready_response
@@ -158,5 +158,66 @@ def test_behavior_event_updates_user_preference_memory(
         assert summary["budget_preferences"][0]["value"] == "budget_low"
         assert summary["companions"][0]["value"] == "parents"
         assert summary["areas"][0]["value"] == "望京"
+
+    run_async(scenario)
+
+
+def test_card_reject_and_change_routes_write_feedback_events(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-card-feedback-{uuid.uuid4()}"
+        boot = await bootstrap(async_client, device_id=device_id)
+        body = await chat_turn(
+            async_client,
+            conversation_id=boot["conversation_id"],
+            message="我现在在大同喜晋道，不知道吃什么，给我推荐一个。",
+        )
+        card_id = str(body["cards"][0]["id"])
+
+        rejected = await async_client.post(
+            f"/v1/cards/{card_id}/reject",
+            json={
+                "device_id": device_id,
+                "reason": "不想吃面",
+                "tags": ["不想吃面", "换口味"],
+                "metadata": {"surface": "chat_card"},
+            },
+        )
+        rejected_body = require_ready_response(rejected)
+        assert rejected_body["accepted"] is False
+        assert rejected_body["feedback"]["action"] == "reject"
+        assert rejected_body["event"]["event_type"] == "recommendation_card_rejected"
+        assert _event_count(
+            event_type="recommendation_card_rejected",
+            recommendation_card_id=uuid.UUID(card_id),
+        ) == 1
+        with session_scope() as session:
+            card = session.get(RecommendationCard, uuid.UUID(card_id))
+            assert card is not None
+            assert card.status == "rejected"
+
+        changed = await async_client.post(
+            f"/v1/cards/{card_id}/change",
+            json={
+                "device_id": device_id,
+                "reason": "想再来一个",
+                "metadata": {"surface": "chat_card"},
+            },
+        )
+        changed_body = require_ready_response(changed)
+        assert changed_body["accepted"] is False
+        assert changed_body["feedback"]["action"] == "change"
+        assert changed_body["feedback"]["previous_status"] == "rejected"
+        assert changed_body["event"]["event_type"] == "recommendation_card_changed"
+        assert _event_count(
+            event_type="recommendation_card_changed",
+            recommendation_card_id=uuid.UUID(card_id),
+        ) == 1
+        with session_scope() as session:
+            card = session.get(RecommendationCard, uuid.UUID(card_id))
+            assert card is not None
+            assert card.status == "changed"
 
     run_async(scenario)

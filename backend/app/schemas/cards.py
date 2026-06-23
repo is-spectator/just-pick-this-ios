@@ -218,6 +218,23 @@ class CardAcceptResponse(ApiModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class CardFeedbackRequest(ApiModel):
+    user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
+    reason: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CardFeedbackResponse(ApiModel):
+    card_id: str
+    accepted: bool = False
+    feedback: dict[str, Any] = Field(default_factory=dict)
+    event: dict[str, Any] | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class UserBehaviorEventRequest(ApiModel):
     event_type: str = Field(min_length=1)
     user_id: str | None = None
