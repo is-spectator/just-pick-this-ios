@@ -14,7 +14,7 @@ def test_health_live_is_static_ok() -> None:
 
 
 def test_health_ready_reports_unready_without_database_url() -> None:
-    app = create_app(Settings(_env_file=None, APP_ENV="development"))
+    app = create_app(Settings(_env_file=None, APP_ENV="development", DATABASE_URL=None))
     with TestClient(app) as client:
         response = client.get("/health/ready")
     assert response.status_code == 503
