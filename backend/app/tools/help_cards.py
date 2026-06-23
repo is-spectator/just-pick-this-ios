@@ -3,6 +3,11 @@ from __future__ import annotations
 import json
 from uuid import uuid4
 
+from app.services.help_service import (
+    assess_one_liner_quality,
+    normalize_one_liner_key,
+    one_liner_quality_metadata,
+)
 from app.schemas.tools import (
     DraftHelpCardInput,
     HelpCardOutput,
@@ -12,7 +17,7 @@ from app.schemas.tools import (
     UpdateHelpCardInput,
 )
 from app.tools.errors import ToolConflictError, ToolForbiddenError, ToolNotFoundError
-from app.tools.session import SessionLike, commit, execute, first_mapping, rollback
+from app.tools.session import SessionLike, all_mappings, commit, execute, first_mapping, rollback
 from app.tools.tool_call_logger import (
     ToolCallLogger,
     ensure_tool_call_logger,
@@ -354,7 +359,20 @@ async def submit_one_liner_answer(
             raise ToolConflictError("Help card is not accepting answers.")
         if await _has_answered(db, input_data.help_card_id, input_data.answer_user_id):
             raise ToolConflictError("User already answered this help card.")
+        quality = assess_one_liner_quality(input_data.raw_text)
+        if not quality.accepted:
+            raise ToolConflictError(f"One-liner is too low quality: {quality.reason}")
+        if await _has_duplicate_answer(db, input_data.help_card_id, quality.normalized_key):
+            raise ToolConflictError("Duplicate one-liner answer.")
 
+        evidence_json = json.dumps(
+            {
+                "evidence_type": "human_one_liner",
+                "quality": one_liner_quality_metadata(quality),
+                "normalized_key": quality.normalized_key,
+            },
+            ensure_ascii=False,
+        )
         result = await execute(
             db,
             """
@@ -385,7 +403,8 @@ async def submit_one_liner_answer(
             {
                 **input_data.model_dump(),
                 "id": str(uuid4()),
-                "evidence_json": '{"evidence_type": "human_one_liner"}',
+                "normalized_text": input_data.normalized_text or input_data.raw_text,
+                "evidence_json": evidence_json,
             },
         )
         row = first_mapping(result)
@@ -489,6 +508,30 @@ async def _has_answered(db: SessionLike, help_card_id: str, answer_user_id: str)
         {"help_card_id": help_card_id, "answer_user_id": answer_user_id},
     )
     return first_mapping(result) is not None
+
+
+async def _has_duplicate_answer(db: SessionLike, help_card_id: str, normalized_key: str) -> bool:
+    result = await execute(
+        db,
+        """
+        SELECT raw_text, normalized_text, evidence_json
+        FROM help_answers
+        WHERE help_card_id = :help_card_id
+        """,
+        {"help_card_id": help_card_id},
+    )
+    for row in all_mappings(result):
+        evidence = row.get("evidence_json") or {}
+        if isinstance(evidence, str):
+            try:
+                evidence = json.loads(evidence)
+            except json.JSONDecodeError:
+                evidence = {}
+        existing_key = str(evidence.get("normalized_key") or "")
+        existing_key = existing_key or normalize_one_liner_key(row.get("normalized_text") or row.get("raw_text") or "")
+        if existing_key and existing_key == normalized_key:
+            return True
+    return False
 
 
 async def _get_question_context(db: SessionLike, question_id: str) -> dict:

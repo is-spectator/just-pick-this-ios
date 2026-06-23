@@ -57,6 +57,11 @@ from app.services.runtime import (
     session_scope,
     utcnow,
 )
+from app.services.help_service import (
+    assess_one_liner_quality,
+    normalize_one_liner_key,
+    one_liner_quality_metadata,
+)
 from app.services.intent_router import detect_app_help, detect_chitchat, detect_clarification_needed
 from app.services.query_rewrite import rewrite_query
 from app.services.llm_query_rewrite import build_llm_query_rewrite, select_query_rewrite
@@ -1860,6 +1865,14 @@ class DbToolExecutor:
         raw_text = str(arguments.get("raw_text") or arguments.get("text") or state["user_message"]).strip()
         if not raw_text:
             raise ValueError("raw_text required")
+        quality = assess_one_liner_quality(raw_text)
+        if not quality.accepted:
+            return {
+                "status": "skipped",
+                "reason": "one_liner_low_quality",
+                "quality": one_liner_quality_metadata(quality),
+                "tool_call_status": "skipped",
+            }
         if help_card.owner_user_id == self.user_id:
             return {
                 "status": "skipped",
@@ -1885,6 +1898,19 @@ class DbToolExecutor:
                 "help_answer_id": str(existing.id),
                 "tool_call_status": "skipped",
             }
+        sibling_answers = self.session.scalars(
+            select(HelpAnswer).where(HelpAnswer.help_card_id == help_card.id)
+        )
+        for sibling in sibling_answers:
+            sibling_key = str((sibling.evidence_json or {}).get("normalized_key") or "")
+            sibling_key = sibling_key or normalize_one_liner_key(sibling.normalized_text or sibling.raw_text)
+            if sibling_key and sibling_key == quality.normalized_key:
+                return {
+                    "status": "skipped",
+                    "reason": "duplicate_answer",
+                    "help_answer_id": str(sibling.id),
+                    "tool_call_status": "skipped",
+                }
 
         answer = HelpAnswer(
             help_card_id=help_card.id,
@@ -1893,7 +1919,11 @@ class DbToolExecutor:
             normalized_text=raw_text,
             status="submitted",
             reward_status="pending",
-            evidence_json={"evidence_type": "human_one_liner"},
+            evidence_json={
+                "evidence_type": "human_one_liner",
+                "quality": one_liner_quality_metadata(quality),
+                "normalized_key": quality.normalized_key,
+            },
         )
         self.session.add(answer)
         help_card.answer_count += 1

@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.jobs.finalizer_job import run_finalize_graph_for_help_card
 from app.models import HelpAnswer, HelpCard, RewardEvent
+from app.services.help_service import assess_one_liner_quality, normalize_one_liner_key, one_liner_quality_metadata
 from app.services.runtime import (
     ensure_user,
     resolve_request_user,
@@ -116,6 +117,12 @@ def create_one_liner(id: str, payload: dict[str, Any]) -> dict[str, Any]:
             raise HTTPException(status_code=422, detail="one_liner_too_short")
         if len(text) > 240:
             raise HTTPException(status_code=422, detail="one_liner_too_long")
+        quality = assess_one_liner_quality(text)
+        if not quality.accepted:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "one_liner_low_quality", "reason": quality.reason},
+            )
         answer_user = ensure_user(
             session,
             device_uid=payload.get("device_uid") or payload.get("device_id") or payload.get("user_id"),
@@ -133,6 +140,14 @@ def create_one_liner(id: str, payload: dict[str, Any]) -> dict[str, Any]:
         )
         if existing is not None:
             raise HTTPException(status_code=409, detail="already_answered")
+        sibling_answers = session.scalars(
+            select(HelpAnswer).where(HelpAnswer.help_card_id == help_card.id)
+        )
+        for sibling in sibling_answers:
+            sibling_key = str((sibling.evidence_json or {}).get("normalized_key") or "")
+            sibling_key = sibling_key or normalize_one_liner_key(sibling.normalized_text or sibling.raw_text)
+            if sibling_key and sibling_key == quality.normalized_key:
+                raise HTTPException(status_code=409, detail="duplicate_answer")
 
         reward = _reward_payload(help_card)
         answer = HelpAnswer(
@@ -142,7 +157,12 @@ def create_one_liner(id: str, payload: dict[str, Any]) -> dict[str, Any]:
             normalized_text=text,
             status="submitted",
             reward_status="pending",
-            evidence_json={"evidence_type": "human_one_liner", "reward": reward},
+            evidence_json={
+                "evidence_type": "human_one_liner",
+                "reward": reward,
+                "quality": one_liner_quality_metadata(quality),
+                "normalized_key": quality.normalized_key,
+            },
         )
         session.add(answer)
         session.flush()

@@ -111,6 +111,18 @@ def _reward_statuses_for_answer(answer_id: str) -> list[str]:
         )
 
 
+def _help_answer_count(help_card_id: str) -> int:
+    with session_scope() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(HelpAnswer)
+                .where(HelpAnswer.help_card_id == uuid.UUID(help_card_id))
+            )
+            or 0
+        )
+
+
 def _behavior_event_count_for_answer(*, answer_id: str, event_type: str) -> int:
     with session_scope() as session:
         return int(
@@ -349,5 +361,50 @@ def test_one_liner_rejects_owner_duplicate_and_bad_text(run_async: Any, async_cl
             json={"device_id": answer_device, "text": "再答一次"},
         )
         assert duplicate.status_code == 409
+
+    run_async(scenario)
+
+
+def test_one_liner_rejects_low_quality_and_cross_user_duplicate(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        help_card_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-owner-quality-{suffix}",
+            title="圣水逛街，求一句",
+            context_text="想小众一点，避开游客区。",
+        )
+
+        low_quality = await async_client.post(
+            f"/v1/help-cards/{help_card_id}/one-liner",
+            json={"device_id": f"pytest-help-deck-low-quality-{suffix}", "text": "随便"},
+        )
+        assert low_quality.status_code == 422
+        assert low_quality.json()["detail"]["code"] == "one_liner_low_quality"
+        assert _help_answer_count(help_card_id) == 0
+
+        first = await async_client.post(
+            f"/v1/help-cards/{help_card_id}/one-liner",
+            json={
+                "device_id": f"pytest-help-deck-dup-1-{suffix}",
+                "text": "去圣水更稳，小店密度高。",
+            },
+        )
+        assert first.status_code == 200, first.text
+        answer_id = first.json()["answer_id"]
+        assert _reward_count_for_answer(answer_id) == 1
+
+        duplicate = await async_client.post(
+            f"/v1/help-cards/{help_card_id}/one-liner",
+            json={
+                "device_id": f"pytest-help-deck-dup-2-{suffix}",
+                "text": "去圣水更稳 小店密度高",
+            },
+        )
+        assert duplicate.status_code == 409
+        assert duplicate.json()["detail"] == "duplicate_answer"
+        assert _help_answer_count(help_card_id) == 1
 
     run_async(scenario)

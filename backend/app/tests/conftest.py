@@ -36,6 +36,7 @@ NO_DB_TEST_FILES = {
     "test_input_gate_slot_extraction.py",
     "test_no_old_graph_nodes_in_main_path.py",
     "test_no_secrets_committed.py",
+    "test_one_liner_quality.py",
     "test_openai_guardrails.py",
     "test_product_benchmark_readiness.py",
     "test_prompt_snapshots.py",
