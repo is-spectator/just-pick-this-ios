@@ -90,6 +90,7 @@ def case_detail(reports_root: Path, run_id: str, case_id: str) -> dict[str, Any]
         "score": score,
         "seed_candidate": seed_candidate,
         "agent_issue": agent_issue,
+        "trace_replay": _trace_replay_payload(result=result, attribution=attribution, score=score),
     }
 
 
@@ -121,6 +122,7 @@ def review_payload(
 
 def _case_summary_payload(attribution: Mapping[str, Any], *, score: Mapping[str, Any]) -> dict[str, Any]:
     quality = _mapping(attribution.get("quality"))
+    trace_replay = _trace_replay_payload(result=None, attribution=attribution, score=score)
     return {
         "case_id": attribution.get("case_id"),
         "group": attribution.get("group"),
@@ -132,6 +134,88 @@ def _case_summary_payload(attribution: Mapping[str, Any], *, score: Mapping[str,
         "expected_kind": attribution.get("expected_kind"),
         "issues": attribution.get("issues") or score.get("issues") or [],
         "trace": attribution.get("trace") or {},
+        "trace_replay": trace_replay,
+    }
+
+
+def _trace_replay_payload(
+    *,
+    result: Mapping[str, Any] | None,
+    attribution: Mapping[str, Any] | None,
+    score: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    result_map = _mapping(result)
+    response = _mapping(result_map.get("response"))
+    response_metadata = _mapping(response.get("metadata"))
+    result_trace = _mapping(result_map.get("trace"))
+    attribution_map = _mapping(attribution)
+    attribution_trace = _mapping(attribution_map.get("trace"))
+    score_map = _mapping(score)
+    score_metadata = _mapping(score_map.get("metadata"))
+
+    trace_id = _first_text(
+        result_trace.get("trace_id"),
+        result_trace.get("agent_run_id"),
+        result_map.get("trace_id"),
+        result_map.get("agent_run_id"),
+        response.get("trace_id"),
+        response_metadata.get("trace_id"),
+        response_metadata.get("agent_run_id"),
+        attribution_trace.get("trace_id"),
+        attribution_trace.get("agent_run_id"),
+        score_metadata.get("trace_id"),
+        score_metadata.get("agent_run_id"),
+    )
+    agent_run_id = _first_text(
+        result_trace.get("agent_run_id"),
+        result_map.get("agent_run_id"),
+        response_metadata.get("agent_run_id"),
+        attribution_trace.get("agent_run_id"),
+        score_metadata.get("agent_run_id"),
+        trace_id,
+    )
+    conversation_id = _first_text(
+        result_trace.get("conversation_id"),
+        result_map.get("conversation_id"),
+        response_metadata.get("conversation_id"),
+        response.get("conversation_id"),
+        attribution_trace.get("conversation_id"),
+        score_metadata.get("conversation_id"),
+    )
+    turn_id = _first_text(
+        result_trace.get("turn_id"),
+        result_map.get("turn_id"),
+        response_metadata.get("turn_id"),
+        response.get("turn_id"),
+        attribution_trace.get("turn_id"),
+        score_metadata.get("turn_id"),
+    )
+    retrieval_run_id = _first_text(
+        result_trace.get("retrieval_run_id"),
+        result_map.get("retrieval_run_id"),
+        response_metadata.get("retrieval_run_id"),
+        attribution_trace.get("retrieval_run_id"),
+        score_metadata.get("retrieval_run_id"),
+    )
+    runtime_path = _first_text(
+        result_trace.get("runtime_path"),
+        result_map.get("runtime_path"),
+        response_metadata.get("runtime_path"),
+        attribution_trace.get("runtime_path"),
+        score_metadata.get("runtime_path"),
+    )
+    trace_key = agent_run_id or trace_id
+    return {
+        "trace_available": bool(trace_key),
+        "trace_id": trace_id,
+        "agent_run_id": agent_run_id,
+        "conversation_id": conversation_id,
+        "turn_id": turn_id,
+        "retrieval_run_id": retrieval_run_id,
+        "runtime_path": runtime_path,
+        "admin_trace_api_path": f"/admin/api/traces/{trace_key}" if trace_key else None,
+        "admin_session_api_path": f"/admin/api/sessions/{conversation_id}" if conversation_id else None,
+        "loop_trace_expected": bool(trace_key),
     }
 
 
@@ -205,3 +289,13 @@ def _low_quality_count(path: Path) -> int:
 
 def _mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _first_text(*values: Any) -> str | None:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None

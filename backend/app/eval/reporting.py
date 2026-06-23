@@ -839,6 +839,7 @@ def render_generated_issue_markdown(score: CaseQualityScore, *, index: int) -> s
     trace_id = str(score.metadata.get("trace_id") or "")
     agent_run_id = str(score.metadata.get("agent_run_id") or "")
     retrieval_run_id = str(score.metadata.get("retrieval_run_id") or "")
+    admin_trace_api_path = f"/admin/api/traces/{agent_run_id or trace_id}" if (agent_run_id or trace_id) else ""
     title = _generated_issue_title(score)
     lines = [
         f"# issuer_{index:03d}.md",
@@ -858,6 +859,7 @@ def render_generated_issue_markdown(score: CaseQualityScore, *, index: int) -> s
         f"- trace_id: `{trace_id or '-'}`",
         f"- agent_run_id: `{agent_run_id or '-'}`",
         f"- retrieval_run_id: `{retrieval_run_id or '-'}`",
+        f"- admin_trace_api_path: `{admin_trace_api_path or '-'}`",
         "",
         "## 失败证据",
         "",
