@@ -92,6 +92,13 @@ def test_effect_loop_reports_generate_attribution_seed_and_agent_outputs(tmp_pat
     assert summary["primary_cause_counts"]["seed_gap"] == 1
     assert seed_candidates
     assert seed_candidates[0]["need"] == "approved_answer"
+    assert seed_candidates[0]["intent_key"]
+    assert seed_candidates[0]["slots"]["area"] == "朝阳区"
+    assert seed_candidates[0]["slots"]["food_item"] == "热干面"
+    assert seed_candidates[0]["slots"]["location_state"] == "in_area"
+    assert seed_candidates[0]["source_cases"][0]["case_id"] == "seed-gap-chaoyang-hotdry"
+    assert seed_candidates[0]["source_cases"][0]["trace"]["runtime_path"] == "product"
+    assert seed_candidates[0]["priority_score"] > 0
     assert agent_issues
     assert agent_issues[0]["primary_cause"] == "agent_bug"
     assert paths["quality_attribution_jsonl"].exists()

@@ -152,6 +152,21 @@ def test_quality_report_generates_all_files_and_classifies_seed_gap(tmp_path) ->
     assert "顶层路由" in generated_text
     assert "agent-1" in generated_text
 
+    seed_candidates = [
+        json.loads(line)
+        for line in (tmp_path / "seed_candidates.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert seed_candidates
+    assert {
+        "intent_key",
+        "slots",
+        "source_cases",
+        "priority",
+        "priority_score",
+    } <= set(seed_candidates[0])
+    assert seed_candidates[0]["source_cases"][0]["case_id"] == "seed-gap-help-card"
+
 
 def test_quality_report_generates_shadow_comparison_files(tmp_path) -> None:
     cases = [
