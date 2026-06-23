@@ -57,7 +57,7 @@ from app.services.runtime import (
     session_scope,
     utcnow,
 )
-from app.services.intent_router import detect_chitchat, detect_clarification_needed
+from app.services.intent_router import detect_app_help, detect_chitchat, detect_clarification_needed
 from app.services.query_rewrite import rewrite_query
 from app.services.llm_query_rewrite import build_llm_query_rewrite, select_query_rewrite
 from app.services.amap_service import AmapService
@@ -2306,7 +2306,7 @@ def _chat_response_contract(
             response_kind = "chitchat"
             location_state = "unknown"
             data = {}
-        elif detect_chitchat(message) is not None:
+        elif detect_chitchat(message) is not None or detect_app_help(message) is not None:
             response_kind = "chitchat"
             location_state = "unknown"
             data = {}

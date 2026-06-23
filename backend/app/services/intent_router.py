@@ -21,6 +21,7 @@ class ClarificationDecision:
 _GREETING_TERMS = ("你好", "嗨", "哈喽", "早上好", "晚上好")
 _THANKS_TERMS = ("谢谢", "谢谢你", "感谢", "辛苦了")
 _IDENTITY_TERMS = ("你是谁", "你叫什么", "你叫什么名字", "你能干什么", "你能做什么", "皮皮是谁")
+_APP_HELP_TERMS = ("怎么用", "帮助", "help", "说明")
 _GOODBYE_TERMS = ("再见", "拜拜", "下次见", "先这样拜拜")
 _CASUAL_TERMS = (
     "哈哈",
@@ -190,6 +191,16 @@ def detect_chitchat(message: str) -> ChitchatDecision | None:
         return ChitchatDecision(
             intent_key="chitchat.smalltalk",
             assistant_message="我在，皮皮可以陪你聊两句；真要做选择时，我也可以直接帮你定一个。",
+        )
+    return None
+
+
+def detect_app_help(message: str) -> ChitchatDecision | None:
+    normalized = _normalize(message)
+    if _contains_any(normalized, _APP_HELP_TERMS):
+        return ChitchatDecision(
+            intent_key="chitchat.app_help",
+            assistant_message="告诉我你在哪、想做什么；我会直接帮你收成一个选择，拿不准时也可以帮你问别人。",
         )
     return None
 
