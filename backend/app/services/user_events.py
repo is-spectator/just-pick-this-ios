@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import HelpAnswer, HelpCard, RecommendationCard, UserBehaviorEvent
+from app.services.experiments import experiment_assignments_from_payload, merge_experiment_metadata
 from app.services.intent_memory import record_intent_answer_feedback_for_card
 from app.services.runtime import ensure_user, session_scope
 from app.services.user_preferences import serialize_user_preference_memory, update_user_preference_memory_from_event
@@ -82,6 +83,12 @@ def record_user_behavior_event(
         help_card_id=help_card_id,
         help_answer_id=help_answer_id,
     )
+    event_metadata = _inherit_experiment_metadata(
+        session,
+        dict(payload_json or {}),
+        card=card,
+        help_card_id=context.get("help_card_id"),
+    )
     event = UserBehaviorEvent(
         user_id=context.get("user_id"),
         conversation_id=context.get("conversation_id"),
@@ -92,7 +99,7 @@ def record_user_behavior_event(
         event_type=normalized_type,
         source=str(source or "api"),
         payload_json={
-            **dict(payload_json or {}),
+            **event_metadata,
             "known_core_event": normalized_type in CORE_USER_EVENT_TYPES,
         },
     )
@@ -121,6 +128,24 @@ def serialize_user_behavior_event(event: UserBehaviorEvent) -> dict[str, Any]:
         "metadata": event.payload_json or {},
         "created_at": event.created_at,
     }
+
+
+def _inherit_experiment_metadata(
+    session: Session,
+    payload_json: dict[str, Any],
+    *,
+    card: RecommendationCard | None,
+    help_card_id: uuid.UUID | None,
+) -> dict[str, Any]:
+    if payload_json.get("experiment_assignments"):
+        return payload_json
+    assignments = experiment_assignments_from_payload(card.payload_json if card is not None else None)
+    if not assignments and help_card_id is not None:
+        help_card = session.get(HelpCard, help_card_id)
+        assignments = experiment_assignments_from_payload(help_card.payload_json if help_card is not None else None)
+    if not assignments:
+        return payload_json
+    return merge_experiment_metadata(payload_json, assignments)
 
 
 def _resolve_context(

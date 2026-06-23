@@ -63,6 +63,7 @@ from app.services.help_service import (
     normalize_one_liner_key,
     one_liner_quality_metadata,
 )
+from app.services.experiments import experiment_metadata, resolve_experiment_assignments
 from app.services.intent_router import detect_app_help, detect_chitchat, detect_clarification_needed
 from app.services.query_rewrite import rewrite_query
 from app.services.llm_query_rewrite import build_llm_query_rewrite, select_query_rewrite
@@ -124,6 +125,16 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
         client_context = _normalise_client_context(payload.get("client_context") or {})
         payload = {**payload, "client_context": client_context}
         conversation, user = _resolve_conversation_and_user(session, payload)
+        experiment_assignments = resolve_experiment_assignments(
+            user_id=str(user.id),
+            device_uid=user.device_uid,
+            conversation_id=str(conversation.id),
+            client_context=client_context,
+            metadata=payload.get("metadata") or {},
+        )
+        experiments = experiment_metadata(experiment_assignments)
+        client_context = {**client_context, "experiment_assignments": experiment_assignments}
+        payload = {**payload, "client_context": client_context}
         _persist_client_location_context(
             session,
             user=user,
@@ -140,6 +151,7 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
                 "client_turn_id": payload.get("client_turn_id"),
                 "metadata": payload.get("metadata", {}),
                 "client_context": client_context,
+                "experiment_assignments": experiment_assignments,
             },
         )
         active_help_card = _active_help_card(session, conversation.id, payload.get("metadata", {}))
@@ -214,6 +226,8 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
                 "message": payload["message"],
                 "metadata": payload.get("metadata", {}),
                 "client_context": client_context,
+                "experiment_assignments": experiment_assignments,
+                "experiment_variant_ids": experiments["variant_ids"],
                 "prompt_versions": active_prompt_versions,
             },
         )
@@ -266,6 +280,8 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
                     "latest_user_context": latest_user_context,
                     "active_help_card_id": str(active_help_card.id) if active_help_card else None,
                     "client_context": payload.get("client_context") or {},
+                    "experiment_assignments": experiment_assignments,
+                    "experiments": experiments,
                     "question_id": str(question.id) if question else None,
                     "user_id": str(user.id),
                 },
@@ -308,6 +324,8 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
             "latest_user_context": latest_user_context,
             "active_help_card_id": str(active_help_card.id) if active_help_card else None,
             "client_context": payload.get("client_context") or {},
+            "experiment_assignments": experiment_assignments,
+            "experiments": experiments,
             "question_id": str(question.id) if question else None,
             "user_id": str(user.id),
             "context_provider": context_provider,
@@ -346,6 +364,8 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
                         "latest_user_context": latest_user_context,
                         "active_help_card_id": str(active_help_card.id) if active_help_card else None,
                         "client_context": payload.get("client_context") or {},
+                        "experiment_assignments": experiment_assignments,
+                        "experiments": experiments,
                     },
                 },
             )
@@ -387,6 +407,7 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
             "query_rewrite": state.get("query_rewrite"),
             "loop": _loop_metadata(state),
             "runtime_path": "product",
+            "experiments": experiments,
         }
         llm_query_rewrite_metadata = (state.get("metadata") or {}).get("llm_query_rewrite")
         if isinstance(llm_query_rewrite_metadata, dict):
@@ -463,6 +484,18 @@ def _safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         for key, value in metadata.items()
         if (safe_value := _json_safe_value(value)) is not _UNSAFE_JSON_VALUE
     }
+
+
+def _experiment_assignments_from_state(state: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = dict(state.get("metadata") or {})
+    assignments = metadata.get("experiment_assignments")
+    if isinstance(assignments, list):
+        return [dict(item) for item in assignments if isinstance(item, dict)]
+    context = dict(metadata.get("client_context") or {})
+    assignments = context.get("experiment_assignments")
+    if isinstance(assignments, list):
+        return [dict(item) for item in assignments if isinstance(item, dict)]
+    return []
 
 
 def _query_rewrite_selection_payload(
@@ -1641,6 +1674,7 @@ class DbToolExecutor:
             subtitle = "四季民福故宫店 · 默认 2 人"
             decision_factor = "第一次来四季民福，先吃招牌，口味最稳。"
         image_status = "attached" if image is not None else "missing"
+        experiment_assignments = _experiment_assignments_from_state(state)
         card = RecommendationCard(
             question_id=self.question.id,
             conversation_id=self.question.conversation_id,
@@ -1683,6 +1717,8 @@ class DbToolExecutor:
                     "retrieval_run_id": (state.get("retrieval_run") or {}).get("id"),
                 },
                 "ui": {"layout": "minimal_recommendation", "show_actions": False},
+                "experiment_assignments": experiment_assignments,
+                "experiments": experiment_metadata(experiment_assignments),
                 "followups": [],
                 "composer": {
                     "provider": draft.model_provider,
@@ -1766,6 +1802,10 @@ class DbToolExecutor:
             else raw_message or effective_message
         )
         help_payload = _help_card_payload(message)
+        experiment_assignments = _experiment_assignments_from_state(state)
+        if experiment_assignments:
+            help_payload["experiment_assignments"] = experiment_assignments
+            help_payload["experiments"] = experiment_metadata(experiment_assignments)
         title = str(help_payload["title"])
         context_text = _help_context_text(help_payload)
         help_card = HelpCard(

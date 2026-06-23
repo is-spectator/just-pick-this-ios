@@ -6,7 +6,7 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.models import RecommendationCard, UserBehaviorEvent
+from app.models import AgentRun, RecommendationCard, UserBehaviorEvent
 from app.services.runtime import session_scope
 
 from .conftest import bootstrap, chat_turn, require_ready_response
@@ -57,6 +57,55 @@ def test_recommendation_accept_writes_user_behavior_event(
             event_type="recommendation_card_accepted",
             recommendation_card_id=uuid.UUID(card_id),
         ) == 1
+
+    run_async(scenario)
+
+
+def test_chat_turn_and_card_feedback_preserve_experiment_assignment(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-experiment-event-{uuid.uuid4()}"
+        boot = await bootstrap(async_client, device_id=device_id)
+        body = await chat_turn(
+            async_client,
+            conversation_id=boot["conversation_id"],
+            message="我现在在大同喜晋道，不知道吃什么，给我推荐一个。",
+        )
+
+        experiments = body["metadata"]["experiments"]
+        assignments = experiments["assignments"]
+        assert assignments
+        assert experiments["variant_ids"]["pipi_card_copy_v1"] == assignments[0]["variant_id"]
+
+        card_id = str(body["cards"][0]["id"])
+        agent_run_id = str(body["metadata"]["agent_run_id"])
+        with session_scope() as session:
+            agent_run = session.get(AgentRun, uuid.UUID(agent_run_id))
+            assert agent_run is not None
+            assert agent_run.input_json["experiment_assignments"] == assignments
+            assert agent_run.output_json["metadata"]["experiment_assignments"] == assignments
+
+            card = session.get(RecommendationCard, uuid.UUID(card_id))
+            assert card is not None
+            assert card.payload_json["experiment_assignments"] == assignments
+
+        accepted = await async_client.post(f"/v1/cards/{card_id}/accept", json={"device_id": device_id})
+        require_ready_response(accepted)
+
+        with session_scope() as session:
+            event = session.scalar(
+                select(UserBehaviorEvent)
+                .where(
+                    UserBehaviorEvent.recommendation_card_id == uuid.UUID(card_id),
+                    UserBehaviorEvent.event_type == "recommendation_card_accepted",
+                )
+                .order_by(UserBehaviorEvent.created_at.desc())
+            )
+            assert event is not None
+            assert event.payload_json["experiment_assignments"] == assignments
+            assert event.payload_json["experiment_variant_ids"] == experiments["variant_ids"]
 
     run_async(scenario)
 

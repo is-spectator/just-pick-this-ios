@@ -30,6 +30,7 @@ NO_DB_TEST_FILES = {
     "test_decision_factor_not_generic.py",
     "test_evaluator.py",
     "test_evidence_pack.py",
+    "test_experiments.py",
     "test_harness_input_gate.py",
     "test_health_readiness.py",
     "test_help_card_extractor_compressor.py",

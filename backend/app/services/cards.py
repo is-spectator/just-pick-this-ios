@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.models import RecommendationCard
+from app.services.experiments import experiment_assignments_from_payload, merge_experiment_metadata
 from app.services.runtime import serialize_card_detail, session_scope, utcnow
 from app.services.user_events import record_user_behavior_event
 
@@ -43,11 +44,14 @@ def accept_card(id: str, payload: dict[str, Any] | None = None) -> dict[str, Any
             conversation_id=card.conversation_id,
             recommendation_card_id=card.id,
             source="api",
-            payload_json={
-                "status": "completed",
-                "already_accepted": already_accepted,
-                **dict(payload.get("metadata") or {}),
-            },
+            payload_json=_card_feedback_metadata(
+                card,
+                {
+                    "status": "completed",
+                    "already_accepted": already_accepted,
+                    **dict(payload.get("metadata") or {}),
+                },
+            ),
         )
         session.flush()
         return {"card_id": str(card.id), "accepted": True, "metadata": {"status": "completed"}}
@@ -96,6 +100,7 @@ def _feedback_card(
             "tags": [str(item).strip() for item in payload.get("tags") or [] if str(item).strip()],
             **dict(payload.get("metadata") or {}),
         }
+        metadata = _card_feedback_metadata(card, metadata)
         event = record_user_behavior_event(
             session,
             event_type=event_type,
@@ -128,3 +133,8 @@ def _optional_uuid(value: Any) -> uuid.UUID | None:
         return uuid.UUID(str(value)) if value else None
     except ValueError:
         return None
+
+
+def _card_feedback_metadata(card: RecommendationCard, payload: dict[str, Any]) -> dict[str, Any]:
+    assignments = experiment_assignments_from_payload(card.payload_json or {})
+    return merge_experiment_metadata(payload, assignments)
