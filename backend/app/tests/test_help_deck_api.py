@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from app.jobs.finalizer_job import run_finalize_graph_for_help_card
 from app.models import ContentReviewTask, Conversation, HelpAnswer, HelpCard, Question, RewardEvent, Turn, UserBehaviorEvent
 from app.services.runtime import ensure_user, session_scope, utcnow
+from app.services.user_preferences import PREFERENCE_PROFILE_KEY
 
 
 def _seed_help_card(
@@ -471,6 +472,52 @@ def test_help_feed_ranks_reward_scarcity_and_answer_count(run_async: Any, async_
         assert ids == [high_reward_id, low_answer_id, filled_id]
         assert relevant_items[0]["metadata"]["feed_ranking"]["reward_value"] == 30
         assert relevant_items[1]["metadata"]["feed_ranking"]["remaining_answers"] == 3
+
+    run_async(scenario)
+
+
+def test_help_feed_ranks_answerer_preference_within_same_tier(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        reader_device = f"pytest-help-deck-rank-preference-reader-{suffix}"
+        with session_scope() as session:
+            reader = ensure_user(session, device_uid=reader_device)
+            reader.profile_json = {
+                PREFERENCE_PROFILE_KEY: {
+                    "version": "user_preference_memory_v1",
+                    "summary": {
+                        "top_cuisines": [{"value": "韩餐", "score": 4}],
+                        "areas": [{"value": "五道口", "score": 2}],
+                    },
+                }
+            }
+
+        matching_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-rank-preference-match-owner-{suffix}",
+            title="五道口韩餐，求一句",
+            context_text="想吃韩餐，不想排太久。",
+            reward_value=10,
+        )
+        generic_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-rank-preference-generic-owner-{suffix}",
+            title="国贸午饭，求一句",
+            context_text="想找现在能直接去的一家。",
+            reward_value=10,
+        )
+
+        feed = await _get_feed(async_client, device_id=reader_device, limit=100)
+        expected = {matching_id, generic_id}
+        relevant_items = [item for item in feed["items"] if item["id"] in expected]
+
+        assert [item["id"] for item in relevant_items] == [matching_id, generic_id]
+        preference_match = relevant_items[0]["metadata"]["feed_ranking"]["preference_match"]
+        assert preference_match["matched"]["top_cuisines"] == ["韩餐"]
+        assert preference_match["matched"]["areas"] == ["五道口"]
+        assert preference_match["score"] > 0
+        assert relevant_items[1]["metadata"]["feed_ranking"]["preference_match"]["score"] == 0
 
     run_async(scenario)
 

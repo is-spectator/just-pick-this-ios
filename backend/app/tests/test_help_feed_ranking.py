@@ -8,13 +8,19 @@ from app.services.help_feed import help_feed_rank_payload, help_feed_sort_key
 
 def _card(
     *,
+    title: str = "默认求一句",
+    context_text: str = "想找一个稳妥选择。",
+    payload_json: dict | None = None,
     reward_value: int = 10,
     answer_count: int = 0,
     min_answers_required: int = 3,
     published_at: datetime | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
-        payload_json={"reward": {"value": reward_value, "label": f"+{reward_value}"}},
+        title=title,
+        prompt=title,
+        context_text=context_text,
+        payload_json=payload_json or {"reward": {"value": reward_value, "label": f"+{reward_value}"}},
         answer_count=answer_count,
         min_answers_required=min_answers_required,
         published_at=published_at or datetime(2026, 6, 23, tzinfo=timezone.utc),
@@ -39,3 +45,37 @@ def test_help_feed_sort_prioritizes_high_reward_then_fewer_answers() -> None:
     ordered = sorted([filled, low_answer_count, high_reward], key=help_feed_sort_key)
 
     assert ordered == [high_reward, low_answer_count, filled]
+
+
+def test_help_feed_rank_payload_exposes_answerer_preference_match() -> None:
+    card = _card(title="五道口韩餐，求一句", context_text="想吃韩餐，不想排太久。")
+
+    rank = help_feed_rank_payload(
+        card,
+        answerer_preferences={
+            "top_cuisines": [{"value": "韩餐", "score": 3}],
+            "areas": [{"value": "五道口", "score": 2}],
+        },
+    )
+
+    assert rank["preference_match"]["score"] > 0
+    assert rank["preference_match"]["matched"] == {
+        "top_cuisines": ["韩餐"],
+        "areas": ["五道口"],
+    }
+    assert rank["score"] > help_feed_rank_payload(card)["score"]
+
+
+def test_help_feed_sort_uses_preferences_as_same_tier_tiebreaker() -> None:
+    matching = _card(title="五道口韩餐，求一句", context_text="想吃韩餐，不想排太久。")
+    generic = _card(title="国贸午饭，求一句", context_text="想找现在能直接去的一家。")
+
+    ordered = sorted(
+        [generic, matching],
+        key=lambda card: help_feed_sort_key(
+            card,
+            answerer_preferences={"top_cuisines": [{"value": "韩餐", "score": 3}]},
+        ),
+    )
+
+    assert ordered == [matching, generic]

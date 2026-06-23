@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import HTTPException
@@ -26,6 +27,7 @@ from app.services.runtime import (
     session_scope,
     utcnow,
 )
+from app.services.user_preferences import PREFERENCE_PROFILE_KEY
 from app.services.user_events import record_user_behavior_event
 from app.services.user_events import serialize_user_behavior_event
 
@@ -73,8 +75,9 @@ def list_help_feed(
             query = query.where(~HelpCard.id.in_(answered_ids))
         if skipped_ids:
             query = query.where(~HelpCard.id.in_(skipped_ids))
+        answerer_preferences = _answerer_preference_summary(user)
         rows = [card for card in session.scalars(query) if not _help_card_abuse(card).unsafe]
-        rows = sorted(rows, key=help_feed_sort_key)
+        rows = sorted(rows, key=lambda card: help_feed_sort_key(card, answerer_preferences=answerer_preferences))
         items = rows[offset : offset + resolved_limit]
         if user is not None and items:
             shown_ids = [str(card.id) for card in items]
@@ -92,12 +95,21 @@ def list_help_feed(
                         "limit": resolved_limit,
                         "cursor": cursor,
                         "shown_help_card_ids": shown_ids,
-                        "feed_ranking": help_feed_rank_payload(card),
+                        "feed_ranking": help_feed_rank_payload(
+                            card,
+                            answerer_preferences=answerer_preferences,
+                        ),
                     },
                 )
             session.flush()
         next_cursor = str(offset + resolved_limit) if len(rows) > offset + resolved_limit else None
-        return {"items": [_serialize_ranked_help_card(card) for card in items], "next_cursor": next_cursor}
+        return {
+            "items": [
+                _serialize_ranked_help_card(card, answerer_preferences=answerer_preferences)
+                for card in items
+            ],
+            "next_cursor": next_cursor,
+        }
 
 
 def get_help_card(id: str) -> dict[str, Any]:
@@ -518,34 +530,52 @@ def _reward_payload(help_card: HelpCard) -> dict[str, Any]:
     }
 
 
-def _serialize_ranked_help_card(help_card: HelpCard) -> dict[str, Any]:
+def _serialize_ranked_help_card(
+    help_card: HelpCard,
+    *,
+    answerer_preferences: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     item = serialize_help_card(help_card)
     metadata = dict(item.get("metadata") or {})
-    metadata["feed_ranking"] = help_feed_rank_payload(help_card)
+    metadata["feed_ranking"] = help_feed_rank_payload(
+        help_card,
+        answerer_preferences=answerer_preferences,
+    )
     item["metadata"] = metadata
     return item
 
 
-def help_feed_rank_payload(help_card: HelpCard) -> dict[str, Any]:
+def help_feed_rank_payload(
+    help_card: HelpCard,
+    *,
+    answerer_preferences: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     answer_count = int(getattr(help_card, "answer_count", 0) or 0)
     min_required = int(getattr(help_card, "min_answers_required", 3) or 3)
     reward_value = _help_card_reward_value(help_card)
     remaining_answers = max(0, min_required - answer_count)
+    preference_match = _answerer_preference_match_payload(help_card, answerer_preferences)
     return {
         "reward_value": reward_value,
         "answer_count": answer_count,
         "min_answers_required": min_required,
         "remaining_answers": remaining_answers,
+        "preference_match": preference_match,
         "score": _help_feed_score(
             reward_value=reward_value,
             remaining_answers=remaining_answers,
             answer_count=answer_count,
+            preference_score=int(preference_match["score"]),
         ),
     }
 
 
-def help_feed_sort_key(help_card: HelpCard) -> tuple[float, int, int, float, float]:
-    rank = help_feed_rank_payload(help_card)
+def help_feed_sort_key(
+    help_card: HelpCard,
+    *,
+    answerer_preferences: Mapping[str, Any] | None = None,
+) -> tuple[float, int, int, float, float]:
+    rank = help_feed_rank_payload(help_card, answerer_preferences=answerer_preferences)
     published_ts = _timestamp(getattr(help_card, "published_at", None))
     created_ts = _timestamp(getattr(help_card, "created_at", None))
     return (
@@ -557,8 +587,131 @@ def help_feed_sort_key(help_card: HelpCard) -> tuple[float, int, int, float, flo
     )
 
 
-def _help_feed_score(*, reward_value: int, remaining_answers: int, answer_count: int) -> float:
-    return float(reward_value * 100 + remaining_answers * 20 - answer_count * 5)
+def _help_feed_score(
+    *,
+    reward_value: int,
+    remaining_answers: int,
+    answer_count: int,
+    preference_score: int = 0,
+) -> float:
+    return float(reward_value * 100 + remaining_answers * 20 - answer_count * 5 + preference_score)
+
+
+def _answerer_preference_summary(user: Any | None) -> dict[str, Any]:
+    if user is None:
+        return {}
+    profile = dict(getattr(user, "profile_json", None) or {})
+    memory = profile.get(PREFERENCE_PROFILE_KEY)
+    if not isinstance(memory, Mapping):
+        return {}
+    summary = memory.get("summary")
+    return dict(summary) if isinstance(summary, Mapping) else {}
+
+
+def _answerer_preference_match_payload(
+    help_card: HelpCard,
+    answerer_preferences: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if not answerer_preferences:
+        return {"score": 0, "matched": {}, "candidate_terms": []}
+
+    haystack = _help_card_match_text(help_card)
+    matched: dict[str, list[str]] = {}
+    score = 0
+    weights = {
+        "top_cuisines": 35,
+        "top_food_items": 35,
+        "taste_preferences": 25,
+        "spice_preferences": 25,
+        "budget_preferences": 15,
+        "companions": 15,
+        "areas": 20,
+        "accepted_items": 20,
+    }
+    for preference_key, weight in weights.items():
+        values = _preference_values(answerer_preferences.get(preference_key))
+        hits = [value for value in values if value and value in haystack]
+        if not hits:
+            continue
+        matched[preference_key] = hits
+        score += weight * len(hits)
+
+    return {
+        "score": score,
+        "matched": matched,
+        "candidate_terms": _help_card_candidate_terms(help_card),
+    }
+
+
+def _help_card_match_text(help_card: HelpCard) -> str:
+    payload = getattr(help_card, "payload_json", None) or {}
+    parts: list[str] = [
+        str(getattr(help_card, "title", "") or ""),
+        str(getattr(help_card, "prompt", "") or ""),
+        str(getattr(help_card, "context_text", "") or ""),
+    ]
+    if isinstance(payload, Mapping):
+        for key in ("context", "wants", "avoids", "constraints"):
+            parts.extend(_flatten_text_values(payload.get(key)))
+    return " ".join(part for part in parts if part)
+
+
+def _help_card_candidate_terms(help_card: HelpCard) -> list[str]:
+    text = _help_card_match_text(help_card)
+    candidates = [
+        "韩餐",
+        "川菜",
+        "粤菜",
+        "火锅",
+        "热干面",
+        "烤鸭",
+        "清淡",
+        "不辣",
+        "预算",
+        "朋友",
+        "爸妈",
+        "约会",
+        "五道口",
+        "三里屯",
+        "朝阳区",
+        "望京",
+        "国贸",
+    ]
+    return [term for term in candidates if term in text]
+
+
+def _preference_values(value: Any) -> list[str]:
+    values: list[Any]
+    if isinstance(value, Mapping):
+        values = [value.get("value")]
+    elif isinstance(value, list):
+        values = [item.get("value") if isinstance(item, Mapping) else item for item in value]
+    else:
+        values = [value]
+    cleaned: list[str] = []
+    for item in values:
+        text = str(item or "").strip()
+        if text and text not in cleaned:
+            cleaned.append(text)
+    return cleaned
+
+
+def _flatten_text_values(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Mapping):
+        parts: list[str] = []
+        for nested in value.values():
+            parts.extend(_flatten_text_values(nested))
+        return parts
+    if isinstance(value, (list, tuple, set)):
+        parts: list[str] = []
+        for nested in value:
+            parts.extend(_flatten_text_values(nested))
+        return parts
+    return [str(value)]
 
 
 def _help_card_reward_value(help_card: HelpCard) -> int:
