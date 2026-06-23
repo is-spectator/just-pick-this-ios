@@ -17,6 +17,7 @@ from app.eval.quality_scoring import (
     summarize_scores,
 )
 from app.eval.agent_issue_generator import write_agent_fix_issue_reports
+from app.eval.experiment_lift import write_experiment_lift_reports
 from app.eval.quality_attribution import attribute_rows, summarize_attributions
 from app.eval.seed_candidate_generator import write_seed_candidate_reports
 from app.eval.shadow_promotion_generator import write_shadow_promotion_candidate_reports
@@ -191,6 +192,8 @@ def write_quality_reports(
         "shadow_comparison_markdown": output / "shadow_comparison_report.md",
         "shadow_comparison_json": output / "shadow_comparison_report.json",
         "shadow_decisions_jsonl": output / "shadow_decisions.jsonl",
+        "experiment_lift_markdown": output / "experiment_lift_report.md",
+        "experiment_lift_json": output / "experiment_lift_report.json",
         "generated_issues_index": output / "generated" / "index.md",
         "generated_issues_p2_aggregate": output / "generated" / "p2_aggregate.md",
     }
@@ -299,6 +302,7 @@ def write_quality_reports(
         encoding="utf-8",
     )
     write_generated_issue_reports(scores, output / "generated")
+    paths.update(write_experiment_lift_reports(rows, output))
     paths.update(write_shadow_promotion_candidate_reports(shadow_report, output))
     paths.update(write_seed_candidate_reports(rows, attributions, output))
     paths.update(write_agent_fix_issue_reports(attributions, output))

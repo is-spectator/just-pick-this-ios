@@ -118,6 +118,8 @@ def test_quality_report_generates_all_files_and_classifies_seed_gap(tmp_path) ->
         "shadow_comparison_report.md",
         "shadow_comparison_report.json",
         "shadow_decisions.jsonl",
+        "experiment_lift_report.md",
+        "experiment_lift_report.json",
         "shadow_promotion_candidates.jsonl",
         "shadow_promotion_candidates.json",
         "shadow_promotion_candidates.md",
