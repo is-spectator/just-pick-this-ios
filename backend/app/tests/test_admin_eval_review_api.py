@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.eval.reporting import write_quality_reports
 from app.main import create_app
 from app.models import AdminAuditLog, IntentAnswer
+from app.services.intent_answer_import import ADMIN_INTENT_ANSWER_IMPORT_SOURCE_TYPE
 from app.services.runtime import session_scope
 
 
@@ -198,3 +199,79 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
         json={"seed_patch": {"area": "朝阳区"}},
     )
     assert invalid_draft.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_admin_imports_intent_answer_drafts_idempotently(eval_admin_client: Any) -> None:
+    client, _root = eval_admin_client
+    payload = {
+        "items": [
+            {
+                "intent_key": "area:北京:五道口:韩餐",
+                "intent_text": "北京五道口韩餐",
+                "answer_title": "五道口韩餐，就选这家",
+                "answer_summary": "五道口想吃韩餐，优先选距离近、翻台稳定的一家。",
+                "constraints": {"city": "北京", "area": "五道口", "cuisine": "韩餐"},
+                "source_ref_id": "manual-seed-001",
+                "confidence": 0.82,
+                "tags": ["area_food", "seed_candidate"],
+                "is_active": True,
+            }
+        ]
+    }
+
+    response = await client.post(
+        "/admin/api/intent-answers/import-drafts",
+        headers=_headers(),
+        json=payload,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["count"] == 1
+    imported = body["items"][0]
+    assert imported["intent_key"] == "area:北京:五道口:韩餐"
+    assert imported["source_type"] == ADMIN_INTENT_ANSWER_IMPORT_SOURCE_TYPE
+    assert imported["source_ref_id"] == "manual-seed-001"
+    assert imported["is_active"] is False
+    assert imported["constraints"]["area"] == "五道口"
+    assert imported["evidence"]["draft"] is True
+
+    second = await client.post(
+        "/admin/api/intent-answers/import-drafts",
+        headers=_headers(),
+        json={
+            "items": [
+                {
+                    **payload["items"][0],
+                    "answer_summary": "五道口想吃韩餐，更新为更适合现场直接去的一家。",
+                }
+            ]
+        },
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["items"][0]["id"] == imported["id"]
+    assert "更新为更适合现场" in second.json()["items"][0]["answer_summary"]
+
+    with session_scope() as session:
+        answer = session.get(IntentAnswer, uuid.UUID(imported["id"]))
+        assert answer is not None
+        assert answer.is_active is False
+        assert answer.answer_summary == "五道口想吃韩餐，更新为更适合现场直接去的一家。"
+        assert answer.success_count == 0
+        assert answer.rejection_count == 0
+        audit = session.scalar(
+            select(AdminAuditLog)
+            .where(AdminAuditLog.action == "import_intent_answer_drafts")
+            .order_by(AdminAuditLog.created_at.desc())
+            .limit(1)
+        )
+        assert audit is not None
+        assert audit.target_table == "intent_answers"
+        assert audit.after_json["items"][0]["id"] == imported["id"]
+
+    invalid = await client.post(
+        "/admin/api/intent-answers/import-drafts",
+        headers=_headers(),
+        json={"items": [{"intent_key": "area:北京:五道口:韩餐"}]},
+    )
+    assert invalid.status_code == 422

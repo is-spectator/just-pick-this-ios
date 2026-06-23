@@ -63,6 +63,10 @@ from app.services.eval_review_service import (
     resolve_reports_root,
     review_payload as build_eval_review_payload,
 )
+from app.services.intent_answer_import import (
+    import_intent_answer_drafts,
+    serialize_imported_intent_answer,
+)
 from app.services.prompt_config import (
     list_prompt_configs,
     list_prompt_versions,
@@ -408,6 +412,47 @@ def create_eval_seed_intent_answer_draft(
     )
     session.commit()
     return {"ok": True, "intent_answer": draft}
+
+
+@router.post("/api/intent-answers/import-drafts")
+def import_admin_intent_answer_drafts(
+    request: Request,
+    payload: dict[str, Any],
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    _require_admin_role(request, {"admin", "content_ops"})
+    actor = _admin_actor(request)
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        raise HTTPException(status_code=422, detail="items must be a non-empty list")
+    for index, item in enumerate(raw_items):
+        if not isinstance(item, Mapping):
+            raise HTTPException(status_code=422, detail=f"items[{index}] must be an object")
+    activate = bool(payload.get("activate", False))
+    try:
+        answers = import_intent_answer_drafts(
+            session,
+            items=raw_items,
+            reviewer=actor,
+            activate=activate,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    imported = [serialize_imported_intent_answer(answer) for answer in answers]
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="import_intent_answer_drafts",
+        table_name="intent_answers",
+        target_record_id=None,
+        request_json=_request_json(request, extra={"item_count": len(raw_items), "activate": activate}),
+        before_json=None,
+        after_json={"items": imported},
+    )
+    session.commit()
+    return {"ok": True, "count": len(imported), "items": imported}
 
 
 @router.get("/api/sessions/{conversation_id}")
