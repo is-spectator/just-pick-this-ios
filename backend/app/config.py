@@ -1,4 +1,7 @@
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import lru_cache
+from collections.abc import Iterator
 from typing import Literal
 
 from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
@@ -158,6 +161,32 @@ class Settings(BaseSettings):
     )
 
 
+_request_settings: ContextVar[Settings | None] = ContextVar("request_settings", default=None)
+
+
 @lru_cache
-def get_settings() -> Settings:
+def _load_settings() -> Settings:
     return Settings()
+
+
+def get_settings() -> Settings:
+    override = _request_settings.get()
+    if override is not None:
+        return override
+    return _load_settings()
+
+
+def _clear_settings_cache() -> None:
+    _load_settings.cache_clear()
+
+
+get_settings.cache_clear = _clear_settings_cache  # type: ignore[attr-defined]
+
+
+@contextmanager
+def use_request_settings(settings: Settings) -> Iterator[None]:
+    token = _request_settings.set(settings)
+    try:
+        yield
+    finally:
+        _request_settings.reset(token)

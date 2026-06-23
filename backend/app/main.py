@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.admin import router as admin_router
 from app.api import api_router
-from app.config import Settings, get_settings
+from app.config import Settings, get_settings, use_request_settings
 from app.debug import router as debug_router
 from app.harness.middleware import install_hybrid_harness_middleware
 from app.ops import router as ops_router
@@ -17,6 +17,7 @@ from app.schemas.health import HealthResponse
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create the FastAPI application."""
 
+    has_explicit_settings = settings is not None
     resolved_settings = settings or get_settings()
     app = FastAPI(
         title=resolved_settings.app_name,
@@ -26,6 +27,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved_settings
     _assert_startup_runtime_guards(resolved_settings)
     install_hybrid_harness_middleware(app)
+
+    if has_explicit_settings:
+        @app.middleware("http")
+        async def explicit_settings_middleware(request: Request, call_next: Any) -> Any:
+            with use_request_settings(resolved_settings):
+                return await call_next(request)
 
     @app.exception_handler(SQLAlchemyError)
     async def database_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:

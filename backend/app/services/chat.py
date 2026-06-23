@@ -919,6 +919,10 @@ class DbKnowledgeRetriever:
         }
         if search.disabled:
             metadata["amap_disabled"] = True
+            run.metadata_json = metadata
+            self.session.flush()
+            if _web_reference_provider_enabled(self.session):
+                return []
             metadata["amap"]["fallback"] = "local_area_place"
             run.metadata_json = metadata
             self.session.flush()
@@ -934,6 +938,10 @@ class DbKnowledgeRetriever:
                 search_run_id=search.search_run_id,
             )
         if search.status != "succeeded" or not search.candidates:
+            run.metadata_json = metadata
+            self.session.flush()
+            if _web_reference_provider_enabled(self.session):
+                return []
             metadata["amap"]["fallback"] = "local_area_place"
             run.metadata_json = metadata
             self.session.flush()
@@ -3254,6 +3262,12 @@ def _choose_amap_candidate(
 
 def _nearby_summary(area: str) -> str:
     return f"在{area}附近"
+
+
+def _web_reference_provider_enabled(session: Session) -> bool:
+    from app.retrieval.tavily_service import TavilyService
+
+    return TavilyService(session).settings.web_search_provider == "tavily"
 
 
 def _local_area_route_summary(area: str) -> str:
