@@ -54,6 +54,7 @@ NO_DB_TEST_FILES = {
     "test_shadow_promotion_candidates.py",
     "test_shadow_schema_contract.py",
     "test_test_scripts.py",
+    "test_trace_store.py",
     "test_user_preference_memory.py",
 }
 
