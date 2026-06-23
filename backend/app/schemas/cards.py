@@ -22,7 +22,9 @@ class ImageAsset(ApiModel):
     caption: str | None = None
     alt_text: str | None = None
     verified: bool
+    displayable: bool | None = None
     is_ai_generated: bool
+    verification_status: str | None = None
     source_type: str | None = None
     license_note: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

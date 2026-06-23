@@ -233,6 +233,8 @@ def _datong_tool_result(tool_name: str) -> ToolResult:
                     "verified": True,
                     "displayable": True,
                     "is_ai_generated": False,
+                    "source_url": "https://example.com/datong-noodles",
+                    "source_domain": "example.com",
                 },
                 "item_title": "刀削面 + 肉丸子",
                 "decision_factor": "第一次来大同，地方记忆点最强。",

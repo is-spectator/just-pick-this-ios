@@ -22,7 +22,14 @@ def test_quality_report_can_be_generated(tmp_path) -> None:
                         "title": "刀削面 + 肉丸子",
                         "item": {"title": "刀削面 + 肉丸子"},
                         "decision_factor": {"text": "第一次来大同，地方记忆点最强。"},
-                        "image": {"id": "img-1", "verified": True, "is_ai_generated": False},
+                        "image": {
+                            "id": "img-1",
+                            "verified": True,
+                            "displayable": True,
+                            "is_ai_generated": False,
+                            "source_url": "https://example.com/datong-noodles",
+                            "source_domain": "example.com",
+                        },
                         "evidence_ids": ["hit-1"],
                     }
                 },
@@ -69,3 +76,37 @@ def test_recommendation_card_without_image_is_not_rejected_by_default() -> None:
     issue_codes = {issue.code for issue in score.issues}
     assert "recommendation_card_missing_trusted_image_or_place" not in issue_codes
     assert score.passed is True
+
+
+def test_recommendation_card_image_without_source_is_not_trusted() -> None:
+    score = score_case_result(
+        {
+            "case": {
+                "id": "bad-image-card",
+                "expected": {"response_kind": "recommendation_card"},
+            },
+            "response": {
+                "response_kind": "recommendation_card",
+                "data": {
+                    "recommendation_card": {
+                        "title": "朝阳区热干面",
+                        "item": {"title": "朝阳区热干面"},
+                        "decision_factor": {"text": "朝阳区想吃热干面，先按明确证据选这一家。"},
+                        "evidence_ids": ["hit-1"],
+                        "image": {
+                            "id": "img-no-source",
+                            "verified": True,
+                            "displayable": True,
+                            "is_ai_generated": False,
+                        },
+                    }
+                },
+                "tool_calls": [{"name": "create_recommendation_card", "status": "succeeded"}],
+                "metadata": {"agent_run_id": "agent-1", "retrieval_run_id": "retrieval-1"},
+            },
+        }
+    )
+
+    issue_codes = {issue.code for issue in score.issues}
+    assert "recommendation_card_image_asset_missing_source_url" in issue_codes
+    assert "recommendation_card_image_asset_missing_source_domain" in issue_codes

@@ -17,7 +17,14 @@ def _valid_recommendation_response() -> dict[str, object]:
                 "target_type": "restaurant",
                 "item": {"title": "三里屯川菜馆", "category": "restaurant"},
                 "decision_factor": {"text": "离你近，现场落座也比较稳。"},
-                "image": {"id": "img-1", "verified": True, "is_ai_generated": False},
+                "image": {
+                    "id": "img-1",
+                    "verified": True,
+                    "displayable": True,
+                    "is_ai_generated": False,
+                    "source_url": "https://example.com/sanlitun-sichuan",
+                    "source_domain": "example.com",
+                },
                 "evidence_ids": ["hit-1"],
                 "provenance": {"retrieval_run_id": "retrieval-1"},
             }

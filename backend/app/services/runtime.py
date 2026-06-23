@@ -237,6 +237,8 @@ def serialize_image(image: ImageAsset | None) -> dict[str, Any] | None:
         "caption": "参考图片",
         "alt_text": image.alt_text,
         "verified": image.verified and image.verification_status == "verified" and image.displayable,
+        "displayable": image.displayable,
+        "verification_status": image.verification_status,
         "is_ai_generated": image.is_ai_generated,
         "source_type": image.source_type,
         "license_note": image.license_note,

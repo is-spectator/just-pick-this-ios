@@ -662,9 +662,13 @@ def _has_trusted_image_or_place(card: Mapping[str, Any]) -> bool:
             or image.get("is_verified")
             or image.get("verification_status") == "verified"
         )
-        if "displayable" in image and image.get("displayable") is False:
-            verified = False
-        return bool(verified and image.get("is_ai_generated") is False)
+        return bool(
+            verified
+            and image.get("displayable") is True
+            and image.get("is_ai_generated") is False
+            and image.get("source_url")
+            and image.get("source_domain")
+        )
     place = _mapping(card.get("place"))
     action = _mapping(card.get("action"))
     return bool(place.get("provider") == "amap" and action.get("type") == "open_amap")
