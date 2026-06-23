@@ -8,8 +8,15 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.jobs.finalizer_job import run_finalize_graph_for_help_card
-from app.models import HelpAnswer, HelpCard, RewardEvent
-from app.services.help_service import assess_one_liner_quality, normalize_one_liner_key, one_liner_quality_metadata
+from app.models import ContentReviewTask, HelpAnswer, HelpCard, RewardEvent
+from app.services.help_service import (
+    OneLinerAbuseCheck,
+    OneLinerQuality,
+    assess_one_liner_quality,
+    detect_one_liner_abuse,
+    normalize_one_liner_key,
+    one_liner_quality_metadata,
+)
 from app.services.runtime import (
     ensure_user,
     resolve_request_user,
@@ -113,8 +120,42 @@ def create_one_liner(id: str, payload: dict[str, Any]) -> dict[str, Any]:
             raise HTTPException(status_code=422, detail="one_liner_too_short")
         if len(text) > 240:
             raise HTTPException(status_code=422, detail="one_liner_too_long")
+        abuse = detect_one_liner_abuse(text)
+        if abuse.unsafe:
+            _queue_one_liner_review_task(
+                session,
+                help_card=help_card,
+                raw_text=text,
+                reason=abuse.reason or "unsafe",
+                issues=abuse.issues,
+                priority=abuse.priority,
+                payload=payload,
+                abuse=abuse,
+                quality=None,
+            )
+            session.commit()
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "one_liner_unsafe",
+                    "reason": abuse.reason,
+                    "issues": list(abuse.issues),
+                },
+            )
         quality = assess_one_liner_quality(text)
         if not quality.accepted:
+            _queue_one_liner_review_task(
+                session,
+                help_card=help_card,
+                raw_text=text,
+                reason=quality.reason or "low_quality",
+                issues=quality.issues,
+                priority=70,
+                payload=payload,
+                abuse=None,
+                quality=quality,
+            )
+            session.commit()
             raise HTTPException(
                 status_code=422,
                 detail={"code": "one_liner_low_quality", "reason": quality.reason},
@@ -258,6 +299,52 @@ def get_my_rewards(*, user_id: str | None = None, device_uid: str | None = None)
                 for event in rows
             ],
         }
+
+
+def _queue_one_liner_review_task(
+    session: Any,
+    *,
+    help_card: HelpCard,
+    raw_text: str,
+    reason: str,
+    issues: tuple[str, ...],
+    priority: int,
+    payload: dict[str, Any],
+    abuse: OneLinerAbuseCheck | None,
+    quality: OneLinerQuality | None,
+) -> None:
+    session.add(
+        ContentReviewTask(
+            task_type="one_liner_rejected",
+            status="open",
+            priority=priority,
+            target_table="help_cards",
+            target_record_id=str(help_card.id),
+            title=f"Rejected one-liner for {help_card.title}",
+            reason=reason,
+            payload_json={
+                "source": "one_liner",
+                "help_card_id": str(help_card.id),
+                "help_card_title": help_card.title,
+                "device_uid": payload.get("device_uid") or payload.get("device_id") or payload.get("user_id"),
+                "user_id": payload.get("user_id"),
+                "raw_text": raw_text,
+                "reason": reason,
+                "issues": list(issues),
+                "abuse": {
+                    "unsafe": abuse.unsafe,
+                    "reason": abuse.reason,
+                    "issues": list(abuse.issues),
+                    "priority": abuse.priority,
+                }
+                if abuse is not None
+                else None,
+                "quality": one_liner_quality_metadata(quality) if quality is not None else None,
+                "metadata": dict(payload.get("metadata") or {}),
+            },
+        )
+    )
+    session.flush()
 
 
 def _reward_payload(help_card: HelpCard) -> dict[str, Any]:

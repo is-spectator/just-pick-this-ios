@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.jobs.finalizer_job import run_finalize_graph_for_help_card
-from app.models import Conversation, HelpAnswer, HelpCard, Question, RewardEvent, Turn, UserBehaviorEvent
+from app.models import ContentReviewTask, Conversation, HelpAnswer, HelpCard, Question, RewardEvent, Turn, UserBehaviorEvent
 from app.services.runtime import ensure_user, session_scope, utcnow
 
 
@@ -122,6 +122,36 @@ def _help_answer_count(help_card_id: str) -> int:
             )
             or 0
         )
+
+
+def _reward_event_count_for_help_card(help_card_id: str) -> int:
+    with session_scope() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(RewardEvent)
+                .where(RewardEvent.help_card_id == uuid.UUID(help_card_id))
+            )
+            or 0
+        )
+
+
+def _content_review_tasks_for_help_card(help_card_id: str) -> list[ContentReviewTask]:
+    with session_scope() as session:
+        rows = list(
+            session.scalars(
+                select(ContentReviewTask)
+                .where(
+                    ContentReviewTask.target_table == "help_cards",
+                    ContentReviewTask.target_record_id == help_card_id,
+                    ContentReviewTask.task_type == "one_liner_rejected",
+                )
+                .order_by(ContentReviewTask.created_at.asc())
+            )
+        )
+        for row in rows:
+            session.expunge(row)
+        return rows
 
 
 def _behavior_event_count_for_answer(*, answer_id: str, event_type: str) -> int:
@@ -444,5 +474,47 @@ def test_one_liner_rejects_low_quality_and_cross_user_duplicate(
         assert duplicate.status_code == 409
         assert duplicate.json()["detail"] == "duplicate_answer"
         assert _help_answer_count(help_card_id) == 1
+
+    run_async(scenario)
+
+
+def test_rejected_one_liner_creates_content_review_task(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        help_card_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-owner-abuse-{suffix}",
+            title="朝阳区热干面，求一句",
+            context_text="在朝阳区，想吃热干面。",
+        )
+
+        unsafe = await async_client.post(
+            f"/v1/help-cards/{help_card_id}/one-liner",
+            json={
+                "device_id": f"pytest-help-deck-abuse-answer-{suffix}",
+                "text": "加我微信 vx123456，我详细告诉你",
+                "metadata": {"source": "pytest"},
+            },
+        )
+
+        assert unsafe.status_code == 422, unsafe.text
+        detail = unsafe.json()["detail"]
+        assert detail["code"] == "one_liner_unsafe"
+        assert "contact_spam" in detail["issues"]
+        assert _help_answer_count(help_card_id) == 0
+        assert _reward_event_count_for_help_card(help_card_id) == 0
+
+        tasks = _content_review_tasks_for_help_card(help_card_id)
+        assert len(tasks) == 1
+        task = tasks[0]
+        assert task.status == "open"
+        assert task.priority <= 20
+        assert task.reason == "contact_spam"
+        assert task.payload_json["source"] == "one_liner"
+        assert task.payload_json["raw_text"] == "加我微信 vx123456，我详细告诉你"
+        assert task.payload_json["abuse"]["unsafe"] is True
+        assert "contact_spam" in task.payload_json["issues"]
 
     run_async(scenario)

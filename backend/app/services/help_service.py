@@ -28,6 +28,11 @@ _GENERIC_LOW_VALUE_ANSWERS = {
 }
 _PUNCTUATION_RE = re.compile(r"[\s,，。.!！?？、;；:：\"'“”‘’（）()\[\]{}<>《》|/\\_-]+")
 _REPEATED_CHAR_RE = re.compile(r"^(.)\1{3,}$")
+_CONTACT_SPAM_RE = re.compile(
+    r"(加我|联系我|私聊|vx[:：]?\w+|v信|微信号|qq[:：]?\w+|二维码|https?://|www\.)",
+    re.IGNORECASE,
+)
+_ABUSE_TERMS = ("约炮", "裸聊")
 
 
 @dataclass(frozen=True)
@@ -36,6 +41,15 @@ class OneLinerQuality:
     normalized_key: str
     reason: str | None = None
     issues: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class OneLinerAbuseCheck:
+    unsafe: bool
+    normalized_key: str
+    reason: str | None = None
+    issues: tuple[str, ...] = ()
+    priority: int = 100
 
 
 def human_one_liner_evidence(base: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -86,6 +100,32 @@ def assess_one_liner_quality(text: str) -> OneLinerQuality:
     )
 
 
+def detect_one_liner_abuse(text: str) -> OneLinerAbuseCheck:
+    """Detect obvious unsafe or off-platform one-liners before reward handling.
+
+    This intentionally avoids broad moderation. It only catches clear contact
+    solicitation, external links, or adult-harassment terms so normal human
+    evidence can continue to flow into finalization.
+    """
+
+    normalized_key = normalize_one_liner_key(text)
+    issues: list[str] = []
+    priority = 100
+    if _CONTACT_SPAM_RE.search(str(text or "")):
+        issues.append("contact_spam")
+        priority = min(priority, 20)
+    if any(term in normalized_key for term in _ABUSE_TERMS):
+        issues.append("adult_harassment")
+        priority = min(priority, 10)
+    return OneLinerAbuseCheck(
+        unsafe=bool(issues),
+        normalized_key=normalized_key,
+        reason=issues[0] if issues else None,
+        issues=tuple(issues),
+        priority=priority,
+    )
+
+
 def one_liner_quality_metadata(quality: OneLinerQuality) -> dict[str, Any]:
     return {
         "accepted": quality.accepted,
@@ -109,7 +149,9 @@ __all__ = [
     "HUMAN_ONE_LINER_EVIDENCE_TYPE",
     "RAW_TEXT_ROLE",
     "OneLinerQuality",
+    "OneLinerAbuseCheck",
     "assess_one_liner_quality",
+    "detect_one_liner_abuse",
     "help_answer_text",
     "human_one_liner_evidence",
     "is_finalization_ready",
