@@ -59,6 +59,7 @@ NO_DB_TEST_FILES = {
     "test_results_guard.py",
     "test_runtime_latency.py",
     "test_seed_pack_v1.py",
+    "test_seed_workflow_summary.py",
     "test_shadow_quality_diff.py",
     "test_shadow_promotion_candidates.py",
     "test_shadow_schema_contract.py",

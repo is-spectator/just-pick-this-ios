@@ -112,6 +112,17 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert detail.json()["quality"]["case_id"] == "seed-gap-case"
     assert detail.json()["seed_candidate"]
 
+    initial_summary = await client.get(
+        "/admin/api/eval-runs/run-1/seed-workflow-summary?top_limit=1",
+        headers=_headers(),
+    )
+    assert initial_summary.status_code == 200, initial_summary.text
+    initial_body = initial_summary.json()
+    assert initial_body["top_candidate_count"] == 1
+    assert initial_body["processed_count"] == 0
+    assert initial_body["processing_rate"] == 0
+    assert initial_body["processing_rate_target_met"] is False
+
     review = await client.post(
         "/admin/api/eval-runs/run-1/cases/seed-gap-case/review",
         headers=_headers(),
@@ -150,6 +161,21 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert alignment.json()["target_met"] is True
     assert alignment.json()["items"][0]["predicted_cause"] == "seed_gap"
 
+    reviewed_summary = await client.get(
+        "/admin/api/eval-runs/run-1/seed-workflow-summary?top_limit=1",
+        headers=_headers(),
+    )
+    assert reviewed_summary.status_code == 200, reviewed_summary.text
+    reviewed_body = reviewed_summary.json()
+    assert reviewed_body["reviewed_count"] == 1
+    assert reviewed_body["accepted_seed_gap_count"] == 1
+    assert reviewed_body["processed_count"] == 1
+    assert reviewed_body["processing_rate"] == 1
+    assert reviewed_body["processing_rate_target_met"] is True
+    assert reviewed_body["intent_answer_draft_count"] == 0
+    assert reviewed_body["items"][0]["processed"] is True
+    assert reviewed_body["items"][0]["accepted_seed_gap"] is True
+
     draft = await client.post(
         "/admin/api/eval-runs/run-1/cases/seed-gap-case/seed-intent-answer-draft",
         headers=_headers(),
@@ -173,6 +199,19 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     )
     assert idempotent.status_code == 200, idempotent.text
     assert idempotent.json()["intent_answer"]["id"] == draft_body["id"]
+
+    drafted_summary = await client.get(
+        "/admin/api/eval-runs/run-1/seed-workflow-summary?top_limit=1",
+        headers=_headers(),
+    )
+    assert drafted_summary.status_code == 200, drafted_summary.text
+    drafted_body = drafted_summary.json()
+    assert drafted_body["intent_answer_draft_count"] == 1
+    assert drafted_body["intent_answer_draft_rate"] == 1
+    assert drafted_body["average_processing_hours"] is not None
+    assert drafted_body["average_processing_hours"] <= 48
+    assert drafted_body["processing_time_target_met"] is True
+    assert drafted_body["items"][0]["intent_answer_drafted"] is True
 
     with session_scope() as session:
         audit = session.scalar(

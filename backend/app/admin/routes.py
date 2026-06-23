@@ -81,6 +81,7 @@ from app.services.prompt_config import (
 from app.services.seed_patch_workflow import (
     create_seed_intent_answer_draft,
     latest_accepted_seed_patch,
+    seed_workflow_summary,
     serialize_seed_intent_answer_draft,
 )
 
@@ -359,6 +360,22 @@ def get_eval_case_detail(request: Request, run_id: str, case_id: str) -> dict[st
 def get_eval_review_alignment(request: Request, run_id: str) -> dict[str, Any]:
     reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
     return review_alignment_summary(reports_root, run_id)
+
+
+@router.get("/api/eval-runs/{run_id}/seed-workflow-summary")
+def get_eval_seed_workflow_summary(
+    request: Request,
+    run_id: str,
+    top_limit: int = Query(default=50, ge=1, le=500),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return seed_workflow_summary(
+        session,
+        reports_root=reports_root,
+        run_id=run_id,
+        top_limit=top_limit,
+    )
 
 
 @router.post("/api/eval-runs/{run_id}/cases/{case_id}/review")
