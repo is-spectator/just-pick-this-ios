@@ -76,6 +76,7 @@ class User(TimestampMixin, Base):
     auth_sessions: Mapped[list[AuthSession]] = relationship(back_populates="user")
     devices: Mapped[list[UserDevice]] = relationship(back_populates="user")
     light_events: Mapped[list[LightEvent]] = relationship(back_populates="user")
+    behavior_events: Mapped[list[UserBehaviorEvent]] = relationship(back_populates="user")
 
 
 class Conversation(TimestampMixin, Base):
@@ -926,6 +927,35 @@ class RewardEvent(CreatedAtMixin, Base):
 
     user: Mapped[User] = relationship(back_populates="reward_events")
     help_answer: Mapped[HelpAnswer | None] = relationship(back_populates="reward_events")
+
+
+class UserBehaviorEvent(CreatedAtMixin, Base):
+    __tablename__ = "user_behavior_events"
+    __table_args__ = (
+        Index("ix_user_behavior_events_user_id_created_at", "user_id", "created_at"),
+        Index("ix_user_behavior_events_event_type_created_at", "event_type", "created_at"),
+        Index("ix_user_behavior_events_conversation_id", "conversation_id"),
+        Index("ix_user_behavior_events_recommendation_card_id", "recommendation_card_id"),
+        Index("ix_user_behavior_events_help_card_id", "help_card_id"),
+        Index("ix_user_behavior_events_payload_json", "payload_json", postgresql_using="gin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+    )
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("turns.id", ondelete="SET NULL"))
+    recommendation_card_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("recommendation_cards.id", ondelete="SET NULL"),
+    )
+    help_card_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("help_cards.id", ondelete="SET NULL"))
+    help_answer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("help_answers.id", ondelete="SET NULL"))
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    source: Mapped[str] = mapped_column(String(100), default="api", nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
+    user: Mapped[User | None] = relationship(back_populates="behavior_events")
 
 
 class EmailLoginCode(TimestampMixin, Base):

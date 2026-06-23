@@ -15,6 +15,7 @@ from app.services.runtime import (
     session_scope,
     utcnow,
 )
+from app.services.user_events import record_user_behavior_event
 
 
 def list_help_feed(
@@ -78,7 +79,7 @@ def publish_help_card(id: str, payload: dict[str, Any]) -> dict[str, Any]:
         help_card = session.get(HelpCard, uuid.UUID(id))
         if help_card is None:
             raise HTTPException(status_code=404, detail="help_card_not_found")
-        ensure_user(
+        publish_user = ensure_user(
             session,
             device_uid=payload.get("device_uid") or payload.get("device_id") or payload.get("user_id"),
             user_id=payload.get("user_id"),
@@ -88,6 +89,16 @@ def publish_help_card(id: str, payload: dict[str, Any]) -> dict[str, Any]:
         if help_card.status == "draft":
             help_card.status = "published"
             help_card.published_at = help_card.published_at or utcnow()
+        record_user_behavior_event(
+            session,
+            event_type="help_card_published",
+            user_id=publish_user.id,
+            conversation_id=help_card.conversation_id,
+            help_card_id=help_card.id,
+            source="api",
+            payload_json={"status": help_card.status, **dict(payload.get("metadata") or {})},
+        )
+        session.flush()
         return {
             "help_card": {"id": str(help_card.id), "status": help_card.status},
             "ui_events": [{"type": "help_card_published", "help_card_id": str(help_card.id)}],
@@ -146,6 +157,16 @@ def create_one_liner(id: str, payload: dict[str, Any]) -> dict[str, Any]:
                 status="pending",
                 payload_json={"help_card_title": help_card.title},
             )
+        )
+        record_user_behavior_event(
+            session,
+            event_type="one_liner_submitted",
+            user_id=answer_user.id,
+            conversation_id=help_card.conversation_id,
+            help_card_id=help_card.id,
+            help_answer_id=answer.id,
+            source="api",
+            payload_json={"reward": reward, **dict(payload.get("metadata") or {})},
         )
         help_card.answer_count += 1
         help_card.status = "collecting"

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.config import get_settings
 from app.models import (
@@ -24,6 +24,7 @@ from app.models import (
     ToolCall,
     Turn,
     User,
+    UserBehaviorEvent,
 )
 from app.services.runtime import (
     create_question_for_turn,
@@ -96,7 +97,26 @@ def reset_eval(payload: dict[str, Any]) -> dict[str, Any]:
             ).all()
         )
 
+        behavior_event_filters = []
+        if eval_conversation_ids:
+            behavior_event_filters.append(UserBehaviorEvent.conversation_id.in_(eval_conversation_ids))
+        if eval_user_ids:
+            behavior_event_filters.append(UserBehaviorEvent.user_id.in_(eval_user_ids))
+        eval_behavior_event_ids = (
+            set(
+                session.scalars(
+                    select(UserBehaviorEvent.id).where(or_(*behavior_event_filters))
+                ).all()
+            )
+            if behavior_event_filters
+            else set()
+        )
+
         for model, ids in (
+            (
+                UserBehaviorEvent,
+                eval_behavior_event_ids,
+            ),
             (HelpAnswer, _ids_for(HelpAnswer.help_card_id, eval_help_card_ids, session, HelpAnswer.id)),
             (LightEvent, _ids_for(LightEvent.conversation_id, eval_conversation_ids, session, LightEvent.id)),
             (RetrievalHit, _ids_for(RetrievalHit.retrieval_run_id, eval_retrieval_run_ids, session, RetrievalHit.id)),

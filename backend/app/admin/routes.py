@@ -50,6 +50,7 @@ from app.models import (
     ToolCall,
     Turn,
     User,
+    UserBehaviorEvent,
     WebSearchResult,
     WebSearchRun,
 )
@@ -148,6 +149,7 @@ TABLES: dict[str, TableConfig] = {
     "recommendation_cards": TableConfig(RecommendationCard),
     "help_cards": TableConfig(HelpCard),
     "help_answers": TableConfig(HelpAnswer),
+    "user_behavior_events": TableConfig(UserBehaviorEvent, read_only=True),
     "light_events": TableConfig(LightEvent),
     "web_search_runs": TableConfig(WebSearchRun),
     "web_search_results": TableConfig(WebSearchResult),

@@ -12,6 +12,8 @@ from app.schemas.cards import (
     ImageAsset,
     LightEvent,
     LightEventsResponse,
+    UserBehaviorEventRequest,
+    UserBehaviorEventResponse,
 )
 from app.schemas.chat import (
     BootstrapRequest,
@@ -38,4 +40,6 @@ __all__ = [
     "LightEvent",
     "LightEventsResponse",
     "ToolCallView",
+    "UserBehaviorEventRequest",
+    "UserBehaviorEventResponse",
 ]

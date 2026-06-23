@@ -206,6 +206,8 @@ class LightEventsResponse(ApiModel):
 
 class CardAcceptRequest(ApiModel):
     user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -213,6 +215,26 @@ class CardAcceptResponse(ApiModel):
     card_id: str
     accepted: bool = True
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class UserBehaviorEventRequest(ApiModel):
+    event_type: str = Field(min_length=1)
+    user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
+    conversation_id: str | None = None
+    turn_id: str | None = None
+    card_id: str | None = None
+    recommendation_card_id: str | None = None
+    help_card_id: str | None = None
+    help_answer_id: str | None = None
+    source: str = "ios"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class UserBehaviorEventResponse(ApiModel):
+    event: dict[str, Any]
+    accepted: bool = True
 
 
 def _extract_evidence_ids(data: dict[str, Any]) -> list[str]:

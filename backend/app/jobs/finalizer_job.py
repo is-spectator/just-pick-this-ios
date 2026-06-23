@@ -46,6 +46,7 @@ from app.services.runtime import (
     session_scope,
     utcnow,
 )
+from app.services.user_events import record_user_behavior_event
 
 
 class FinalizerJobResult(TypedDict):
@@ -456,6 +457,18 @@ class DbFinalizeToolInvoker:
         for answer in help_card.answers:
             answer.status = "used"
             answer.reward_status = "granted"
+            if answer.answer_user_id is not None:
+                record_user_behavior_event(
+                    self.session,
+                    event_type="one_liner_reward_granted",
+                    user_id=answer.answer_user_id,
+                    conversation_id=help_card.conversation_id,
+                    help_card_id=help_card.id,
+                    help_answer_id=answer.id,
+                    recommendation_card_id=card.id,
+                    source="pipi_finalize_graph",
+                    payload_json={"final_recommendation_card_id": str(card.id)},
+                )
         self.session.flush()
         return _card_result(card, status="persisted")
 
