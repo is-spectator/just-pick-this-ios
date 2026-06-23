@@ -408,6 +408,7 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
             "loop": _loop_metadata(state),
             "runtime_path": "product",
             "experiments": experiments,
+            "prompt_versions": active_prompt_versions,
         }
         llm_query_rewrite_metadata = (state.get("metadata") or {}).get("llm_query_rewrite")
         if isinstance(llm_query_rewrite_metadata, dict):
