@@ -14,10 +14,13 @@ IntentFeedbackOutcome = Literal["success", "rejection"]
 SUCCESS_EVENT_TYPES = {
     "recommendation_card_accepted",
     "final_recommendation_accepted",
+    "recommendation_card_post_review_satisfied",
 }
 REJECTION_EVENT_TYPES = {
     "recommendation_card_rejected",
     "recommendation_card_changed",
+    "recommendation_card_post_review_regretted",
+    "recommendation_card_post_review_not_went",
 }
 
 

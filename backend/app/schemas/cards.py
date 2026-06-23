@@ -229,6 +229,13 @@ class CardFeedbackRequest(ApiModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class CardPostReviewRequest(CardFeedbackRequest):
+    outcome: Literal["went_satisfied", "went_regretted", "not_went", "unknown"] | None = None
+    went: bool | None = None
+    satisfied: bool | None = None
+    notes: str | None = None
+
+
 class CardFeedbackResponse(ApiModel):
     card_id: str
     accepted: bool = False

@@ -77,6 +77,39 @@ def change_card(id: str, payload: dict[str, Any] | None = None) -> dict[str, Any
     )
 
 
+def review_card(id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    outcome = _post_review_outcome(payload)
+    event_type = {
+        "went_satisfied": "recommendation_card_post_review_satisfied",
+        "went_regretted": "recommendation_card_post_review_regretted",
+        "not_went": "recommendation_card_post_review_not_went",
+        "unknown": "recommendation_card_post_review_unknown",
+    }[outcome]
+    status = {
+        "went_satisfied": "reviewed_satisfied",
+        "went_regretted": "reviewed_regretted",
+        "not_went": "reviewed_not_went",
+        "unknown": "reviewed_unknown",
+    }[outcome]
+    return _feedback_card(
+        id,
+        {
+            **payload,
+            "metadata": {
+                "outcome": outcome,
+                "went": outcome != "not_went" if outcome != "unknown" else payload.get("went"),
+                "satisfied": outcome == "went_satisfied" if outcome != "unknown" else payload.get("satisfied"),
+                "notes": payload.get("notes"),
+                **dict(payload.get("metadata") or {}),
+            },
+        },
+        event_type=event_type,
+        status=status,
+        action="post_review",
+    )
+
+
 def _feedback_card(
     id: str,
     payload: dict[str, Any] | None,
@@ -114,11 +147,12 @@ def _feedback_card(
         session.flush()
         return {
             "card_id": str(card.id),
-            "accepted": False,
+            "accepted": event_type == "recommendation_card_post_review_satisfied",
             "feedback": {
                 "action": action,
                 "status": status,
                 "previous_status": previous_status,
+                "outcome": metadata.get("outcome"),
             },
             "event": {
                 "id": str(event.id),
@@ -138,3 +172,18 @@ def _optional_uuid(value: Any) -> uuid.UUID | None:
 def _card_feedback_metadata(card: RecommendationCard, payload: dict[str, Any]) -> dict[str, Any]:
     assignments = experiment_assignments_from_payload(card.payload_json or {})
     return merge_experiment_metadata(payload, assignments)
+
+
+def _post_review_outcome(payload: dict[str, Any]) -> str:
+    outcome = str(payload.get("outcome") or "").strip()
+    if outcome in {"went_satisfied", "went_regretted", "not_went", "unknown"}:
+        return outcome
+    went = payload.get("went")
+    satisfied = payload.get("satisfied")
+    if went is False:
+        return "not_went"
+    if went is True and satisfied is True:
+        return "went_satisfied"
+    if went is True and satisfied is False:
+        return "went_regretted"
+    return "unknown"

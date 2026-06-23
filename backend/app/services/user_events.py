@@ -23,6 +23,10 @@ CORE_USER_EVENT_TYPES = {
     "one_liner_reward_granted",
     "one_liner_reward_rejected",
     "final_recommendation_accepted",
+    "recommendation_card_post_review_satisfied",
+    "recommendation_card_post_review_regretted",
+    "recommendation_card_post_review_not_went",
+    "recommendation_card_post_review_unknown",
 }
 
 

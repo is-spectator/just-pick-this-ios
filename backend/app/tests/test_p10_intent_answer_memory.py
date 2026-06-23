@@ -227,3 +227,56 @@ def test_card_rejection_event_updates_intent_answer_rejection_memory(
         assert after.rejection_count == before.rejection_count + 1
 
     run_async(scenario)
+
+
+def test_post_experience_review_updates_intent_answer_memory(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-intent-memory-post-review-{uuid.uuid4()}"
+        owner = await bootstrap(
+            async_client,
+            device_id=device_id,
+        )
+        body = await chat_turn(
+            async_client,
+            conversation_id=owner["conversation_id"],
+            message="我现在在大同喜晋道，不知道吃什么，给我推荐一个。",
+        )
+        card_id = body["cards"][0]["id"]
+        before = _intent_answer_for_card(card_id)
+
+        satisfied = await async_client.post(
+            f"/v1/cards/{card_id}/review",
+            json={
+                "device_id": device_id,
+                "outcome": "went_satisfied",
+                "notes": "去了，确实稳。",
+            },
+        )
+        satisfied_body = require_ready_response(satisfied)
+        assert satisfied_body["accepted"] is True
+        assert satisfied_body["event"]["event_type"] == "recommendation_card_post_review_satisfied"
+
+        after_satisfied = _intent_answer_for_card(card_id)
+        assert after_satisfied.success_count == before.success_count + 1
+        assert after_satisfied.rejection_count == before.rejection_count
+
+        regretted = await async_client.post(
+            f"/v1/cards/{card_id}/review",
+            json={
+                "device_id": device_id,
+                "outcome": "went_regretted",
+                "notes": "去了，但不太满意。",
+            },
+        )
+        regretted_body = require_ready_response(regretted)
+        assert regretted_body["accepted"] is False
+        assert regretted_body["event"]["event_type"] == "recommendation_card_post_review_regretted"
+
+        after_regretted = _intent_answer_for_card(card_id)
+        assert after_regretted.success_count == after_satisfied.success_count
+        assert after_regretted.rejection_count == after_satisfied.rejection_count + 1
+
+    run_async(scenario)
