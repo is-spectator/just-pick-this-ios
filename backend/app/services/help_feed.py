@@ -222,10 +222,12 @@ def get_my_rewards(*, user_id: str | None = None, device_uid: str | None = None)
         )
         pending_value = sum(event.value for event in rows if event.status == "pending")
         granted_value = sum(event.value for event in rows if event.status == "granted")
+        rejected_value = sum(event.value for event in rows if event.status == "rejected")
         return {
             "device_uid": user.device_uid,
             "pending_value": pending_value,
             "granted_value": granted_value,
+            "rejected_value": rejected_value,
             "items": [
                 {
                     "id": str(event.id),

@@ -6,7 +6,8 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.models import Conversation, HelpAnswer, HelpCard, Question, RewardEvent, Turn
+from app.jobs.finalizer_job import run_finalize_graph_for_help_card
+from app.models import Conversation, HelpAnswer, HelpCard, Question, RewardEvent, Turn, UserBehaviorEvent
 from app.services.runtime import ensure_user, session_scope, utcnow
 
 
@@ -99,6 +100,74 @@ def _reward_count_for_answer(answer_id: str) -> int:
         )
 
 
+def _reward_statuses_for_answer(answer_id: str) -> list[str]:
+    with session_scope() as session:
+        return list(
+            session.scalars(
+                select(RewardEvent.status)
+                .where(RewardEvent.help_answer_id == uuid.UUID(answer_id))
+                .order_by(RewardEvent.created_at.asc())
+            )
+        )
+
+
+def _behavior_event_count_for_answer(*, answer_id: str, event_type: str) -> int:
+    with session_scope() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(UserBehaviorEvent)
+                .where(
+                    UserBehaviorEvent.help_answer_id == uuid.UUID(answer_id),
+                    UserBehaviorEvent.event_type == event_type,
+                )
+            )
+            or 0
+        )
+
+
+def _seed_answers_with_rewards(
+    *,
+    help_card_id: str,
+    answer_specs: list[tuple[str, str]],
+) -> dict[str, str]:
+    answer_ids: dict[str, str] = {}
+    with session_scope() as session:
+        help_card = session.get(HelpCard, uuid.UUID(help_card_id))
+        assert help_card is not None
+        for device, text in answer_specs:
+            answer_user = ensure_user(session, device_uid=device)
+            answer = HelpAnswer(
+                help_card_id=help_card.id,
+                answer_user_id=answer_user.id,
+                raw_text=text,
+                normalized_text=text,
+                status="submitted",
+                reward_status="pending",
+                evidence_json={
+                    "evidence_type": "human_one_liner",
+                    "reward": {"label": "+10", "value": 10, "status": "pending"},
+                },
+            )
+            session.add(answer)
+            session.flush()
+            session.add(
+                RewardEvent(
+                    user_id=answer_user.id,
+                    help_card_id=help_card.id,
+                    help_answer_id=answer.id,
+                    event_type="one_liner_submitted",
+                    label="+10",
+                    value=10,
+                    status="pending",
+                    payload_json={"help_card_title": help_card.title},
+                )
+            )
+            help_card.answer_count += 1
+            answer_ids[device] = str(answer.id)
+    return answer_ids
+
+
 async def _get_feed(client: AsyncClient, *, device_id: str, limit: int = 10) -> dict[str, Any]:
     response = await client.get("/v1/help-feed", params={"device_id": device_id, "limit": limit})
     assert response.status_code == 200, response.text
@@ -168,6 +237,80 @@ def test_one_liner_creates_answer_reward_event_and_advances(run_async: Any, asyn
         assert body["help_card"]["answer_count"] == 1
         assert body["toast"] == "收到了，+10 等她采纳。"
         assert _reward_count_for_answer(body["answer_id"]) == 1
+
+    run_async(scenario)
+
+
+def test_one_liner_reward_becomes_granted_after_finalization(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        help_card_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-owner-grant-{suffix}",
+            title="韩国逛街不去明洞，求一句",
+            context_text="想小众，别太游客。",
+        )
+        answer_devices = [f"pytest-help-deck-grant-answer-{index}-{suffix}" for index in range(3)]
+        last_body: dict[str, Any] = {}
+        for index, device_id in enumerate(answer_devices, start=1):
+            response = await async_client.post(
+                f"/v1/help-cards/{help_card_id}/one-liner",
+                json={"device_id": device_id, "text": f"去圣水更稳，小店密度高 {index}"},
+            )
+            assert response.status_code == 200, response.text
+            last_body = response.json()
+
+        assert last_body["metadata"]["finalization_ready"] is True
+        rewards = await async_client.get("/v1/rewards/me", params={"device_id": answer_devices[0]})
+        assert rewards.status_code == 200, rewards.text
+        body = rewards.json()
+        assert body["pending_value"] == 0
+        assert body["granted_value"] == 10
+        assert body["rejected_value"] == 0
+        assert body["items"][0]["status"] == "granted"
+
+    run_async(scenario)
+
+
+def test_finalizer_rejects_pending_rewards_not_selected_as_evidence(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        rejected_device = f"pytest-help-deck-reject-answer-bad-{suffix}"
+        help_card_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-owner-reject-{suffix}",
+            title="韩国逛街不去明洞，求一句",
+            context_text="想小众，别太游客。",
+        )
+        answer_ids = _seed_answers_with_rewards(
+            help_card_id=help_card_id,
+            answer_specs=[
+                (f"pytest-help-deck-reject-answer-1-{suffix}", "去圣水，小店多，也适合买美妆。"),
+                (f"pytest-help-deck-reject-answer-2-{suffix}", "圣水比明洞更小众，咖啡店也密集。"),
+                (f"pytest-help-deck-reject-answer-3-{suffix}", "预算不高也能逛圣水，路线轻松。"),
+                (rejected_device, "随便"),
+            ],
+        )
+
+        with session_scope() as session:
+            run_finalize_graph_for_help_card(session, uuid.UUID(help_card_id))
+
+        assert _reward_statuses_for_answer(answer_ids[rejected_device]) == ["rejected"]
+        assert _behavior_event_count_for_answer(
+            answer_id=answer_ids[rejected_device],
+            event_type="one_liner_reward_rejected",
+        ) == 1
+        rewards = await async_client.get("/v1/rewards/me", params={"device_id": rejected_device})
+        assert rewards.status_code == 200, rewards.text
+        body = rewards.json()
+        assert body["pending_value"] == 0
+        assert body["granted_value"] == 0
+        assert body["rejected_value"] == 10
+        assert body["items"][0]["status"] == "rejected"
 
     run_async(scenario)
 

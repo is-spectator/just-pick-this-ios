@@ -18,6 +18,7 @@ CORE_USER_EVENT_TYPES = {
     "help_card_published",
     "one_liner_submitted",
     "one_liner_reward_granted",
+    "one_liner_reward_rejected",
     "final_recommendation_accepted",
 }
 

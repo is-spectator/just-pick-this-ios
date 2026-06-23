@@ -182,6 +182,7 @@ class RewardsMeResponse(ApiModel):
     device_uid: str | None = None
     pending_value: int = 0
     granted_value: int = 0
+    rejected_value: int = 0
     items: list[dict[str, Any]] = Field(default_factory=list)
 
 

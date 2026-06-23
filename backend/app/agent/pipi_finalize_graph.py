@@ -259,7 +259,7 @@ class PipiFinalizeGraph:
                 },
             }
 
-        evidence_ids = [answer.get("id", "") for answer in answers if answer.get("id")]
+        evidence_ids = _selected_evidence_answer_ids(answers, min_required)
         retrieval_hit_ids = [
             hit.get("source_id", "") for hit in state.get("retrieval_hits", []) if hit.get("source_id")
         ]
@@ -595,6 +595,34 @@ def _deterministic_final_decision(
             "retrieval_hit_ids": retrieval_hit_ids,
         },
     }
+
+
+def _selected_evidence_answer_ids(answers: list[HelpAnswerSnapshot], min_required: int) -> list[str]:
+    useful_ids = [
+        answer_id
+        for answer in answers
+        if (answer_id := str(answer.get("id") or "").strip()) and _is_useful_human_evidence(answer)
+    ]
+    if len(useful_ids) >= min_required:
+        return useful_ids
+    return [answer.get("id", "") for answer in answers if answer.get("id")]
+
+
+def _is_useful_human_evidence(answer: HelpAnswerSnapshot) -> bool:
+    text = str(answer.get("text") or "").strip()
+    compact = "".join(text.split())
+    if len(compact) < 4:
+        return False
+    generic_phrases = {
+        "随便",
+        "都行",
+        "不知道",
+        "不知道呢",
+        "我也不知道",
+        "好吃就行",
+        "都可以",
+    }
+    return compact not in generic_phrases
 
 
 def _best_retrieval_payload(state: PipiFinalizeGraphState) -> dict[str, Any]:
