@@ -151,6 +151,12 @@ struct BottomComposer: View {
         !isSending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private func send() {
+        guard canSend else { return }
+        isFocused = false
+        onSend()
+    }
+
     init(
         text: Binding<String>,
         placeholder: String,
@@ -174,12 +180,10 @@ struct BottomComposer: View {
                 .submitLabel(.send)
                 .disabled(isSending)
                 .onSubmit {
-                    if canSend {
-                        onSend()
-                    }
+                    send()
                 }
 
-            Button(action: onSend) {
+            Button(action: send) {
                 ZStack {
                     if isSending {
                         ProgressView()
@@ -215,6 +219,21 @@ struct BottomComposer: View {
         .padding(.top, 10)
         .padding(.bottom, 8)
         .background(AppTheme.background)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("收起") {
+                    isFocused = false
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .accessibilityLabel("收起键盘")
+            }
+        }
+        .onChange(of: isSending) { _, sending in
+            if sending {
+                isFocused = false
+            }
+        }
     }
 }
 
