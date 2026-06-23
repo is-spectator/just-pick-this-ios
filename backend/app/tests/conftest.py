@@ -32,6 +32,7 @@ NO_DB_TEST_FILES = {
     "test_harness_input_gate.py",
     "test_health_readiness.py",
     "test_help_card_extractor_compressor.py",
+    "test_help_feed_ranking.py",
     "test_input_gate_reasoner_contract.py",
     "test_input_gate_slot_extraction.py",
     "test_no_old_graph_nodes_in_main_path.py",

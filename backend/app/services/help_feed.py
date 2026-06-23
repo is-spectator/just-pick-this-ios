@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -42,22 +43,17 @@ def list_help_feed(
         query = (
             select(HelpCard)
             .where(HelpCard.status.in_(["published", "collecting"]))
-            .order_by(
-                HelpCard.answer_count.asc(),
-                HelpCard.published_at.desc().nullslast(),
-                HelpCard.created_at.desc(),
-            )
-            .offset(offset)
-            .limit(resolved_limit + 1)
+            .order_by(HelpCard.published_at.desc().nullslast(), HelpCard.created_at.desc())
+            .limit(max(500, offset + resolved_limit + 1))
         )
         if user is not None:
             query = query.where(HelpCard.owner_user_id != user.id)
         if answered_ids:
             query = query.where(~HelpCard.id.in_(answered_ids))
-        rows = list(session.scalars(query))
-        items = rows[:resolved_limit]
-        next_cursor = str(offset + resolved_limit) if len(rows) > resolved_limit else None
-        return {"items": [serialize_help_card(card) for card in items], "next_cursor": next_cursor}
+        rows = sorted(session.scalars(query), key=help_feed_sort_key)
+        items = rows[offset : offset + resolved_limit]
+        next_cursor = str(offset + resolved_limit) if len(rows) > offset + resolved_limit else None
+        return {"items": [_serialize_ranked_help_card(card) for card in items], "next_cursor": next_cursor}
 
 
 def get_help_card(id: str) -> dict[str, Any]:
@@ -273,3 +269,69 @@ def _reward_payload(help_card: HelpCard) -> dict[str, Any]:
         "value": value,
         "status": str(reward.get("status") or "pending"),
     }
+
+
+def _serialize_ranked_help_card(help_card: HelpCard) -> dict[str, Any]:
+    item = serialize_help_card(help_card)
+    metadata = dict(item.get("metadata") or {})
+    metadata["feed_ranking"] = help_feed_rank_payload(help_card)
+    item["metadata"] = metadata
+    return item
+
+
+def help_feed_rank_payload(help_card: HelpCard) -> dict[str, Any]:
+    answer_count = int(getattr(help_card, "answer_count", 0) or 0)
+    min_required = int(getattr(help_card, "min_answers_required", 3) or 3)
+    reward_value = _help_card_reward_value(help_card)
+    remaining_answers = max(0, min_required - answer_count)
+    return {
+        "reward_value": reward_value,
+        "answer_count": answer_count,
+        "min_answers_required": min_required,
+        "remaining_answers": remaining_answers,
+        "score": _help_feed_score(
+            reward_value=reward_value,
+            remaining_answers=remaining_answers,
+            answer_count=answer_count,
+        ),
+    }
+
+
+def help_feed_sort_key(help_card: HelpCard) -> tuple[float, int, int, float, float]:
+    rank = help_feed_rank_payload(help_card)
+    published_ts = _timestamp(getattr(help_card, "published_at", None))
+    created_ts = _timestamp(getattr(help_card, "created_at", None))
+    return (
+        -float(rank["score"]),
+        -int(rank["reward_value"]),
+        int(rank["answer_count"]),
+        -published_ts,
+        -created_ts,
+    )
+
+
+def _help_feed_score(*, reward_value: int, remaining_answers: int, answer_count: int) -> float:
+    return float(reward_value * 100 + remaining_answers * 20 - answer_count * 5)
+
+
+def _help_card_reward_value(help_card: HelpCard) -> int:
+    payload = getattr(help_card, "payload_json", None) or {}
+    reward = dict(payload.get("reward") or {})
+    return int(reward.get("value") or payload.get("reward_value") or 10)
+
+
+def _timestamp(value: Any) -> float:
+    if isinstance(value, datetime):
+        return value.timestamp()
+    return 0.0
+
+
+__all__ = [
+    "create_one_liner",
+    "get_help_card",
+    "get_my_rewards",
+    "help_feed_rank_payload",
+    "help_feed_sort_key",
+    "list_help_feed",
+    "publish_help_card",
+]

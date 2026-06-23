@@ -18,6 +18,7 @@ def _seed_help_card(
     context_text: str,
     answer_count: int = 0,
     status: str = "published",
+    reward_value: int = 10,
 ) -> str:
     with session_scope() as session:
         owner = ensure_user(session, device_uid=owner_device)
@@ -61,7 +62,7 @@ def _seed_help_card(
                 "wants": ["一句明确建议"],
                 "avoids": ["绕远"],
                 "constraints": [],
-                "reward": {"label": "+10", "value": 10, "status": "pending"},
+                "reward": {"label": f"+{reward_value}", "value": reward_value, "status": "pending"},
             },
             published_at=utcnow(),
         )
@@ -221,6 +222,43 @@ def test_help_feed_filters_owner_and_answered_cards(run_async: Any, async_client
         assert visible[visible_card_id]["context_text"] == "晚上想吃本地味道。"
         assert visible[visible_card_id]["reward"]["label"] == "+10"
         assert isinstance(visible[visible_card_id]["answer_count"], int)
+
+    run_async(scenario)
+
+
+def test_help_feed_ranks_reward_scarcity_and_answer_count(run_async: Any, async_client: AsyncClient) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        high_reward_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-rank-high-owner-{suffix}",
+            title="高奖励求一句",
+            context_text="更值得答主先看。",
+            answer_count=2,
+            reward_value=30,
+        )
+        low_answer_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-rank-low-owner-{suffix}",
+            title="低答案求一句",
+            context_text="还缺很多答案。",
+            answer_count=0,
+            reward_value=10,
+        )
+        filled_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-rank-filled-owner-{suffix}",
+            title="已快完成求一句",
+            context_text="答案已经比较多。",
+            answer_count=3,
+            reward_value=10,
+        )
+
+        feed = await _get_feed(async_client, device_id=f"pytest-help-deck-rank-reader-{suffix}", limit=100)
+        expected = {high_reward_id, low_answer_id, filled_id}
+        relevant_items = [item for item in feed["items"] if item["id"] in expected]
+        ids = [item["id"] for item in relevant_items]
+
+        assert ids == [high_reward_id, low_answer_id, filled_id]
+        assert relevant_items[0]["metadata"]["feed_ranking"]["reward_value"] == 30
+        assert relevant_items[1]["metadata"]["feed_ranking"]["remaining_answers"] == 3
 
     run_async(scenario)
 
