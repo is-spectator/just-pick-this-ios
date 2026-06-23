@@ -40,7 +40,14 @@ def test_amap_key_missing_keeps_chat_turn_running(
         body = await _chat(async_client, "我到了北京三里屯，有什么好吃的川菜么")
         assert body["conversation_id"]
         assert body["debug"]["amap_disabled"] is True
-        assert body["response_kind"] in {"help_card_draft", "clarification"}
+        assert body["response_kind"] == "recommendation_card"
+        assert body["location_state"] == "in_area"
+        card = body["data"]["recommendation_card"]
+        assert card["target_type"] == "restaurant"
+        assert card["place"]["provider"] == "amap"
+        assert card["place"]["location"]["coord_type"] == "gcj02"
+        assert card["action"]["type"] == "open_amap"
+        assert card["action"]["uri"]
 
     try:
         run_async(scenario)

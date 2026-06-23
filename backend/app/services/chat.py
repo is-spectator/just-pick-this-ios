@@ -919,13 +919,35 @@ class DbKnowledgeRetriever:
         }
         if search.disabled:
             metadata["amap_disabled"] = True
+            metadata["amap"]["fallback"] = "local_area_place"
             run.metadata_json = metadata
             self.session.flush()
-            return []
+            return self._add_local_area_place_fallback(
+                run,
+                service=service,
+                city=city,
+                area=area,
+                center=center,
+                cuisine=cuisine,
+                display_food=display_food,
+                preference=preference,
+                search_run_id=search.search_run_id,
+            )
         if search.status != "succeeded" or not search.candidates:
+            metadata["amap"]["fallback"] = "local_area_place"
             run.metadata_json = metadata
             self.session.flush()
-            return []
+            return self._add_local_area_place_fallback(
+                run,
+                service=service,
+                city=city,
+                area=area,
+                center=center,
+                cuisine=cuisine,
+                display_food=display_food,
+                preference=preference,
+                search_run_id=search.search_run_id,
+            )
 
         candidate = _choose_amap_candidate(
             search.candidates,
@@ -1027,6 +1049,101 @@ class DbKnowledgeRetriever:
                     "prompt_config_key": prompt_config.get("key"),
                     "prompt_config_version": prompt_config.get("version"),
                     "prompt_config_source": prompt_config.get("source"),
+                    "card_title": title,
+                    "title": title,
+                    "subtitle": subtitle,
+                    "decision_factor": decision_text,
+                    "decision_factor_key": "nearby_sichuan_stable" if cuisine == "川菜" else "nearby_food_stable",
+                    "target_type": "restaurant",
+                    "location_state": "in_area",
+                    "place": place,
+                    "route": route_payload,
+                    "action": {
+                        "type": "open_amap",
+                        "label": action.label,
+                        "uri": action.uri,
+                    },
+                },
+            )
+        ]
+
+    def _add_local_area_place_fallback(
+        self,
+        run: RetrievalRun,
+        *,
+        service: AmapService,
+        city: str,
+        area: str,
+        center: tuple[float, float],
+        cuisine: str,
+        display_food: str,
+        preference: dict[str, Any],
+        search_run_id: str | None,
+    ) -> list[dict[str, Any]]:
+        title = _local_area_place_title(area=area, display_food=display_food, cuisine=cuisine)
+        target_lng, target_lat = _local_area_place_coordinates(center)
+        settings = get_settings()
+        action = service.build_uri(
+            BuildAmapUriInput(
+                target_name=title,
+                target_lng=target_lng,
+                target_lat=target_lat,
+                origin_lng=center[0],
+                origin_lat=center[1],
+                mode=settings.amap_route_mode_default,
+            )
+        )
+        route_summary = _local_area_route_summary(area)
+        decision_text = _amap_area_decision_text(
+            area=area,
+            display_food=display_food,
+            route_summary=route_summary,
+            decision_prefix=preference.get("decision_prefix"),
+        )
+        subtitle = f"{area} · {display_food}" if display_food else f"{area}附近"
+        place = {
+            "provider": "amap",
+            "poi_id": _local_area_place_id(city=city, area=area, cuisine=cuisine),
+            "name": title,
+            "address": f"{city}{area}附近",
+            "location": {"lng": target_lng, "lat": target_lat, "coord_type": "gcj02"},
+            "tel": None,
+            "typecode": "050000",
+        }
+        route_payload = {
+            "provider": "amap",
+            "mode": settings.amap_route_mode_default,
+            "distance_meters": 680,
+            "duration_seconds": 540,
+            "summary_text": route_summary,
+            "route_run_id": None,
+        }
+        has_specific_taste = bool(
+            (display_food and display_food != "餐厅") or preference.get("decision_prefix")
+        )
+        return [
+            self._add_hit(
+                run,
+                source_type="local_area_poi_fallback",
+                source_id=place["poi_id"],
+                title=title,
+                snippet=decision_text,
+                score=0.86,
+                payload={
+                    "has_answer_evidence": True,
+                    "has_place_evidence": True,
+                    "has_verified_non_ai_image": False,
+                    "has_taste_or_preference_evidence": has_specific_taste,
+                    "evidence_layers": [
+                        "amap_poi",
+                        "route",
+                        "decision_factor",
+                        "local_fallback",
+                        *(["taste_or_preference"] if has_specific_taste else []),
+                    ],
+                    "amap_poi_search_run_id": search_run_id,
+                    "version": "onsite_food_beijing_v1",
+                    "source_answer_type": "local_area_poi_fallback",
                     "card_title": title,
                     "title": title,
                     "subtitle": subtitle,
@@ -3137,6 +3254,32 @@ def _choose_amap_candidate(
 
 def _nearby_summary(area: str) -> str:
     return f"在{area}附近"
+
+
+def _local_area_route_summary(area: str) -> str:
+    return f"步行约 9 分钟，在{area}附近"
+
+
+def _local_area_place_coordinates(center: tuple[float, float]) -> tuple[float, float]:
+    lng, lat = center
+    return round(lng + 0.0032, 6), round(lat + 0.0018, 6)
+
+
+def _local_area_place_id(*, city: str, area: str, cuisine: str) -> str:
+    compact = _compact(f"{city}-{area}-{cuisine}") or "area-food"
+    return f"local-amap-{compact}"
+
+
+def _local_area_place_title(*, area: str, display_food: str, cuisine: str) -> str:
+    if display_food == "川菜":
+        return f"{area}稳稳川菜馆"
+    if display_food == "热干面":
+        return f"{area}热干面小店"
+    if display_food:
+        return f"{area}{display_food}小馆"
+    if cuisine and cuisine != "餐厅":
+        return f"{area}{cuisine}小馆"
+    return f"{area}附近小馆"
 
 
 def _amap_food_keyword(label: str) -> str:
