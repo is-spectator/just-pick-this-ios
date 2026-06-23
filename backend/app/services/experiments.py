@@ -113,14 +113,12 @@ def _normalise_provided_assignments(value: Any) -> list[dict[str, Any]]:
             variant_id = str(raw_item.get("variant_id") or raw_item.get("variant") or "")
             if not experiment_id or not variant_id:
                 continue
-            items.append(
-                {
-                    "experiment_id": experiment_id,
-                    "variant_id": variant_id,
-                    "source": str(raw_item.get("source") or "client"),
-                    "version": int(raw_item.get("version") or 1),
-                }
-            )
+            item = dict(raw_item)
+            item["experiment_id"] = experiment_id
+            item["variant_id"] = variant_id
+            item["source"] = str(raw_item.get("source") or "client")
+            item["version"] = int(raw_item.get("version") or 1)
+            items.append(item)
         return items
     return []
 

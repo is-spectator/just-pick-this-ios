@@ -45,3 +45,21 @@ def test_experiment_metadata_and_event_merge() -> None:
     assert merged["surface"] == "card"
     assert merged["experiment_assignments"] == assignments
     assert merged["experiment_variant_ids"] == metadata["variant_ids"]
+
+
+def test_list_assignment_normalization_preserves_assignment_hash() -> None:
+    assignments = resolve_experiment_assignments(
+        client_context={
+            "experiment_assignments": [
+                {
+                    "experiment_id": "pipi_card_copy_v1",
+                    "variant_id": "control",
+                    "source": "server_hash",
+                    "version": 1,
+                    "assignment_key_hash": "abc123",
+                }
+            ]
+        }
+    )
+
+    assert assignments[0]["assignment_key_hash"] == "abc123"
