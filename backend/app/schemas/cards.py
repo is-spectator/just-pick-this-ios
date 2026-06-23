@@ -238,6 +238,12 @@ class UserBehaviorEventResponse(ApiModel):
     accepted: bool = True
 
 
+class UserPreferencesResponse(ApiModel):
+    user_id: str
+    device_uid: str
+    preference_memory: dict[str, Any] = Field(default_factory=dict)
+
+
 def _extract_evidence_ids(data: dict[str, Any]) -> list[str]:
     evidence_ids = _string_list(data.get("evidence_ids"))
     if evidence_ids:

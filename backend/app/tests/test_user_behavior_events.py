@@ -116,3 +116,47 @@ def test_generic_behavior_event_endpoint_records_ask_human(
         ) == 1
 
     run_async(scenario)
+
+
+def test_behavior_event_updates_user_preference_memory(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-preference-memory-{uuid.uuid4()}"
+        await bootstrap(async_client, device_id=device_id)
+
+        response = await async_client.post(
+            "/v1/events",
+            json={
+                "device_id": device_id,
+                "event_type": "ask_human_requested",
+                "source": "ios",
+                "metadata": {
+                    "cuisine": "粤菜",
+                    "taste_preference": ["清淡", "安静"],
+                    "spice_preference": "not_spicy",
+                    "budget_preference": "budget_low",
+                    "companion": "parents",
+                    "area": "望京",
+                },
+            },
+        )
+        require_ready_response(response)
+
+        preferences = await async_client.get(
+            "/v1/users/preferences",
+            params={"device_uid": device_id},
+        )
+        body = require_ready_response(preferences)
+        memory = body["preference_memory"]
+        summary = memory["summary"]
+        assert memory["explicit_signal_count"] == 1
+        assert summary["top_cuisines"][0]["value"] == "粤菜"
+        assert {item["value"] for item in summary["taste_preferences"]} >= {"清淡", "安静"}
+        assert summary["spice_preferences"][0]["value"] == "not_spicy"
+        assert summary["budget_preferences"][0]["value"] == "budget_low"
+        assert summary["companions"][0]["value"] == "parents"
+        assert summary["areas"][0]["value"] == "望京"
+
+    run_async(scenario)

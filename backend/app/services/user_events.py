@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import HelpAnswer, HelpCard, RecommendationCard, UserBehaviorEvent
 from app.services.intent_memory import record_intent_answer_feedback_for_card
 from app.services.runtime import ensure_user, session_scope
+from app.services.user_preferences import serialize_user_preference_memory, update_user_preference_memory_from_event
 
 
 CORE_USER_EVENT_TYPES = {
@@ -43,6 +44,16 @@ def create_user_event(payload: dict[str, Any]) -> dict[str, Any]:
         return {"event": serialize_user_behavior_event(event), "accepted": True}
 
 
+def get_user_preferences(payload: dict[str, Any]) -> dict[str, Any]:
+    device_uid = payload.get("device_uid") or payload.get("device_id")
+    user_id = payload.get("user_id")
+    if not device_uid and not user_id:
+        raise HTTPException(status_code=422, detail="device_uid_or_user_id_required")
+    with session_scope() as session:
+        user = ensure_user(session, device_uid=device_uid or str(user_id), user_id=user_id)
+        return serialize_user_preference_memory(user)
+
+
 def record_user_behavior_event(
     session: Session,
     *,
@@ -61,6 +72,7 @@ def record_user_behavior_event(
     if not normalized_type:
         raise HTTPException(status_code=422, detail="event_type_required")
 
+    card = session.get(RecommendationCard, recommendation_card_id) if recommendation_card_id else None
     context = _resolve_context(
         session,
         user_id=user_id,
@@ -91,6 +103,7 @@ def record_user_behavior_event(
         event_type=normalized_type,
         metadata=event.payload_json,
     )
+    update_user_preference_memory_from_event(session, event, card=card)
     return event
 
 
