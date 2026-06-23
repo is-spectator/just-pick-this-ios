@@ -91,14 +91,16 @@ async def run_product_benchmark(config: ProductBenchmarkConfig) -> dict[str, Any
         )
         report_paths.update({key: str(value) for key, value in generated.items()})
 
+    runtime_gate = _product_runtime_gate(rows)
     summary = {
-        "ok": True,
+        "ok": runtime_gate["ok"],
         "run_id": run_id,
         "benchmark": str(config.benchmark_path),
         "output_dir": str(config.output_dir),
         "results_path": str(results_path),
         "evaluated_cases": len(rows),
         "guard": guard,
+        "runtime_gate": runtime_gate,
         "stats": _benchmark_stats(rows),
         "report_paths": report_paths,
     }
@@ -111,6 +113,11 @@ async def run_product_benchmark(config: ProductBenchmarkConfig) -> dict[str, Any
         encoding="utf-8",
     )
     _write_latest_pointer(config.output_dir, summary)
+    if not runtime_gate["ok"]:
+        raise RuntimeError(
+            "product benchmark runtime gate failed: "
+            f"{runtime_gate['failed_rows']} failed row(s)"
+        )
     return summary
 
 
@@ -317,6 +324,30 @@ def _benchmark_stats(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _product_runtime_gate(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    failures: list[dict[str, Any]] = []
+    for row in rows:
+        issues = [str(item) for item in (row.get("issues") or [])]
+        if str(row.get("status") or "") == "passed" and not issues:
+            continue
+        failures.append(
+            {
+                "case_id": row.get("case_id"),
+                "category": row.get("category") or row.get("group"),
+                "status": row.get("status"),
+                "status_code": row.get("status_code"),
+                "runtime_path": _runtime_path(row),
+                "issues": issues,
+            }
+        )
+    return {
+        "ok": not failures,
+        "total_rows": len(rows),
+        "failed_rows": len(failures),
+        "failure_samples": failures[:20],
+    }
+
+
 def _actual_summary_from_row(row: Mapping[str, Any]) -> Mapping[str, Any]:
     summary = row.get("actual_summary")
     if isinstance(summary, Mapping):
@@ -373,10 +404,12 @@ def _default_run_id() -> str:
 
 def _write_latest_pointer(output_dir: Path, summary: Mapping[str, Any]) -> None:
     latest = {
+        "ok": summary.get("ok"),
         "run_id": summary.get("run_id"),
         "output_dir": summary.get("output_dir"),
         "results_path": summary.get("results_path"),
         "evaluated_cases": summary.get("evaluated_cases"),
+        "runtime_gate": summary.get("runtime_gate"),
         "stats": summary.get("stats"),
     }
     (output_dir.parent / "latest.json").write_text(
@@ -438,6 +471,12 @@ def _write_blocked_benchmark_summary(
             "runtime_path_counts": {},
             "slowest_cases": [],
         },
+        "runtime_gate": {
+            "ok": False,
+            "total_rows": 0,
+            "failed_rows": 0,
+            "failure_samples": [],
+        },
     }
     (config.output_dir / "product_benchmark_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
@@ -498,11 +537,29 @@ def _render_summary_markdown(summary: Mapping[str, Any]) -> str:
         f"- Evaluated cases: `{int(summary.get('evaluated_cases') or 0)}`",
         f"- Results path: `{summary.get('results_path')}`",
         f"- Rows with latency: `{int(guard.get('latency_rows') or 0)}`",
+        f"- Runtime gate failed rows: `{int(_runtime_gate(summary).get('failed_rows') or 0)}`",
         f"- P50 latency: `{_display(latency.get('p50_ms'))}` ms",
         f"- P95 latency: `{_display(latency.get('p95_ms'))}` ms",
         f"- Max latency: `{_display(latency.get('max_ms'))}` ms",
         "",
     ]
+    runtime_gate = _runtime_gate(summary)
+    failure_samples = runtime_gate.get("failure_samples")
+    if isinstance(failure_samples, list) and failure_samples:
+        lines += [
+            "## Runtime Gate Failures",
+            "",
+            "| Case | Category | Status | HTTP | Runtime Path | Issues |",
+            "| --- | --- | --- | ---: | --- | --- |",
+        ]
+        for item in failure_samples:
+            row = item if isinstance(item, Mapping) else {}
+            issues = ", ".join(str(value) for value in (row.get("issues") or []))
+            lines.append(
+                f"| `{row.get('case_id')}` | `{row.get('category')}` | `{row.get('status')}` | "
+                f"{row.get('status_code')} | `{row.get('runtime_path')}` | {issues} |"
+            )
+        lines.append("")
     for title, key in (
         ("Status Codes", "status_code_counts"),
         ("Response Kinds", "response_kind_counts"),
@@ -531,6 +588,11 @@ def _render_summary_markdown(summary: Mapping[str, Any]) -> str:
             f"{row.get('status_code')} |"
         )
     return "\n".join(lines)
+
+
+def _runtime_gate(summary: Mapping[str, Any]) -> Mapping[str, Any]:
+    value = summary.get("runtime_gate")
+    return value if isinstance(value, Mapping) else {}
 
 
 def _render_blocked_summary_markdown(summary: Mapping[str, Any]) -> str:

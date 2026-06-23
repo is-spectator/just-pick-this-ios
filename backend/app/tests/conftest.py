@@ -42,6 +42,7 @@ NO_DB_TEST_FILES = {
     "test_one_liner_quality.py",
     "test_openai_guardrails.py",
     "test_product_benchmark_readiness.py",
+    "test_product_benchmark_runtime_gate.py",
     "test_provider_fallback.py",
     "test_pipi_loop.py",
     "test_prompt_snapshots.py",
