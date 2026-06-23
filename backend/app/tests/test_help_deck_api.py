@@ -698,6 +698,29 @@ def test_finalizer_rejects_pending_rewards_not_selected_as_evidence(
         assert body["rejected_value"] == 10
         assert body["items"][0]["status"] == "rejected"
 
+        rejected_quality = await async_client.get(
+            "/v1/answerers/me/quality",
+            params={"device_id": rejected_device},
+        )
+        assert rejected_quality.status_code == 200, rejected_quality.text
+        rejected_body = rejected_quality.json()
+        assert rejected_body["answers"]["submitted_count"] == 1
+        assert rejected_body["rewards"]["rejected_count"] == 1
+        assert rejected_body["quality"]["tier"] == "at_risk"
+        assert "reward_rejected" in rejected_body["quality"]["signals"]
+
+        granted_device = next(device for device in answer_ids if device != rejected_device)
+        granted_quality = await async_client.get(
+            "/v1/answerers/me/quality",
+            params={"device_id": granted_device},
+        )
+        assert granted_quality.status_code == 200, granted_quality.text
+        granted_body = granted_quality.json()
+        assert granted_body["answers"]["submitted_count"] == 1
+        assert granted_body["rewards"]["granted_count"] == 1
+        assert granted_body["quality"]["score"] > rejected_body["quality"]["score"]
+        assert "reward_granted" in granted_body["quality"]["signals"]
+
     run_async(scenario)
 
 

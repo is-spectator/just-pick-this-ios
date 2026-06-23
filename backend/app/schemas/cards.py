@@ -219,6 +219,16 @@ class RewardsMeResponse(ApiModel):
     items: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class AnswererQualityResponse(ApiModel):
+    user: dict[str, Any]
+    quality: dict[str, Any]
+    answers: dict[str, Any]
+    rewards: dict[str, Any]
+    moderation: dict[str, Any]
+    behavior: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class LightEvent(ApiModel):
     id: str
     kind: str

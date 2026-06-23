@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query
 
 from app.api._service import call_service, dump_model, resolve_service_handler
 from app.schemas.cards import (
+    AnswererQualityResponse,
     HelpCardDetail,
     HelpCardFinalAcceptRequest,
     HelpCardFinalAcceptResponse,
@@ -90,4 +91,14 @@ async def rewards_me(
     device_id: str | None = None,
 ) -> RewardsMeResponse:
     handler = resolve_service_handler("app.services.help_feed", "get_my_rewards")
+    return await call_service(handler, user_id=user_id, device_uid=device_uid or device_id)
+
+
+@router.get("/answerers/me/quality", response_model=AnswererQualityResponse)
+async def answerer_quality_me(
+    user_id: str | None = None,
+    device_uid: str | None = None,
+    device_id: str | None = None,
+) -> AnswererQualityResponse:
+    handler = resolve_service_handler("app.services.answerer_quality", "get_answerer_quality")
     return await call_service(handler, user_id=user_id, device_uid=device_uid or device_id)
