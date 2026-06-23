@@ -42,6 +42,12 @@ async def change_card(card_id: str, payload: CardFeedbackRequest) -> CardFeedbac
     return await call_service(handler, card_id, dump_model(payload))
 
 
+@router.post("/cards/{card_id}/ask-human", response_model=CardFeedbackResponse)
+async def ask_human_for_card(card_id: str, payload: CardFeedbackRequest) -> CardFeedbackResponse:
+    handler = resolve_service_handler("app.services.cards", "ask_human_for_card")
+    return await call_service(handler, card_id, dump_model(payload))
+
+
 @router.post("/cards/{card_id}/review", response_model=CardFeedbackResponse)
 async def review_card(card_id: str, payload: CardPostReviewRequest) -> CardFeedbackResponse:
     handler = resolve_service_handler("app.services.cards", "review_card")

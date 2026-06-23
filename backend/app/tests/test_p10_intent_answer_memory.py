@@ -229,6 +229,39 @@ def test_card_rejection_event_updates_intent_answer_rejection_memory(
     run_async(scenario)
 
 
+def test_card_ask_human_does_not_penalize_intent_answer_memory(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-intent-memory-ask-human-{uuid.uuid4()}"
+        owner = await bootstrap(
+            async_client,
+            device_id=device_id,
+        )
+        body = await chat_turn(
+            async_client,
+            conversation_id=owner["conversation_id"],
+            message="我现在在大同喜晋道，不知道吃什么，给我推荐一个。",
+        )
+        card_id = body["cards"][0]["id"]
+        before = _intent_answer_for_card(card_id)
+
+        asked = await async_client.post(
+            f"/v1/cards/{card_id}/ask-human",
+            json={"device_id": device_id, "reason": "想听真人意见"},
+        )
+        asked_body = require_ready_response(asked)
+        assert asked_body["feedback"]["action"] == "ask_human"
+        assert asked_body["event"]["event_type"] == "ask_human_requested"
+
+        after = _intent_answer_for_card(card_id)
+        assert after.success_count == before.success_count
+        assert after.rejection_count == before.rejection_count
+
+    run_async(scenario)
+
+
 def test_post_experience_review_updates_intent_answer_memory(
     run_async: Any,
     async_client: AsyncClient,

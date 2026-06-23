@@ -77,6 +77,16 @@ def change_card(id: str, payload: dict[str, Any] | None = None) -> dict[str, Any
     )
 
 
+def ask_human_for_card(id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    return _feedback_card(
+        id,
+        payload,
+        event_type="ask_human_requested",
+        status="asked_human",
+        action="ask_human",
+    )
+
+
 def review_card(id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     outcome = _post_review_outcome(payload)

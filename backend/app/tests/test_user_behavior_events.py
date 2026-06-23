@@ -270,3 +270,52 @@ def test_card_reject_and_change_routes_write_feedback_events(
             assert card.status == "changed"
 
     run_async(scenario)
+
+
+def test_card_ask_human_route_writes_bound_feedback_event(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-card-ask-human-{uuid.uuid4()}"
+        boot = await bootstrap(async_client, device_id=device_id)
+        body = await chat_turn(
+            async_client,
+            conversation_id=boot["conversation_id"],
+            message="我现在在大同喜晋道，不知道吃什么，给我推荐一个。",
+        )
+        card_id = str(body["cards"][0]["id"])
+
+        asked = await async_client.post(
+            f"/v1/cards/{card_id}/ask-human",
+            json={
+                "device_id": device_id,
+                "reason": "想听真人意见",
+                "metadata": {"surface": "chat_card"},
+            },
+        )
+
+        asked_body = require_ready_response(asked)
+        assert asked_body["accepted"] is False
+        assert asked_body["feedback"]["action"] == "ask_human"
+        assert asked_body["feedback"]["status"] == "asked_human"
+        assert asked_body["event"]["event_type"] == "ask_human_requested"
+        assert _event_count(
+            event_type="ask_human_requested",
+            recommendation_card_id=uuid.UUID(card_id),
+        ) == 1
+        with session_scope() as session:
+            card = session.get(RecommendationCard, uuid.UUID(card_id))
+            assert card is not None
+            assert card.status == "asked_human"
+            event = session.scalar(
+                select(UserBehaviorEvent).where(
+                    UserBehaviorEvent.recommendation_card_id == card.id,
+                    UserBehaviorEvent.event_type == "ask_human_requested",
+                )
+            )
+            assert event is not None
+            assert event.payload_json["reason"] == "想听真人意见"
+            assert event.payload_json["known_core_event"] is True
+
+    run_async(scenario)
