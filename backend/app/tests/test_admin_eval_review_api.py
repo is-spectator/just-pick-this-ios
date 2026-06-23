@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.eval.reporting import write_quality_reports
 from app.main import create_app
-from app.models import AdminAuditLog
+from app.models import AdminAuditLog, IntentAnswer
 from app.services.runtime import session_scope
 
 
@@ -133,6 +134,30 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert review.json()["review"]["suggested_fix"]["owner"] == "data"
     assert review.json()["review"]["seed_patch"]["food_item"] == "热干面"
 
+    draft = await client.post(
+        "/admin/api/eval-runs/run-1/cases/seed-gap-case/seed-intent-answer-draft",
+        headers=_headers(),
+        json={},
+    )
+    assert draft.status_code == 200, draft.text
+    draft_body = draft.json()["intent_answer"]
+    assert draft_body["intent_key"] == "area:北京:朝阳区:热干面"
+    assert draft_body["source_type"] == "ops_seed_patch"
+    assert draft_body["source_ref_id"] == "run-1:seed-gap-case"
+    assert draft_body["is_active"] is False
+    assert draft_body["constraints"]["area"] == "朝阳区"
+    assert draft_body["constraints"]["food_item"] == "热干面"
+    assert draft_body["evidence"]["draft"] is True
+    assert draft_body["evidence"]["approved"] is False
+
+    idempotent = await client.post(
+        "/admin/api/eval-runs/run-1/cases/seed-gap-case/seed-intent-answer-draft",
+        headers=_headers(),
+        json={},
+    )
+    assert idempotent.status_code == 200, idempotent.text
+    assert idempotent.json()["intent_answer"]["id"] == draft_body["id"]
+
     with session_scope() as session:
         audit = session.scalar(
             select(AdminAuditLog)
@@ -145,6 +170,20 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
         assert audit.after_json is not None
         assert audit.after_json["suggested_fix"]["summary"] == "补朝阳区热干面 approved answer"
         assert audit.after_json["seed_patch"]["intent_key"] == "area:北京:朝阳区:热干面"
+        intent_answer = session.get(IntentAnswer, uuid.UUID(draft_body["id"]))
+        assert intent_answer is not None
+        assert intent_answer.is_active is False
+        assert intent_answer.source_type == "ops_seed_patch"
+
+        draft_audit = session.scalar(
+            select(AdminAuditLog)
+            .where(AdminAuditLog.action == "create_seed_intent_answer_draft")
+            .order_by(AdminAuditLog.created_at.desc())
+            .limit(1)
+        )
+        assert draft_audit is not None
+        assert draft_audit.target_table == "intent_answers"
+        assert draft_audit.after_json["id"] == draft_body["id"]
 
     invalid = await client.post(
         "/admin/api/eval-runs/run-1/cases/seed-gap-case/review",
@@ -152,3 +191,10 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
         json={"action": "accept_seed_gap", "seed_patch": "not-an-object"},
     )
     assert invalid.status_code == 422
+
+    invalid_draft = await client.post(
+        "/admin/api/eval-runs/run-1/cases/seed-gap-case/seed-intent-answer-draft",
+        headers=_headers(),
+        json={"seed_patch": {"area": "朝阳区"}},
+    )
+    assert invalid_draft.status_code == 422

@@ -71,6 +71,11 @@ from app.services.prompt_config import (
     serialize_prompt_replay,
     upsert_prompt_config,
 )
+from app.services.seed_patch_workflow import (
+    create_seed_intent_answer_draft,
+    latest_accepted_seed_patch,
+    serialize_seed_intent_answer_draft,
+)
 
 
 def _settings(request: Request) -> Any:
@@ -357,6 +362,52 @@ def review_eval_case(
     )
     session.commit()
     return {"ok": True, "review": review}
+
+
+@router.post("/api/eval-runs/{run_id}/cases/{case_id}/seed-intent-answer-draft")
+def create_eval_seed_intent_answer_draft(
+    request: Request,
+    run_id: str,
+    case_id: str,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    body = payload or {}
+    seed_patch = _optional_mapping(body.get("seed_patch"), field_name="seed_patch")
+    if seed_patch is None:
+        seed_patch = latest_accepted_seed_patch(session, run_id=run_id, case_id=case_id)
+    if seed_patch is None:
+        raise HTTPException(status_code=404, detail="accepted seed_patch not found")
+
+    try:
+        answer = create_seed_intent_answer_draft(
+            session,
+            run_id=run_id,
+            case_id=case_id,
+            seed_patch=seed_patch,
+            reviewer=actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    draft = serialize_seed_intent_answer_draft(answer)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="create_seed_intent_answer_draft",
+        table_name="intent_answers",
+        target_record_id=str(answer.id),
+        request_json=_request_json(
+            request,
+            extra={"run_id": run_id, "case_id": case_id, "seed_patch": seed_patch},
+        ),
+        before_json=None,
+        after_json=draft,
+    )
+    session.commit()
+    return {"ok": True, "intent_answer": draft}
 
 
 @router.get("/api/sessions/{conversation_id}")
