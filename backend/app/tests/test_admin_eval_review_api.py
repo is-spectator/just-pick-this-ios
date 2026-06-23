@@ -134,6 +134,21 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert review.json()["review"]["action"] == "accept_seed_gap"
     assert review.json()["review"]["suggested_fix"]["owner"] == "data"
     assert review.json()["review"]["seed_patch"]["food_item"] == "热干面"
+    review_file = root / "run-1" / "human_reviews.jsonl"
+    assert review_file.exists()
+    review_rows = [
+        json.loads(line)
+        for line in review_file.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert review_rows[-1]["case_id"] == "seed-gap-case"
+    assert review_rows[-1]["action"] == "accept_seed_gap"
+
+    alignment = await client.get("/admin/api/eval-runs/run-1/review-alignment", headers=_headers())
+    assert alignment.status_code == 200, alignment.text
+    assert alignment.json()["agreement_rate"] == 1.0
+    assert alignment.json()["target_met"] is True
+    assert alignment.json()["items"][0]["predicted_cause"] == "seed_gap"
 
     draft = await client.post(
         "/admin/api/eval-runs/run-1/cases/seed-gap-case/seed-intent-answer-draft",

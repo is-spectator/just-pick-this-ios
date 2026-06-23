@@ -34,6 +34,7 @@ NO_DB_TEST_FILES = {
     "test_evidence_pack.py",
     "test_experiments.py",
     "test_eval_review_trace_replay.py",
+    "test_eval_review_alignment.py",
     "test_finalize_harness_path.py",
     "test_harness_input_gate.py",
     "test_health_readiness.py",

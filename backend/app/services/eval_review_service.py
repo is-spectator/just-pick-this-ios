@@ -7,6 +7,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+REVIEW_ACTION_TO_EXPECTED_CAUSE = {
+    "accept_seed_gap": "seed_gap",
+    "mark_agent_bug": "agent_bug",
+    "mark_not_issue": "not_issue",
+    "needs_more_data": "needs_more_data",
+}
+
 
 def default_reports_root() -> Path:
     repo_root = Path(__file__).resolve().parents[3]
@@ -120,6 +127,73 @@ def review_payload(
     return payload
 
 
+def append_case_review(reports_root: Path, run_id: str, review: Mapping[str, Any]) -> Path:
+    """Append a human review event next to file-backed eval reports.
+
+    Admin review actions are still audited in the database; the JSONL file gives
+    benchmark tooling a stable, database-independent surface for evaluator-vs-
+    reviewer agreement checks.
+    """
+
+    run_dir = _run_dir(reports_root, run_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / "human_reviews.jsonl"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(dict(review), ensure_ascii=False, sort_keys=True) + "\n")
+    return path
+
+
+def review_alignment_summary(reports_root: Path, run_id: str) -> dict[str, Any]:
+    run_dir = _run_dir(reports_root, run_id)
+    attributions = {str(item.get("case_id")): item for item in _load_jsonl(run_dir / "quality_attribution.jsonl")}
+    scores = {str(item.get("case_id")): item for item in _load_jsonl(run_dir / "case_quality_scores.jsonl")}
+    latest_reviews = _latest_reviews_by_case(_load_jsonl(run_dir / "human_reviews.jsonl"))
+
+    items: list[dict[str, Any]] = []
+    agreements = 0
+    comparable = 0
+    for case_id, review in sorted(latest_reviews.items()):
+        action = str(review.get("action") or "")
+        expected_cause = REVIEW_ACTION_TO_EXPECTED_CAUSE.get(action, "unknown")
+        predicted_cause = _predicted_cause(attributions.get(case_id), scores.get(case_id))
+        comparable_item = expected_cause not in {"unknown", "needs_more_data"} and predicted_cause != "unknown"
+        agreed = comparable_item and expected_cause == predicted_cause
+        if comparable_item:
+            comparable += 1
+            if agreed:
+                agreements += 1
+        items.append(
+            {
+                "case_id": case_id,
+                "review_action": action,
+                "expected_cause": expected_cause,
+                "predicted_cause": predicted_cause,
+                "agreed": agreed,
+                "comparable": comparable_item,
+                "reviewer": review.get("reviewer"),
+                "notes": review.get("notes") or "",
+            }
+        )
+
+    total_reviews = len(latest_reviews)
+    disagreements = [item for item in items if item["comparable"] and not item["agreed"]]
+    return {
+        "run_id": run_id,
+        "review_file": str(run_dir / "human_reviews.jsonl"),
+        "total_reviews": total_reviews,
+        "comparable_reviews": comparable,
+        "agreements": agreements,
+        "disagreements": len(disagreements),
+        "agreement_rate": round(agreements / comparable, 4) if comparable else 0.0,
+        "target_agreement_rate": 0.75,
+        "target_met": bool(comparable and agreements / comparable >= 0.75),
+        "by_review_action": _count_by(items, "review_action"),
+        "by_predicted_cause": _count_by(items, "predicted_cause"),
+        "items": items,
+        "disagreement_items": disagreements,
+    }
+
+
 def _case_summary_payload(attribution: Mapping[str, Any], *, score: Mapping[str, Any]) -> dict[str, Any]:
     quality = _mapping(attribution.get("quality"))
     trace_replay = _trace_replay_payload(result=None, attribution=attribution, score=score)
@@ -136,6 +210,39 @@ def _case_summary_payload(attribution: Mapping[str, Any], *, score: Mapping[str,
         "trace": attribution.get("trace") or {},
         "trace_replay": trace_replay,
     }
+
+
+def _latest_reviews_by_case(reviews: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
+    latest: dict[str, Mapping[str, Any]] = {}
+    for review in reviews:
+        case_id = str(review.get("case_id") or "").strip()
+        if not case_id:
+            continue
+        latest[case_id] = review
+    return latest
+
+
+def _predicted_cause(attribution: Mapping[str, Any] | None, score: Mapping[str, Any] | None) -> str:
+    attribution_map = _mapping(attribution)
+    cause = _first_text(attribution_map.get("primary_cause"))
+    if cause:
+        return cause
+    score_map = _mapping(score)
+    try:
+        quality_score = float(score_map.get("quality_score") or 0.0)
+    except (TypeError, ValueError):
+        quality_score = 0.0
+    if quality_score >= 0.75 or score_map.get("status") == "passed":
+        return "not_issue"
+    return "unknown"
+
+
+def _count_by(items: Sequence[Mapping[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        value = str(item.get(key) or "unknown")
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _trace_replay_payload(

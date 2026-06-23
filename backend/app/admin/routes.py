@@ -57,11 +57,13 @@ from app.models import (
 )
 from app.services.ability_config import list_ability_configs, serialize_ability_config, upsert_ability_config
 from app.services.eval_review_service import (
+    append_case_review,
     case_detail as eval_case_detail,
     list_eval_runs as list_eval_report_runs,
     low_quality_cases as eval_low_quality_cases,
     resolve_reports_root,
     review_payload as build_eval_review_payload,
+    review_alignment_summary,
 )
 from app.services.intent_answer_import import (
     import_intent_answer_drafts,
@@ -353,6 +355,12 @@ def get_eval_case_detail(request: Request, run_id: str, case_id: str) -> dict[st
         raise HTTPException(status_code=404, detail="eval case not found") from exc
 
 
+@router.get("/api/eval-runs/{run_id}/review-alignment")
+def get_eval_review_alignment(request: Request, run_id: str) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return review_alignment_summary(reports_root, run_id)
+
+
 @router.post("/api/eval-runs/{run_id}/cases/{case_id}/review")
 def review_eval_case(
     request: Request,
@@ -378,6 +386,8 @@ def review_eval_case(
         suggested_fix=suggested_fix,
         seed_patch=seed_patch,
     )
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    append_case_review(reports_root, run_id, review)
     _write_audit(
         session,
         request=request,
