@@ -22,6 +22,7 @@ NO_DB_TEST_FILES = {
     "test_admin_debug_security.py",
     "test_answer_gate.py",
     "test_answerer_quality.py",
+    "test_area_food_evidence_policy_profiles.py",
     "test_benchmark_500_distribution.py",
     "test_benchmark_non_empty_guard.py",
     "test_card_contract_and_answer_gate.py",

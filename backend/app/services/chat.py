@@ -69,6 +69,7 @@ from app.services.query_rewrite import rewrite_query
 from app.services.llm_query_rewrite import build_llm_query_rewrite, select_query_rewrite
 from app.services.amap_service import AmapService
 from app.services.prompt_config import get_prompt_config
+from app.services.user_preferences import PREFERENCE_PROFILE_KEY
 from app.services.ability_config import filter_enabled_ability_tools
 from app.harness.input_gate import run_input_gate
 from app.schemas.tools import AmapPoiSearchInput, AmapRoutePlanInput, BuildAmapUriInput
@@ -234,7 +235,7 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
         session.add(agent_run)
         session.flush()
 
-        retriever = DbKnowledgeRetriever(session, agent_run=agent_run, turn=user_turn, question=question)
+        retriever = DbKnowledgeRetriever(session, agent_run=agent_run, turn=user_turn, question=question, user=user)
         context_provider = DbConversationContextProvider(session)
         # Product-path tool execution is intentionally rooted at
         # DbPipiAbilityCenter below. DbToolExecutor is an internal persistence
@@ -742,11 +743,13 @@ class DbKnowledgeRetriever:
         agent_run: AgentRun,
         turn: Any,
         question: Question | None,
+        user: Any | None = None,
     ) -> None:
         self.session = session
         self.agent_run = agent_run
         self.turn = turn
         self.question = question
+        self.user = user
         self.retrieval_run: RetrievalRun | None = None
 
     def retrieve(self, state: dict[str, Any]) -> dict[str, Any]:
@@ -935,7 +938,11 @@ class DbKnowledgeRetriever:
             return []
 
         prompt_config = get_prompt_config(self.session, "area_food_evidence_policy")
-        preference = _area_food_preference(query, prompt_config.get("config_json") or {})
+        preference = _area_food_preference(
+            query,
+            prompt_config.get("config_json") or {},
+            user_preference_memory=_user_preference_memory(self.user),
+        )
         cuisine = preference.get("display_food") or _food_label(query)
         keyword = preference.get("search_keyword") or _amap_food_keyword(cuisine)
         display_food = _display_food_label(cuisine)
@@ -962,6 +969,13 @@ class DbKnowledgeRetriever:
             "status": search.status,
             "disabled": search.disabled,
         }
+        if preference:
+            metadata["area_food_preference"] = {
+                "rule_name": preference.get("rule_name"),
+                "source": preference.get("source"),
+                "search_keyword": preference.get("search_keyword"),
+                "display_food": preference.get("display_food"),
+            }
         if search.disabled:
             metadata["amap_disabled"] = True
             run.metadata_json = metadata
@@ -1102,6 +1116,8 @@ class DbKnowledgeRetriever:
                     "prompt_config_key": prompt_config.get("key"),
                     "prompt_config_version": prompt_config.get("version"),
                     "prompt_config_source": prompt_config.get("source"),
+                    "preference_source": preference.get("source"),
+                    "preference_rule_name": preference.get("rule_name"),
                     "card_title": title,
                     "title": title,
                     "subtitle": subtitle,
@@ -1197,6 +1213,8 @@ class DbKnowledgeRetriever:
                     "amap_poi_search_run_id": search_run_id,
                     "version": "onsite_food_beijing_v1",
                     "source_answer_type": "local_area_poi_fallback",
+                    "preference_source": preference.get("source"),
+                    "preference_rule_name": preference.get("rule_name"),
                     "card_title": title,
                     "title": title,
                     "subtitle": subtitle,
@@ -3416,13 +3434,21 @@ def _amap_area_decision_text(
     return f"{area}附近先选这家，{route_text}。"
 
 
-def _area_food_preference(message: str, config: dict[str, Any]) -> dict[str, Any]:
+def _area_food_preference(
+    message: str,
+    config: dict[str, Any],
+    *,
+    user_preference_memory: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     rules = config.get("profile_cuisine_rules") or []
+    memory_hint = _preference_memory_hint(user_preference_memory)
     for raw_rule in rules:
         if not isinstance(raw_rule, dict):
             continue
         when_any = [str(term) for term in raw_rule.get("when_any", []) if term]
-        if when_any and any(term in message for term in when_any):
+        explicit_match = bool(when_any and any(term in message for term in when_any))
+        memory_match = bool(memory_hint and when_any and any(term in memory_hint for term in when_any))
+        if explicit_match or memory_match:
             return {
                 "search_keyword": raw_rule.get("search_keyword"),
                 "display_food": raw_rule.get("display_food"),
@@ -3431,8 +3457,62 @@ def _area_food_preference(message: str, config: dict[str, Any]) -> dict[str, Any
                 "reject_terms": [str(term) for term in raw_rule.get("reject_terms", []) if term],
                 "require_preferred_match": bool(raw_rule.get("require_preferred_match", False)),
                 "rule_name": raw_rule.get("name"),
+                "source": "current_query" if explicit_match else "user_memory",
             }
     return {}
+
+
+def _user_preference_memory(user: Any | None) -> dict[str, Any] | None:
+    profile = getattr(user, "profile_json", None)
+    if not isinstance(profile, dict):
+        return None
+    memory = profile.get(PREFERENCE_PROFILE_KEY)
+    return dict(memory) if isinstance(memory, dict) else None
+
+
+def _preference_memory_hint(memory: dict[str, Any] | None) -> str:
+    if not isinstance(memory, dict):
+        return ""
+    summary = memory.get("summary") if isinstance(memory.get("summary"), dict) else {}
+    terms: list[str] = []
+    for key in (
+        "top_cuisines",
+        "top_food_items",
+        "taste_preferences",
+        "spice_preferences",
+        "budget_preferences",
+        "companions",
+        "areas",
+        "accepted_items",
+    ):
+        values = summary.get(key)
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            value = item.get("value") if isinstance(item, dict) else item
+            text = str(value or "").strip()
+            if text:
+                terms.append(text)
+                terms.extend(_preference_synonyms(text))
+    return " ".join(dict.fromkeys(terms))
+
+
+def _preference_synonyms(value: str) -> list[str]:
+    mapping = {
+        "粤菜": ["广东人", "广东口味", "粤"],
+        "茶餐厅": ["广东人", "粤"],
+        "清淡": ["不吃辣", "清爽"],
+        "安静": ["带爸妈", "约会"],
+        "not_spicy": ["不吃辣", "不能吃辣", "不太能吃辣", "少辣", "清淡"],
+        "parents": ["带爸妈", "带父母", "带长辈", "家庭"],
+        "date": ["约会", "纪念日"],
+        "杭帮菜": ["江浙", "杭帮", "清淡"],
+        "本帮菜": ["江浙", "本帮", "清淡"],
+        "淮扬菜": ["江浙", "淮扬", "清淡"],
+        "东北菜": ["东北人", "东北菜"],
+        "素食": ["吃素", "素菜"],
+    }
+    return mapping.get(value, [])
 
 
 def _food_label(message: str) -> str:
