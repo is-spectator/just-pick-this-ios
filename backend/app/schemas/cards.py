@@ -194,6 +194,23 @@ class HelpCardSkipResponse(ApiModel):
     event: dict[str, Any]
 
 
+class HelpCardFinalAcceptRequest(ApiModel):
+    user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
+    reason: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class HelpCardFinalAcceptResponse(ApiModel):
+    help_card_id: str
+    card_id: str
+    accepted: bool = True
+    feedback: dict[str, Any] = Field(default_factory=dict)
+    event: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class RewardsMeResponse(ApiModel):
     device_uid: str | None = None
     pending_value: int = 0

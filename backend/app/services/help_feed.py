@@ -367,6 +367,55 @@ def skip_help_card(id: str, payload: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def accept_final_recommendation(id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    payload = payload or {}
+    with session_scope() as session:
+        help_card = session.get(HelpCard, uuid.UUID(id))
+        if help_card is None:
+            raise HTTPException(status_code=404, detail="help_card_not_found")
+        final_card = help_card.final_recommendation_card
+        if final_card is None:
+            raise HTTPException(status_code=409, detail="final_recommendation_not_ready")
+
+        previous_status = final_card.status
+        final_card.status = "accepted"
+        final_card.accepted_at = utcnow()
+        if help_card.question is not None:
+            help_card.question.status = "completed"
+            help_card.question.current_recommendation_card_id = final_card.id
+
+        event = record_user_behavior_event(
+            session,
+            event_type="final_recommendation_accepted",
+            user_id=uuid.UUID(str(payload["user_id"])) if payload.get("user_id") else help_card.owner_user_id,
+            device_uid=payload.get("device_uid") or payload.get("device_id"),
+            conversation_id=help_card.conversation_id,
+            recommendation_card_id=final_card.id,
+            help_card_id=help_card.id,
+            source="help_final",
+            payload_json={
+                **dict(payload.get("metadata") or {}),
+                "action": "accept_final",
+                "status": "final_accepted",
+                "previous_card_status": previous_status,
+                "reason": str(payload.get("reason") or "").strip() or None,
+            },
+        )
+        session.flush()
+        return {
+            "help_card_id": str(help_card.id),
+            "card_id": str(final_card.id),
+            "accepted": True,
+            "feedback": {
+                "action": "accept_final",
+                "status": "final_accepted",
+                "previous_card_status": previous_status,
+            },
+            "event": serialize_user_behavior_event(event),
+            "metadata": {"status": "final_accepted"},
+        }
+
+
 def get_my_rewards(*, user_id: str | None = None, device_uid: str | None = None) -> dict[str, Any]:
     with session_scope() as session:
         user = ensure_user(session, device_uid=device_uid or user_id, user_id=user_id)
@@ -734,5 +783,6 @@ __all__ = [
     "help_feed_sort_key",
     "list_help_feed",
     "publish_help_card",
+    "accept_final_recommendation",
     "skip_help_card",
 ]

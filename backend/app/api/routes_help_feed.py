@@ -7,6 +7,8 @@ from fastapi import APIRouter, Query
 from app.api._service import call_service, dump_model, resolve_service_handler
 from app.schemas.cards import (
     HelpCardDetail,
+    HelpCardFinalAcceptRequest,
+    HelpCardFinalAcceptResponse,
     HelpCardOneLinerRequest,
     HelpCardOneLinerResponse,
     HelpCardPublishRequest,
@@ -69,6 +71,15 @@ async def skip_help_card(
     payload: HelpCardSkipRequest,
 ) -> HelpCardSkipResponse:
     handler = resolve_service_handler("app.services.help_feed", "skip_help_card")
+    return await call_service(handler, help_card_id, dump_model(payload))
+
+
+@router.post("/help-cards/{help_card_id}/accept-final", response_model=HelpCardFinalAcceptResponse)
+async def accept_final_recommendation(
+    help_card_id: str,
+    payload: HelpCardFinalAcceptRequest,
+) -> HelpCardFinalAcceptResponse:
+    handler = resolve_service_handler("app.services.help_feed", "accept_final_recommendation")
     return await call_service(handler, help_card_id, dump_model(payload))
 
 

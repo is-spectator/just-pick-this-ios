@@ -7,7 +7,17 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.jobs.finalizer_job import run_finalize_graph_for_help_card
-from app.models import ContentReviewTask, Conversation, HelpAnswer, HelpCard, Question, RewardEvent, Turn, UserBehaviorEvent
+from app.models import (
+    ContentReviewTask,
+    Conversation,
+    HelpAnswer,
+    HelpCard,
+    Question,
+    RecommendationCard,
+    RewardEvent,
+    Turn,
+    UserBehaviorEvent,
+)
 from app.services.runtime import ensure_user, session_scope, utcnow
 from app.services.user_preferences import PREFERENCE_PROFILE_KEY
 
@@ -584,6 +594,68 @@ def test_one_liner_reward_becomes_granted_after_finalization(
         assert body["granted_value"] == 10
         assert body["rejected_value"] == 0
         assert body["items"][0]["status"] == "granted"
+
+    run_async(scenario)
+
+
+def test_accept_final_recommendation_writes_behavior_event(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        owner_device = f"pytest-help-deck-owner-final-accept-{suffix}"
+        help_card_id = _seed_help_card(
+            owner_device=owner_device,
+            title="韩国逛街不去明洞，求一句",
+            context_text="想小众，别太游客。",
+        )
+        _seed_answers_with_rewards(
+            help_card_id=help_card_id,
+            answer_specs=[
+                (f"pytest-help-deck-final-accept-answer-1-{suffix}", "去圣水，小店多，也适合买美妆。"),
+                (f"pytest-help-deck-final-accept-answer-2-{suffix}", "圣水比明洞更小众，咖啡店也密集。"),
+                (f"pytest-help-deck-final-accept-answer-3-{suffix}", "预算不高也能逛圣水，路线轻松。"),
+            ],
+        )
+        with session_scope() as session:
+            run_finalize_graph_for_help_card(session, uuid.UUID(help_card_id))
+            help_card = session.get(HelpCard, uuid.UUID(help_card_id))
+            assert help_card is not None
+            final_card_id = str(help_card.final_recommendation_card_id)
+
+        response = await async_client.post(
+            f"/v1/help-cards/{help_card_id}/accept-final",
+            json={
+                "device_id": owner_device,
+                "reason": "最终答案靠谱",
+                "metadata": {"surface": "light_event"},
+            },
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["accepted"] is True
+        assert body["card_id"] == final_card_id
+        assert body["feedback"]["action"] == "accept_final"
+        assert body["event"]["event_type"] == "final_recommendation_accepted"
+
+        with session_scope() as session:
+            card = session.get(RecommendationCard, uuid.UUID(final_card_id))
+            assert card is not None
+            assert card.status == "accepted"
+            assert card.accepted_at is not None
+            event = session.scalar(
+                select(UserBehaviorEvent)
+                .where(
+                    UserBehaviorEvent.help_card_id == uuid.UUID(help_card_id),
+                    UserBehaviorEvent.recommendation_card_id == uuid.UUID(final_card_id),
+                    UserBehaviorEvent.event_type == "final_recommendation_accepted",
+                )
+                .order_by(UserBehaviorEvent.created_at.desc())
+            )
+            assert event is not None
+            assert event.payload_json["reason"] == "最终答案靠谱"
+            assert event.payload_json["known_core_event"] is True
 
     run_async(scenario)
 
