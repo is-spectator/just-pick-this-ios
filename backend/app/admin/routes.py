@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -114,6 +115,24 @@ def _require_admin_role(request: Request, allowed: set[str]) -> None:
     role = _admin_role(request)
     if role not in allowed:
         raise HTTPException(status_code=403, detail="admin role is not allowed for this action")
+
+
+def _optional_mapping(value: Any, *, field_name: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise HTTPException(status_code=422, detail=f"{field_name} must be an object")
+    return dict(value)
+
+
+def _optional_mapping_or_text(value: Any, *, field_name: str) -> dict[str, Any] | str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, Mapping):
+        return dict(value)
+    raise HTTPException(status_code=422, detail=f"{field_name} must be an object or string")
 
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(_require_admin)])
@@ -313,6 +332,8 @@ def review_eval_case(
     if action not in {"accept_seed_gap", "mark_agent_bug", "mark_not_issue", "needs_more_data"}:
         raise HTTPException(status_code=422, detail="invalid review action")
     labels = payload.get("labels") if isinstance(payload.get("labels"), list) else []
+    suggested_fix = _optional_mapping_or_text(payload.get("suggested_fix"), field_name="suggested_fix")
+    seed_patch = _optional_mapping(payload.get("seed_patch"), field_name="seed_patch")
     review = build_eval_review_payload(
         run_id=run_id,
         case_id=case_id,
@@ -320,6 +341,8 @@ def review_eval_case(
         reviewer=actor,
         notes=str(payload.get("notes") or ""),
         labels=[str(label) for label in labels],
+        suggested_fix=suggested_fix,
+        seed_patch=seed_patch,
     )
     _write_audit(
         session,

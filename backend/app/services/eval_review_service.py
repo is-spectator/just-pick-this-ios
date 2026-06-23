@@ -101,8 +101,10 @@ def review_payload(
     reviewer: str,
     notes: str | None = None,
     labels: Sequence[str] | None = None,
+    suggested_fix: Mapping[str, Any] | str | None = None,
+    seed_patch: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "run_id": run_id,
         "case_id": case_id,
         "action": action,
@@ -110,6 +112,11 @@ def review_payload(
         "notes": notes or "",
         "labels": list(labels or []),
     }
+    if suggested_fix is not None:
+        payload["suggested_fix"] = suggested_fix
+    if seed_patch is not None:
+        payload["seed_patch"] = dict(seed_patch)
+    return payload
 
 
 def _case_summary_payload(attribution: Mapping[str, Any], *, score: Mapping[str, Any]) -> dict[str, Any]:

@@ -113,10 +113,25 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     review = await client.post(
         "/admin/api/eval-runs/run-1/cases/seed-gap-case/review",
         headers=_headers(),
-        json={"action": "accept_seed_gap", "notes": "补 approved answer", "labels": ["seed"]},
+        json={
+            "action": "accept_seed_gap",
+            "notes": "补 approved answer",
+            "labels": ["seed"],
+            "suggested_fix": {
+                "owner": "data",
+                "summary": "补朝阳区热干面 approved answer",
+            },
+            "seed_patch": {
+                "intent_key": "area:北京:朝阳区:热干面",
+                "area": "朝阳区",
+                "food_item": "热干面",
+            },
+        },
     )
     assert review.status_code == 200
     assert review.json()["review"]["action"] == "accept_seed_gap"
+    assert review.json()["review"]["suggested_fix"]["owner"] == "data"
+    assert review.json()["review"]["seed_patch"]["food_item"] == "热干面"
 
     with session_scope() as session:
         audit = session.scalar(
@@ -127,3 +142,13 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
         )
         assert audit is not None
         assert audit.target_record_id == "run-1:seed-gap-case"
+        assert audit.after_json is not None
+        assert audit.after_json["suggested_fix"]["summary"] == "补朝阳区热干面 approved answer"
+        assert audit.after_json["seed_patch"]["intent_key"] == "area:北京:朝阳区:热干面"
+
+    invalid = await client.post(
+        "/admin/api/eval-runs/run-1/cases/seed-gap-case/review",
+        headers=_headers(),
+        json={"action": "accept_seed_gap", "seed_patch": "not-an-object"},
+    )
+    assert invalid.status_code == 422
