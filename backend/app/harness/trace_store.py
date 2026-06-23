@@ -17,6 +17,7 @@ HARNESS_TRACE_EVENT_NAMES = (
     "input_gate_result",
     "context_pack",
     "reasoner_decision",
+    "reasoner_provider_fallback",
     "tool_call",
     "tool_result",
     "evaluator_result",

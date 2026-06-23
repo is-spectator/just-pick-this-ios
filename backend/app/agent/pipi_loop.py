@@ -102,6 +102,7 @@ class PipiLoop:
         loop_started = perf_counter()
         trace: list[dict[str, Any]] = _initial_loop_trace(state)
         shadow_results: list[dict[str, Any]] = []
+        provider_fallbacks: list[dict[str, Any]] = []
         current = state
         await self._record(
             "record_input_gate",
@@ -112,10 +113,23 @@ class PipiLoop:
 
         for iteration in range(1, self.max_iters + 1):
             decision = await _maybe_await(self.reasoner.next(current))
+            decision_payload = _dump(decision)
             trace.append(
-                {"iteration": iteration, "event": "reasoner_decision", "data": _dump(decision)}
+                {"iteration": iteration, "event": "reasoner_decision", "data": decision_payload}
             )
             await self._record("record_reasoner_decision", current, decision)
+            provider_fallback = _provider_fallback_payload(decision_payload, iteration=iteration)
+            if provider_fallback is not None:
+                provider_fallbacks.append(provider_fallback)
+                trace.append(
+                    {
+                        "iteration": iteration,
+                        "event": "reasoner_provider_fallback",
+                        "data": provider_fallback,
+                        "payload": provider_fallback,
+                    }
+                )
+                await self._record("record_event", "reasoner_provider_fallback", provider_fallback)
             shadow_result = await self._run_shadow_reasoner(
                 current=current,
                 decision=decision,
@@ -137,7 +151,12 @@ class PipiLoop:
                         iterations=iteration,
                         finish_reason="answer_gate_failed",
                         trace=trace,
-                        state=_state_payload(current, shadow_results, total_latency_ms=_elapsed_ms(loop_started)),
+                        state=_state_payload(
+                            current,
+                            shadow_results,
+                            provider_fallbacks,
+                            total_latency_ms=_elapsed_ms(loop_started),
+                        ),
                     )
                 return PipiLoopResult(
                     message=decision.message,
@@ -146,7 +165,12 @@ class PipiLoop:
                     iterations=iteration,
                     finish_reason="answer",
                     trace=trace,
-                    state=_state_payload(current, shadow_results, total_latency_ms=_elapsed_ms(loop_started)),
+                    state=_state_payload(
+                        current,
+                        shadow_results,
+                        provider_fallbacks,
+                        total_latency_ms=_elapsed_ms(loop_started),
+                    ),
                 )
 
             trace.append(
@@ -192,7 +216,12 @@ class PipiLoop:
             iterations=self.max_iters,
             finish_reason="max_iters",
             trace=trace,
-            state=_state_payload(current, shadow_results, total_latency_ms=_elapsed_ms(loop_started)),
+            state=_state_payload(
+                current,
+                shadow_results,
+                provider_fallbacks,
+                total_latency_ms=_elapsed_ms(loop_started),
+            ),
         )
 
     async def _run_shadow_reasoner(
@@ -360,6 +389,7 @@ def _gate_passed(value: Any) -> bool:
 def _state_payload(
     state: PipiState,
     shadow_results: list[dict[str, Any]],
+    provider_fallbacks: list[dict[str, Any]] | None = None,
     *,
     total_latency_ms: float | None = None,
 ) -> dict[str, Any]:
@@ -369,7 +399,56 @@ def _state_payload(
     if shadow_results:
         payload["shadow_reasoner_results"] = list(shadow_results)
         payload["shadow_summary"] = _shadow_summary(shadow_results)
+    if provider_fallbacks:
+        payload["reasoner_provider_fallbacks"] = list(provider_fallbacks)
+        payload["reasoner_provider_fallback_summary"] = _provider_fallback_summary(provider_fallbacks)
     return payload
+
+
+def _provider_fallback_payload(
+    decision_payload: dict[str, Any],
+    *,
+    iteration: int,
+) -> dict[str, Any] | None:
+    provider = decision_payload.get("llm_provider")
+    status = decision_payload.get("llm_status")
+    if provider is None or status not in {"fallback", "disabled"}:
+        return None
+    return {
+        "provider": str(provider),
+        "status": str(status),
+        "error_type": str(decision_payload.get("llm_error_type") or status),
+        "error": decision_payload.get("llm_error"),
+        "iteration": iteration,
+        "fallback_decision": _provider_decision_snapshot(decision_payload),
+        "product_output_unchanged": True,
+    }
+
+
+def _provider_decision_snapshot(decision_payload: dict[str, Any]) -> dict[str, Any]:
+    snapshot = {
+        "type": decision_payload.get("type"),
+        "tool_name": decision_payload.get("tool_name"),
+        "message": decision_payload.get("message"),
+    }
+    return {key: value for key, value in snapshot.items() if value is not None}
+
+
+def _provider_fallback_summary(provider_fallbacks: list[dict[str, Any]]) -> dict[str, Any]:
+    statuses = [str(item.get("status") or "unknown") for item in provider_fallbacks]
+    error_types = [str(item.get("error_type") or "unknown") for item in provider_fallbacks]
+    providers = [str(item.get("provider")) for item in provider_fallbacks if item.get("provider")]
+    return {
+        "enabled": True,
+        "provider": providers[0] if providers else None,
+        "calls": len(provider_fallbacks),
+        "fallbacks": statuses.count("fallback"),
+        "disabled": statuses.count("disabled"),
+        "schema_errors": error_types.count("schema_error"),
+        "provider_errors": error_types.count("provider_error"),
+        "timeouts": error_types.count("timeout"),
+        "product_output_unchanged": True,
+    }
 
 
 def _shadow_state_snapshot(state: PipiState) -> dict[str, Any]:

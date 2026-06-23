@@ -590,6 +590,10 @@ def _state_from_loop_result(
             "total_latency_ms": result_state.get("total_latency_ms"),
             "shadow_summary": result_state.get("shadow_summary"),
             "shadow_reasoner_results": result_state.get("shadow_reasoner_results"),
+            "reasoner_provider_fallback_summary": result_state.get(
+                "reasoner_provider_fallback_summary"
+            ),
+            "reasoner_provider_fallbacks": result_state.get("reasoner_provider_fallbacks"),
         }
     )
     return state
@@ -654,6 +658,7 @@ def _loop_metadata(state: dict[str, Any]) -> dict[str, Any]:
             for event in trace
             if event.get("event") == "tool_result" and isinstance(event.get("data"), dict)
         ],
+        "reasoner_provider_fallback": state.get("reasoner_provider_fallback_summary"),
     }
 
 
