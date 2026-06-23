@@ -67,6 +67,7 @@ from app.services.intent_answer_import import (
     import_intent_answer_drafts,
     serialize_imported_intent_answer,
 )
+from app.services.runtime_latency import runtime_latency_summary
 from app.services.prompt_config import (
     list_prompt_configs,
     list_prompt_versions,
@@ -292,6 +293,30 @@ def list_admin_sessions(
         "items": [_serialize_conversation_summary(session, item) for item in conversations],
         "pagination": _pagination(page=page, page_size=page_size, total=total),
     }
+
+
+@router.get("/api/runtime-latency")
+def admin_runtime_latency(
+    request: Request,
+    hours: int = Query(default=24, ge=1, le=720),
+    limit: int = Query(default=500, ge=1, le=5000),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = runtime_latency_summary(session, hours=hours, limit=limit)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_runtime_latency",
+        table_name="runtime_latency",
+        target_record_id=None,
+        request_json=_request_json(request, {"hours": hours, "limit": limit}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
 
 
 @router.get("/api/eval-runs")
