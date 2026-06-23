@@ -561,6 +561,8 @@ def _context_pack_after_tool(
         if isinstance(hits, list):
             updated["retrieval_hits"] = hits
             updated["strongest_evidence"] = hits
+        if isinstance(data.get("evidence_pack"), dict):
+            updated["evidence_pack"] = data["evidence_pack"]
         if isinstance(data.get("context"), dict):
             updated["context"] = data["context"]
         if isinstance(data.get("query_rewrite"), dict):

@@ -33,6 +33,7 @@ from app.models import (
     Turn,
 )
 from app.ops.prompt_registry import PromptRegistry
+from app.retrieval.evidence_pack import build_evidence_pack, summarize_evidence_pack
 from app.services.runtime import (
     build_card_ui_event,
     build_help_ui_event,
@@ -1417,10 +1418,13 @@ class DbPipiAbilityCenter:
             graph_state = self._with_context_and_query_rewrite(graph_state)
             retrieval_run = self.retriever.retrieve(graph_state)
             hits = list(retrieval_run.get("hits") or [])
+            evidence_pack = build_evidence_pack(hits, retrieval_run=retrieval_run)
             data = {
                 "retrieval_run": retrieval_run,
                 "retrieval_hits": hits,
                 "hits": hits,
+                "evidence_pack": evidence_pack,
+                "evidence_pack_summary": summarize_evidence_pack(evidence_pack),
                 "context": graph_state.get("context"),
                 "query_rewrite": graph_state.get("query_rewrite"),
             }
