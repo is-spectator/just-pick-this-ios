@@ -101,10 +101,12 @@ class SqlAlchemyToolCallLogger:
         help_request_id: str | None = None,
     ) -> ToolCallRecord | None:
         del question_id, help_request_id
+        tool_call_id = str(uuid4())
         result = await execute(
             self.db,
             """
             INSERT INTO tool_calls (
+                id,
                 agent_run_id,
                 turn_id,
                 tool_name,
@@ -116,6 +118,7 @@ class SqlAlchemyToolCallLogger:
                 updated_at
             )
             VALUES (
+                :id,
                 :agent_run_id,
                 :turn_id,
                 :tool_name,
@@ -129,6 +132,7 @@ class SqlAlchemyToolCallLogger:
             RETURNING id, created_at, started_at
             """,
             {
+                "id": tool_call_id,
                 "agent_run_id": agent_run_id or self.agent_run_id,
                 "turn_id": self.turn_id,
                 "tool_name": tool_name,
@@ -178,6 +182,24 @@ class SqlAlchemyToolCallLogger:
             },
         )
         await commit(self.db)
+
+
+def ensure_tool_call_logger(
+    db: SessionLike,
+    logger: ToolCallLogger | None,
+    *,
+    agent_run_id: str | None = None,
+    turn_id: str | None = None,
+    sequence_index: int = 0,
+) -> ToolCallLogger | None:
+    if logger is not None or agent_run_id is None:
+        return logger
+    return SqlAlchemyToolCallLogger(
+        db,
+        agent_run_id=agent_run_id,
+        turn_id=turn_id,
+        sequence_index=sequence_index,
+    )
 
 
 async def start_tool_call(

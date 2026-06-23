@@ -36,7 +36,7 @@ dev = [
 packages = ["app"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "."]
+pythonpath = ["."]
 testpaths = ["tests", "app/tests"]
 addopts = "-q"
 

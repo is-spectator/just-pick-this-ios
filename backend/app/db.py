@@ -28,6 +28,7 @@ def make_engine(**kwargs: Any):
 
 
 def make_session_factory(**kwargs: Any) -> sessionmaker[Session]:
+    kwargs.setdefault("expire_on_commit", False)
     return sessionmaker(bind=make_engine(), autoflush=False, autocommit=False, **kwargs)
 
 

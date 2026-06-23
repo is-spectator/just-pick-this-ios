@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://just-pick-this.local/schemas/benchmark_suite.schema.json",
+  "title": "Pipi Benchmark Suite",
+  "type": "object",
+  "required": ["suite_id", "version", "cases"],
+  "additionalProperties": true,
+  "properties": {
+    "suite_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "is_minimal_seed": {
+      "type": "boolean"
+    },
+    "target_case_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "message", "expected"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected": {
+            "type": "object",
+            "required": ["response_kind"],
+            "additionalProperties": true,
+            "properties": {
+              "response_kind": {
+                "type": "string",
+                "enum": [
+                  "recommendation_card",
+                  "help_card_draft",
+                  "clarification",
+                  "chitchat"
+                ]
+              },
+              "location_state": {
+                "type": "string",
+                "enum": ["in_area", "in_venue", "unknown"]
+              },
+              "target_type": {
+                "type": "string"
+              },
+              "requires_agent_run": {
+                "type": "boolean"
+              },
+              "requires_retrieval": {
+                "type": "boolean"
+              },
+              "requires_verified_image": {
+                "type": "boolean"
+              },
+              "allow_help_card_fallback": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

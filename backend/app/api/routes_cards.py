@@ -11,13 +11,13 @@ from app.schemas.cards import CardAcceptRequest, CardAcceptResponse, CardDetail
 router = APIRouter(tags=["cards"])
 
 
-@router.get("/cards/{id}", response_model=CardDetail)
-async def get_card(id: str) -> CardDetail:
+@router.get("/cards/{card_id}", response_model=CardDetail)
+async def get_card(card_id: str) -> CardDetail:
     handler = resolve_service_handler("app.services.cards", "get_card")
-    return await call_service(handler, id)
+    return await call_service(handler, card_id)
 
 
-@router.post("/cards/{id}/accept", response_model=CardAcceptResponse)
-async def accept_card(id: str, payload: CardAcceptRequest) -> CardAcceptResponse:
+@router.post("/cards/{card_id}/accept", response_model=CardAcceptResponse)
+async def accept_card(card_id: str, payload: CardAcceptRequest) -> CardAcceptResponse:
     handler = resolve_service_handler("app.services.cards", "accept_card")
-    return await call_service(handler, id, dump_model(payload))
+    return await call_service(handler, card_id, dump_model(payload))

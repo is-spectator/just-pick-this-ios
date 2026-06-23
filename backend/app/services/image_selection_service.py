@@ -17,6 +17,13 @@ TRUSTED_IMAGE_DOMAINS = [
     "visitkorea.or.kr",
     "oliveyoung.com",
     "tripadvisor.com",
+    "ctrip.com",
+    "c-ctrip.com",
+    "pixnet.net",
+    "pimg.tw",
+    "trip.com",
+    "tripcdn.com",
+    "anise.tw",
     "pishop.us",
     "pishop.ca",
     "core-electronics.com.au",
@@ -130,8 +137,10 @@ class ImageSelectionService:
         *,
         preferred_domains: list[str] | None,
     ) -> None:
-        source_domain = image.source_domain or extract_domain(image.source_url)
+        source_domain = image.source_domain or extract_domain(image.source_url) or extract_domain(image.url)
         image.source_domain = source_domain
+        if not image.source_url:
+            image.source_url = image.url
 
         risk = self._ai_generated_risk(image)
         image.ai_generated_risk = risk

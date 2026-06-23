@@ -194,7 +194,7 @@ flowchart TD
 - 图片可以来自库内 curated 资产，也可以来自 Tavily 检索后落库的真实网页引用图候选。
 - 不允许 AI 生成图。
 - 不允许模型自己编图片 URL。
-- 不做登录，V0 用 `device_uid` 表示一个手机。
+- 支持邮箱验证码登录；未登录时继续用 `device_uid` 表示一个手机，登录后把设备匿名数据合并到邮箱账号。
 - 不做底部 Tab、社区首页、信息流、设置页、Top 3。
 
 ## 目录
@@ -285,13 +285,11 @@ Tavily 的用途：
 ## iOS 运行
 
 ```sh
-xcodebuild \
-  -project JustPickThisIOS.xcodeproj \
-  -scheme JustPickThisIOS \
-  -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-  build
+./scripts/build_ios_sim.sh
 ```
+
+`scripts/build_ios_sim.sh` 会自动选择一个可用 iPhone Simulator 的
+destination id；如果要固定设备，可设置 `IOS_SIMULATOR_ID=<device-id>`。
 
 也可以直接用 Xcode 打开：
 
@@ -427,10 +425,12 @@ RecommendationCard: ready -> accepted / dismissed
 后端：
 
 ```sh
-cd backend
-uv run pytest
-uv run ruff check app tests
+./scripts/test.sh
 ```
+
+## 密钥安全
+
+真实 API key 只放本机 `.env` 或部署环境变量，不能进仓库、zip 包、README、测试 fixture 或 legacy 目录。任何真实 OpenAI/Tavily token 一旦进入可分享产物，都按已泄露处理，需要立即 rotate。
 
 iOS：
 

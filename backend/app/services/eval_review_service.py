@@ -1,0 +1,200 @@
+"""File-backed eval report review helpers for the admin console."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any
+
+
+def default_reports_root() -> Path:
+    repo_root = Path(__file__).resolve().parents[3]
+    reports = repo_root / "reports"
+    return reports if reports.exists() else repo_root / "benchmarks" / "reports"
+
+
+def resolve_reports_root(value: Any = None) -> Path:
+    if value:
+        return Path(str(value)).expanduser().resolve()
+    return default_reports_root()
+
+
+def list_eval_runs(reports_root: Path) -> list[dict[str, Any]]:
+    if not reports_root.exists():
+        return []
+    runs: list[dict[str, Any]] = []
+    for path in sorted((item for item in reports_root.iterdir() if item.is_dir()), reverse=True):
+        summary = _load_json(path / "quality_report.json")
+        product_summary = _load_json(path / "product_benchmark_summary.json")
+        if not summary and not product_summary:
+            continue
+        run_id = str(product_summary.get("run_id") or path.name)
+        runs.append(
+            {
+                "run_id": run_id,
+                "name": path.name,
+                "path": str(path),
+                "evaluated_cases": product_summary.get("evaluated_cases")
+                or summary.get("evaluated_case_count")
+                or _count_jsonl(path / "results.jsonl"),
+                "pass_rate": _mapping(summary.get("summary")).get("pass_rate"),
+                "average_quality_score": _mapping(summary.get("summary")).get("average_quality_score"),
+                "low_quality_count": _low_quality_count(path),
+                "seed_candidate_count": _count_jsonl(path / "seed_candidates.jsonl"),
+                "agent_fix_issue_count": _count_jsonl(path / "agent_fix_issues.jsonl"),
+            }
+        )
+    return runs
+
+
+def low_quality_cases(
+    reports_root: Path,
+    run_id: str,
+    *,
+    limit: int = 100,
+    primary_cause: str | None = None,
+) -> list[dict[str, Any]]:
+    run_dir = _run_dir(reports_root, run_id)
+    attributions = _load_jsonl(run_dir / "quality_attribution.jsonl")
+    scores = _load_jsonl(run_dir / "case_quality_scores.jsonl")
+    scores_by_id = {str(item.get("case_id")): item for item in scores}
+    items: list[dict[str, Any]] = []
+    for attribution in attributions:
+        if primary_cause and attribution.get("primary_cause") != primary_cause:
+            continue
+        score = scores_by_id.get(str(attribution.get("case_id")), {})
+        quality = _mapping(attribution.get("quality"))
+        if float(quality.get("overall") or score.get("quality_score") or 1.0) >= 0.75:
+            continue
+        items.append(_case_summary_payload(attribution, score=score))
+        if len(items) >= limit:
+            break
+    return items
+
+
+def case_detail(reports_root: Path, run_id: str, case_id: str) -> dict[str, Any]:
+    run_dir = _run_dir(reports_root, run_id)
+    result = _find_jsonl(run_dir / "results.jsonl", case_id)
+    attribution = _find_jsonl(run_dir / "quality_attribution.jsonl", case_id)
+    score = _find_jsonl(run_dir / "case_quality_scores.jsonl", case_id)
+    seed_candidate = _find_candidate(run_dir / "seed_candidates.jsonl", case_id)
+    agent_issue = _find_candidate(run_dir / "agent_fix_issues.jsonl", case_id)
+    if not result and not attribution and not score:
+        raise FileNotFoundError(case_id)
+    return {
+        "run_id": run_id,
+        "case_id": case_id,
+        "result": result,
+        "quality": attribution,
+        "score": score,
+        "seed_candidate": seed_candidate,
+        "agent_issue": agent_issue,
+    }
+
+
+def review_payload(
+    *,
+    run_id: str,
+    case_id: str,
+    action: str,
+    reviewer: str,
+    notes: str | None = None,
+    labels: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "run_id": run_id,
+        "case_id": case_id,
+        "action": action,
+        "reviewer": reviewer,
+        "notes": notes or "",
+        "labels": list(labels or []),
+    }
+
+
+def _case_summary_payload(attribution: Mapping[str, Any], *, score: Mapping[str, Any]) -> dict[str, Any]:
+    quality = _mapping(attribution.get("quality"))
+    return {
+        "case_id": attribution.get("case_id"),
+        "group": attribution.get("group"),
+        "message": attribution.get("message"),
+        "status": attribution.get("status") or score.get("status"),
+        "quality_score": quality.get("overall") or score.get("quality_score"),
+        "primary_cause": attribution.get("primary_cause"),
+        "actual_kind": attribution.get("actual_kind"),
+        "expected_kind": attribution.get("expected_kind"),
+        "issues": attribution.get("issues") or score.get("issues") or [],
+        "trace": attribution.get("trace") or {},
+    }
+
+
+def _run_dir(reports_root: Path, run_id: str) -> Path:
+    direct = reports_root / run_id
+    if direct.exists():
+        return direct
+    paths = reports_root.iterdir() if reports_root.exists() else []
+    for path in paths:
+        if not path.is_dir():
+            continue
+        summary = _load_json(path / "product_benchmark_summary.json")
+        if str(summary.get("run_id") or "") == run_id:
+            return path
+    return direct
+
+
+def _find_jsonl(path: Path, case_id: str) -> dict[str, Any] | None:
+    for item in _load_jsonl(path):
+        if str(item.get("case_id") or "") == case_id:
+            return item
+    return None
+
+
+def _find_candidate(path: Path, case_id: str) -> dict[str, Any] | None:
+    for item in _load_jsonl(path):
+        ids = item.get("example_case_ids") or item.get("case_ids") or []
+        if case_id in {str(value) for value in ids}:
+            return item
+    return None
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def _count_jsonl(path: Path) -> int:
+    return len(_load_jsonl(path))
+
+
+def _low_quality_count(path: Path) -> int:
+    attributions = _load_jsonl(path / "quality_attribution.jsonl")
+    return sum(
+        1
+        for item in attributions
+        if float(_mapping(item.get("quality")).get("overall") or 1.0) < 0.75
+    )
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}

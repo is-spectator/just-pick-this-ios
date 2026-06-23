@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -13,6 +13,7 @@
 		87AD9F66F169E44E4B28AA2D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FDF93B3FEEF0D52283BE50E /* RootView.swift */; };
 		A547C27A10EA0038CE185176 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C2BB2FC946413649EFD0CD /* AppTheme.swift */; };
 		D8487147D1C24F3ACCA29556 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = F898530B97A09D348B627F04 /* Components.swift */; };
+		E711A1C92C0F4B1800000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E711A1C92C0F4B1800000002 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,7 +23,8 @@
 		9F707EFECDD72F353F901334 /* MockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockData.swift; sourceTree = "<group>"; };
 		D0C2BB2FC946413649EFD0CD /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		D4A7C0A6A51158B7AFB64A30 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		DA19B750298287E1F3654654 /* JustPickThisIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = JustPickThisIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA19B750298287E1F3654654 /* pipii.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = pipii.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E711A1C92C0F4B1800000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F898530B97A09D348B627F04 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -31,6 +33,7 @@
 			isa = PBXGroup;
 			children = (
 				D0C2BB2FC946413649EFD0CD /* AppTheme.swift */,
+				E711A1C92C0F4B1800000002 /* Assets.xcassets */,
 				F898530B97A09D348B627F04 /* Components.swift */,
 				D4A7C0A6A51158B7AFB64A30 /* Info.plist */,
 				0AC97FCC22D83B13DE9F1547 /* JustPickThisApp.swift */,
@@ -52,7 +55,7 @@
 		51AD0B8043AE91CABA1A4B91 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				DA19B750298287E1F3654654 /* JustPickThisIOS.app */,
+				DA19B750298287E1F3654654 /* pipii.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -65,6 +68,7 @@
 			buildConfigurationList = 810876773D170C88FFAD8D70 /* Build configuration list for PBXNativeTarget "JustPickThisIOS" */;
 			buildPhases = (
 				68DB068E3AA4D0515EB55BCC /* Sources */,
+				E711A1C92C0F4B1800000003 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -74,7 +78,7 @@
 			packageProductDependencies = (
 			);
 			productName = JustPickThisIOS;
-			productReference = DA19B750298287E1F3654654 /* JustPickThisIOS.app */;
+			productReference = DA19B750298287E1F3654654 /* pipii.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -101,7 +105,6 @@
 			);
 			mainGroup = 439986A2D1709152F7E57D5A;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 54;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -109,6 +112,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E711A1C92C0F4B1800000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E711A1C92C0F4B1800000001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		68DB068E3AA4D0515EB55BCC /* Sources */ = {
@@ -130,15 +144,16 @@
 		2B70C3336D95B4840BF35193 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = Y55UH32LWE;
 				INFOPLIST_FILE = NativeApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.justpickthis.ios;
-				PRODUCT_NAME = "就选这个";
+				PRODUCT_NAME = pipii;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -182,6 +197,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = FJ7ADHR65Z;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -207,15 +223,16 @@
 		6E51109FF75CDD59162837A4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = Y55UH32LWE;
 				INFOPLIST_FILE = NativeApp/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.justpickthis.ios;
-				PRODUCT_NAME = "就选这个";
+				PRODUCT_NAME = pipii;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -259,6 +276,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = FJ7ADHR65Z;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;

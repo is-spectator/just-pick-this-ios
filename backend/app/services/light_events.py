@@ -27,4 +27,5 @@ def list_light_events(
             .order_by(LightEvent.lit_at.desc())
             .limit(limit)
         )
-        return {"items": [serialize_light_event(event) for event in events], "next_cursor": None}
+        items = [serialize_light_event(event) for event in events]
+        return {"items": items, "events": items, "next_cursor": None}
