@@ -19,6 +19,7 @@ from app.eval.quality_scoring import (
 from app.eval.agent_issue_generator import write_agent_fix_issue_reports
 from app.eval.quality_attribution import attribute_rows, summarize_attributions
 from app.eval.seed_candidate_generator import write_seed_candidate_reports
+from app.eval.shadow_promotion_generator import write_shadow_promotion_candidate_reports
 from app.eval.shadow_quality import score_shadow_decision
 
 
@@ -298,6 +299,7 @@ def write_quality_reports(
         encoding="utf-8",
     )
     write_generated_issue_reports(scores, output / "generated")
+    paths.update(write_shadow_promotion_candidate_reports(shadow_report, output))
     paths.update(write_seed_candidate_reports(rows, attributions, output))
     paths.update(write_agent_fix_issue_reports(attributions, output))
     return paths

@@ -111,6 +111,9 @@ def test_quality_report_generates_all_files_and_classifies_seed_gap(tmp_path) ->
         "shadow_comparison_report.md",
         "shadow_comparison_report.json",
         "shadow_decisions.jsonl",
+        "shadow_promotion_candidates.jsonl",
+        "shadow_promotion_candidates.json",
+        "shadow_promotion_candidates.md",
         "index.md",
         "p2_aggregate.md",
     }
@@ -275,6 +278,36 @@ def test_quality_report_generates_shadow_comparison_files(tmp_path) -> None:
     assert "shadow-mismatch" in paths["shadow_comparison_markdown"].read_text(
         encoding="utf-8"
     )
+    promotion_candidates = [
+        json.loads(line)
+        for line in paths["shadow_promotion_candidates_jsonl"].read_text(
+            encoding="utf-8"
+        ).splitlines()
+        if line.strip()
+    ]
+    by_case = {str(row["case_id"]): row for row in promotion_candidates}
+    assert {
+        "shadow-mismatch",
+        "shadow-schema-error",
+        "shadow-provider-error",
+        "shadow-timeout",
+    } <= set(by_case)
+    assert by_case["shadow-mismatch"]["autopromote"] is False
+    assert by_case["shadow-mismatch"]["review_required"] is True
+    assert by_case["shadow-mismatch"]["candidate_type"] == "decision_mismatch_review"
+    assert by_case["shadow-schema-error"]["candidate_type"] == "shadow_runtime_reliability"
+    assert "fix_shadow_schema_prompt" in by_case["shadow-schema-error"]["suggested_actions"]
+    assert by_case["shadow-provider-error"]["priority"] == "P1"
+    assert by_case["shadow-timeout"]["priority"] == "P1"
+    promotion_json = json.loads(
+        paths["shadow_promotion_candidates_json"].read_text(encoding="utf-8")
+    )
+    assert promotion_json["total"] == len(promotion_candidates)
+    promotion_markdown = paths["shadow_promotion_candidates_markdown"].read_text(
+        encoding="utf-8"
+    )
+    assert "autopromote=false" in promotion_markdown
+    assert "shadow-mismatch" in promotion_markdown
 
 
 def test_generated_issues_aggregate_p2_degraded_cases(tmp_path) -> None:

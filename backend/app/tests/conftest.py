@@ -48,6 +48,7 @@ NO_DB_TEST_FILES = {
     "test_recommendation_card_v2_contract.py",
     "test_results_guard.py",
     "test_shadow_quality_diff.py",
+    "test_shadow_promotion_candidates.py",
     "test_shadow_schema_contract.py",
     "test_test_scripts.py",
 }
