@@ -2279,6 +2279,11 @@ def _chat_response_contract(
     agent_run_id: str,
     tool_calls: list[Any],
 ) -> dict[str, Any]:
+    metadata = state.get("metadata") if isinstance(state.get("metadata"), dict) else {}
+    input_gate = {}
+    if isinstance(metadata, dict) and isinstance(metadata.get("input_gate_result"), dict):
+        input_gate = dict(metadata["input_gate_result"])
+
     if cards:
         card = serialize_card(cards[0])
         location_state = str(card.get("location_state") or "unknown")
@@ -2291,7 +2296,17 @@ def _chat_response_contract(
         data = {"help_card": help_card}
     else:
         message = str(payload.get("message") or state.get("user_message") or "")
-        if detect_chitchat(message) is not None:
+        intent_value = str(state.get("intent") or "")
+        gate_intent = str(input_gate.get("intent_type") or "")
+        if gate_intent in {"greeting", "smalltalk", "app_help"} or intent_value in {
+            "greeting",
+            "smalltalk",
+            "app_help",
+        }:
+            response_kind = "chitchat"
+            location_state = "unknown"
+            data = {}
+        elif detect_chitchat(message) is not None:
             response_kind = "chitchat"
             location_state = "unknown"
             data = {}
@@ -2315,10 +2330,6 @@ def _chat_response_contract(
     if include_debug:
         card_payload = cards[0].payload_json if cards else {}
         provenance = (card_payload or {}).get("provenance") or {}
-        input_gate = {}
-        metadata = state.get("metadata") if isinstance(state.get("metadata"), dict) else {}
-        if isinstance(metadata, dict) and isinstance(metadata.get("input_gate_result"), dict):
-            input_gate = dict(metadata["input_gate_result"])
         debug = {
             "enabled": True,
             "selected_tool": selected_tool,
