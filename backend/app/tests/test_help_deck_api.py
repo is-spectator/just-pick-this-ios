@@ -136,7 +136,11 @@ def _reward_event_count_for_help_card(help_card_id: str) -> int:
         )
 
 
-def _content_review_tasks_for_help_card(help_card_id: str) -> list[ContentReviewTask]:
+def _content_review_tasks_for_help_card(
+    help_card_id: str,
+    *,
+    task_type: str = "one_liner_rejected",
+) -> list[ContentReviewTask]:
     with session_scope() as session:
         rows = list(
             session.scalars(
@@ -144,7 +148,7 @@ def _content_review_tasks_for_help_card(help_card_id: str) -> list[ContentReview
                 .where(
                     ContentReviewTask.target_table == "help_cards",
                     ContentReviewTask.target_record_id == help_card_id,
-                    ContentReviewTask.task_type == "one_liner_rejected",
+                    ContentReviewTask.task_type == task_type,
                 )
                 .order_by(ContentReviewTask.created_at.asc())
             )
@@ -252,6 +256,72 @@ def test_help_feed_filters_owner_and_answered_cards(run_async: Any, async_client
         assert visible[visible_card_id]["context_text"] == "晚上想吃本地味道。"
         assert visible[visible_card_id]["reward"]["label"] == "+10"
         assert isinstance(visible[visible_card_id]["answer_count"], int)
+
+    run_async(scenario)
+
+
+def test_help_card_unsafe_publish_is_blocked_and_hidden_from_feed(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        owner_device = f"pytest-help-deck-owner-unsafe-card-{suffix}"
+        help_card_id = _seed_help_card(
+            owner_device=owner_device,
+            title="朝阳区热干面求一个，加我微信 vx123456",
+            context_text="联系方式放这里。",
+            status="draft",
+        )
+
+        blocked = await async_client.post(
+            f"/v1/help-cards/{help_card_id}/publish",
+            json={"device_id": owner_device, "metadata": {"source": "pytest"}},
+        )
+
+        assert blocked.status_code == 422, blocked.text
+        detail = blocked.json()["detail"]
+        assert detail["code"] == "help_card_unsafe"
+        assert "contact_spam" in detail["issues"]
+
+        tasks = _content_review_tasks_for_help_card(help_card_id, task_type="help_card_rejected")
+        assert len(tasks) == 1
+        task = tasks[0]
+        assert task.status == "open"
+        assert task.reason == "contact_spam"
+        assert task.priority <= 20
+        assert task.payload_json["source"] == "help_card_publish"
+        assert task.payload_json["abuse"]["unsafe"] is True
+
+        feed = await _get_feed(async_client, device_id=f"pytest-help-deck-reader-unsafe-card-{suffix}", limit=100)
+        assert help_card_id not in {str(item["id"]) for item in feed["items"]}
+
+    run_async(scenario)
+
+
+def test_help_feed_filters_legacy_unsafe_published_cards(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        help_card_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-owner-legacy-unsafe-{suffix}",
+            title="国贸午饭求一个，加我微信 vx123456",
+            context_text="明显联系方式。",
+            status="published",
+        )
+        safe_help_card_id = _seed_help_card(
+            owner_device=f"pytest-help-deck-owner-legacy-safe-{suffix}",
+            title="国贸午饭求一个",
+            context_text="想找现在能直接去的一家。",
+            status="published",
+        )
+
+        feed = await _get_feed(async_client, device_id=f"pytest-help-deck-reader-legacy-unsafe-{suffix}", limit=100)
+        ids = {str(item["id"]) for item in feed["items"]}
+        assert help_card_id not in ids
+        assert safe_help_card_id in ids
 
     run_async(scenario)
 

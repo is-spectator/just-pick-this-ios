@@ -10,9 +10,11 @@ from sqlalchemy import select
 from app.jobs.finalizer_job import run_finalize_graph_for_help_card
 from app.models import ContentReviewTask, HelpAnswer, HelpCard, RewardEvent
 from app.services.help_service import (
+    HelpCardAbuseCheck,
     OneLinerAbuseCheck,
     OneLinerQuality,
     assess_one_liner_quality,
+    detect_help_card_abuse,
     detect_one_liner_abuse,
     normalize_one_liner_key,
     one_liner_quality_metadata,
@@ -57,7 +59,8 @@ def list_help_feed(
             query = query.where(HelpCard.owner_user_id != user.id)
         if answered_ids:
             query = query.where(~HelpCard.id.in_(answered_ids))
-        rows = sorted(session.scalars(query), key=help_feed_sort_key)
+        rows = [card for card in session.scalars(query) if not _help_card_abuse(card).unsafe]
+        rows = sorted(rows, key=help_feed_sort_key)
         items = rows[offset : offset + resolved_limit]
         next_cursor = str(offset + resolved_limit) if len(rows) > offset + resolved_limit else None
         return {"items": [_serialize_ranked_help_card(card) for card in items], "next_cursor": next_cursor}
@@ -90,6 +93,26 @@ def publish_help_card(id: str, payload: dict[str, Any]) -> dict[str, Any]:
         )
         if help_card.status not in {"draft", "published", "collecting"}:
             raise HTTPException(status_code=409, detail="help_card_not_publishable")
+        abuse = _help_card_abuse(help_card)
+        if abuse.unsafe:
+            _queue_help_card_review_task(
+                session,
+                help_card=help_card,
+                reason=abuse.reason or "unsafe",
+                issues=abuse.issues,
+                priority=abuse.priority,
+                payload=payload,
+                abuse=abuse,
+            )
+            session.commit()
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "help_card_unsafe",
+                    "reason": abuse.reason,
+                    "issues": list(abuse.issues),
+                },
+            )
         if help_card.status == "draft":
             help_card.status = "published"
             help_card.published_at = help_card.published_at or utcnow()
@@ -345,6 +368,77 @@ def _queue_one_liner_review_task(
         )
     )
     session.flush()
+
+
+def _queue_help_card_review_task(
+    session: Any,
+    *,
+    help_card: HelpCard,
+    reason: str,
+    issues: tuple[str, ...],
+    priority: int,
+    payload: dict[str, Any],
+    abuse: HelpCardAbuseCheck,
+) -> None:
+    existing = session.scalar(
+        select(ContentReviewTask).where(
+            ContentReviewTask.task_type == "help_card_rejected",
+            ContentReviewTask.target_table == "help_cards",
+            ContentReviewTask.target_record_id == str(help_card.id),
+            ContentReviewTask.status == "open",
+        )
+    )
+    if existing is not None:
+        existing.reason = reason
+        existing.priority = min(int(existing.priority or priority), int(priority))
+        existing.payload_json = {
+            **dict(existing.payload_json or {}),
+            "reason": reason,
+            "issues": list(issues),
+            "abuse": _help_card_abuse_payload(abuse),
+            "metadata": dict(payload.get("metadata") or {}),
+        }
+        session.flush()
+        return
+    session.add(
+        ContentReviewTask(
+            task_type="help_card_rejected",
+            status="open",
+            priority=priority,
+            target_table="help_cards",
+            target_record_id=str(help_card.id),
+            title=f"Unsafe help card blocked: {help_card.title}",
+            reason=reason,
+            payload_json={
+                "source": "help_card_publish",
+                "help_card_id": str(help_card.id),
+                "help_card_title": help_card.title,
+                "context_text": help_card.context_text,
+                "reason": reason,
+                "issues": list(issues),
+                "abuse": _help_card_abuse_payload(abuse),
+                "metadata": dict(payload.get("metadata") or {}),
+            },
+        )
+    )
+    session.flush()
+
+
+def _help_card_abuse(help_card: HelpCard) -> HelpCardAbuseCheck:
+    return detect_help_card_abuse(
+        title=str(help_card.title or ""),
+        context_text=str(help_card.context_text or ""),
+        payload=help_card.payload_json or {},
+    )
+
+
+def _help_card_abuse_payload(abuse: HelpCardAbuseCheck) -> dict[str, Any]:
+    return {
+        "unsafe": abuse.unsafe,
+        "reason": abuse.reason,
+        "issues": list(abuse.issues),
+        "priority": abuse.priority,
+    }
 
 
 def _reward_payload(help_card: HelpCard) -> dict[str, Any]:

@@ -33,6 +33,8 @@ _CONTACT_SPAM_RE = re.compile(
     re.IGNORECASE,
 )
 _ABUSE_TERMS = ("约炮", "裸聊")
+_ILLEGAL_REQUEST_RE = re.compile(r"(买毒|贩毒|毒品|办假证|代开发票|偷拍视频|偷拍)")
+_PRIVACY_HARM_RE = re.compile(r"(人肉|开盒|身份证号|手机号|家庭住址|住址)")
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,15 @@ class OneLinerQuality:
 
 @dataclass(frozen=True)
 class OneLinerAbuseCheck:
+    unsafe: bool
+    normalized_key: str
+    reason: str | None = None
+    issues: tuple[str, ...] = ()
+    priority: int = 100
+
+
+@dataclass(frozen=True)
+class HelpCardAbuseCheck:
     unsafe: bool
     normalized_key: str
     reason: str | None = None
@@ -126,6 +137,45 @@ def detect_one_liner_abuse(text: str) -> OneLinerAbuseCheck:
     )
 
 
+def detect_help_card_abuse(
+    *,
+    title: str,
+    context_text: str = "",
+    payload: Mapping[str, Any] | None = None,
+) -> HelpCardAbuseCheck:
+    """Detect obvious unsafe help-card requests before they enter the public feed."""
+
+    payload = payload or {}
+    text_parts = [title, context_text]
+    for key in ("context", "wants", "avoids", "constraints"):
+        value = payload.get(key)
+        if value:
+            text_parts.append(str(value))
+    text = " ".join(str(part or "") for part in text_parts)
+    normalized_key = normalize_one_liner_key(text)
+    issues: list[str] = []
+    priority = 100
+    if _CONTACT_SPAM_RE.search(text):
+        issues.append("contact_spam")
+        priority = min(priority, 20)
+    if any(term in normalized_key for term in _ABUSE_TERMS):
+        issues.append("adult_harassment")
+        priority = min(priority, 10)
+    if _ILLEGAL_REQUEST_RE.search(normalized_key):
+        issues.append("illegal_request")
+        priority = min(priority, 5)
+    if _PRIVACY_HARM_RE.search(normalized_key):
+        issues.append("privacy_harm")
+        priority = min(priority, 15)
+    return HelpCardAbuseCheck(
+        unsafe=bool(issues),
+        normalized_key=normalized_key,
+        reason=issues[0] if issues else None,
+        issues=tuple(issues),
+        priority=priority,
+    )
+
+
 def one_liner_quality_metadata(quality: OneLinerQuality) -> dict[str, Any]:
     return {
         "accepted": quality.accepted,
@@ -150,7 +200,9 @@ __all__ = [
     "RAW_TEXT_ROLE",
     "OneLinerQuality",
     "OneLinerAbuseCheck",
+    "HelpCardAbuseCheck",
     "assess_one_liner_quality",
+    "detect_help_card_abuse",
     "detect_one_liner_abuse",
     "help_answer_text",
     "human_one_liner_evidence",
