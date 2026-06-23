@@ -31,6 +31,7 @@ def accept_card(id: str, payload: dict[str, Any] | None = None) -> dict[str, Any
         card = session.get(RecommendationCard, uuid.UUID(id))
         if card is None:
             raise HTTPException(status_code=404, detail="card_not_found")
+        already_accepted = card.status == "accepted" and card.accepted_at is not None
         card.status = "accepted"
         card.accepted_at = utcnow()
         card.question.status = "completed"
@@ -42,7 +43,11 @@ def accept_card(id: str, payload: dict[str, Any] | None = None) -> dict[str, Any
             conversation_id=card.conversation_id,
             recommendation_card_id=card.id,
             source="api",
-            payload_json={"status": "completed", **dict(payload.get("metadata") or {})},
+            payload_json={
+                "status": "completed",
+                "already_accepted": already_accepted,
+                **dict(payload.get("metadata") or {}),
+            },
         )
         session.flush()
         return {"card_id": str(card.id), "accepted": True, "metadata": {"status": "completed"}}

@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import HelpAnswer, HelpCard, RecommendationCard, UserBehaviorEvent
+from app.services.intent_memory import record_intent_answer_feedback_for_card
 from app.services.runtime import ensure_user, session_scope
 
 
@@ -84,6 +85,12 @@ def record_user_behavior_event(
         },
     )
     session.add(event)
+    record_intent_answer_feedback_for_card(
+        session,
+        card_id=recommendation_card_id,
+        event_type=normalized_type,
+        metadata=event.payload_json,
+    )
     return event
 
 

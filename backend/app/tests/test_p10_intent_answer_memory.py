@@ -6,7 +6,7 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import inspect, select
 
-from app.models import HelpCard, IntentAnswer
+from app.models import HelpCard, IntentAnswer, RecommendationCard
 from app.services.runtime import session_scope
 
 from .conftest import bootstrap, chat_turn, require_ready_response
@@ -79,6 +79,21 @@ def _archive_test_help_card(help_card_id: str | None) -> None:
             help_card.status = "test_archived"
 
 
+def _intent_answer_for_card(card_id: str) -> IntentAnswer:
+    with session_scope() as session:
+        card = session.get(RecommendationCard, uuid.UUID(card_id))
+        assert card is not None
+        payload = card.payload_json or {}
+        intent_answer_id = payload.get("intent_answer_id") or payload.get("reference_intent_answer_id")
+        if not intent_answer_id:
+            intent_answer_id = (payload.get("provenance") or {}).get("source_answer_id")
+        assert intent_answer_id
+        answer = session.get(IntentAnswer, uuid.UUID(str(intent_answer_id)))
+        assert answer is not None
+        session.expunge(answer)
+        return answer
+
+
 def test_intent_answer_has_memory_fields() -> None:
     model_columns = {column.name for column in IntentAnswer.__table__.columns}
     missing_model_columns = REQUIRED_INTENT_ANSWER_MEMORY_FIELDS - model_columns
@@ -133,5 +148,82 @@ def test_finalizer_writes_help_final_intent_answer(
             assert intent_answer.rejection_count == 0
         finally:
             _archive_test_help_card(help_card_id)
+
+    run_async(scenario)
+
+
+def test_accept_card_updates_intent_answer_success_memory(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-intent-memory-success-{uuid.uuid4()}"
+        owner = await bootstrap(
+            async_client,
+            device_id=device_id,
+        )
+        body = await chat_turn(
+            async_client,
+            conversation_id=owner["conversation_id"],
+            message="我现在在大同喜晋道，不知道吃什么，给我推荐一个。",
+        )
+        card_id = body["cards"][0]["id"]
+        before = _intent_answer_for_card(card_id)
+
+        accepted = await async_client.post(
+            f"/v1/cards/{card_id}/accept",
+            json={"device_id": device_id},
+        )
+        require_ready_response(accepted)
+
+        after = _intent_answer_for_card(card_id)
+        assert after.success_count == before.success_count + 1
+        assert after.rejection_count == before.rejection_count
+        assert after.last_used_at is not None
+
+        duplicate = await async_client.post(
+            f"/v1/cards/{card_id}/accept",
+            json={"device_id": device_id},
+        )
+        require_ready_response(duplicate)
+        deduped = _intent_answer_for_card(card_id)
+        assert deduped.success_count == after.success_count
+
+    run_async(scenario)
+
+
+def test_card_rejection_event_updates_intent_answer_rejection_memory(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-intent-memory-reject-{uuid.uuid4()}"
+        owner = await bootstrap(
+            async_client,
+            device_id=device_id,
+        )
+        body = await chat_turn(
+            async_client,
+            conversation_id=owner["conversation_id"],
+            message="我现在在大同喜晋道，不知道吃什么，给我推荐一个。",
+        )
+        card_id = body["cards"][0]["id"]
+        before = _intent_answer_for_card(card_id)
+
+        event = await async_client.post(
+            "/v1/events",
+            json={
+                "device_id": device_id,
+                "conversation_id": owner["conversation_id"],
+                "card_id": card_id,
+                "event_type": "recommendation_card_changed",
+                "source": "pytest",
+            },
+        )
+        require_ready_response(event)
+
+        after = _intent_answer_for_card(card_id)
+        assert after.success_count == before.success_count
+        assert after.rejection_count == before.rejection_count + 1
 
     run_async(scenario)
