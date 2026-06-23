@@ -29,6 +29,7 @@ NO_DB_TEST_FILES = {
     "test_database_unavailable_response.py",
     "test_decision_factor_not_generic.py",
     "test_evaluator.py",
+    "test_effect_loop_reports.py",
     "test_evidence_pack.py",
     "test_experiments.py",
     "test_eval_review_trace_replay.py",

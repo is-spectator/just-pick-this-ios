@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter, defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +14,10 @@ from app.services.query_rewrite import rewrite_query
 def generate_seed_candidates(
     rows: Sequence[Mapping[str, Any]],
     attributions: Sequence[Mapping[str, Any]],
+    *,
+    existing_intent_keys: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
+    existing_keys = {str(key).strip() for key in (existing_intent_keys or []) if str(key).strip()}
     rows_by_id = {str(row.get("case_id") or ""): row for row in rows}
     grouped: dict[tuple[str, str, str, str], list[Mapping[str, Any]]] = defaultdict(list)
     for attribution in attributions:
@@ -35,6 +38,8 @@ def generate_seed_candidates(
     for index, ((intent_key, location_state, target_type, domain), items) in enumerate(
         sorted(grouped.items(), key=lambda item: (-len(item[1]), item[0]))
     ):
+        if intent_key in existing_keys:
+            continue
         example_ids = [str(item.get("case_id")) for item in items[:10]]
         source_cases = [_source_case_payload(item) for item in items[:25]]
         slots = _merge_slots([_mapping(item.get("_slots")) for item in items])
@@ -44,15 +49,27 @@ def generate_seed_candidates(
             for item in items
             for issue in _sequence(item.get("issues"))
         )
+        seed_patch = _seed_patch(
+            intent_key=intent_key,
+            domain=domain,
+            location_state=location_state,
+            target_type=target_type,
+            slots=slots,
+            source_cases=source_cases,
+            priority=_priority(priority_score),
+        )
         candidates.append(
             {
                 "candidate_id": f"seed_candidate_{index:03d}",
                 "domain": domain,
                 "intent_key": intent_key,
+                "dedupe_key": f"{domain}:{location_state}:{target_type}:{intent_key}",
                 "location_state": location_state,
                 "target_type": target_type,
                 "slots": slots,
                 "need": "approved_answer",
+                "review_status": "needs_ops_review",
+                "autopromote": False,
                 "priority": _priority(priority_score),
                 "priority_score": priority_score,
                 "case_count": len(items),
@@ -62,32 +79,9 @@ def generate_seed_candidates(
                     {"code": code, "count": count}
                     for code, count in all_issues.most_common(10)
                 ],
-                "suggested_seed": {
-                    "answer_type": _answer_type(target_type),
-                    "intent_text": _intent_text(slots),
-                    "answer_title": _answer_title(slots, target_type),
-                    "constraints": {
-                        key: value
-                        for key, value in slots.items()
-                        if key
-                        in {
-                            "city",
-                            "area",
-                            "venue",
-                            "cuisine",
-                            "food_item",
-                            "party_size",
-                            "spice_preference",
-                            "taste_preference",
-                            "budget_preference",
-                            "user_profile",
-                        }
-                        and value not in (None, "", [], {})
-                    },
-                    "decision_factor_count": 1,
-                    "requires_evidence": True,
-                    "notes": "补 approved answer 后重新跑 product benchmark 验证。",
-                },
+                "seed_patch": seed_patch,
+                # Backward-compatible alias for older admin/report consumers.
+                "suggested_seed": seed_patch,
             }
         )
     return candidates
@@ -97,10 +91,12 @@ def write_seed_candidate_reports(
     rows: Sequence[Mapping[str, Any]],
     attributions: Sequence[Mapping[str, Any]],
     output_dir: str | Path,
+    *,
+    existing_intent_keys: Iterable[str] | None = None,
 ) -> dict[str, Path]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    candidates = generate_seed_candidates(rows, attributions)
+    candidates = generate_seed_candidates(rows, attributions, existing_intent_keys=existing_intent_keys)
     paths = {
         "seed_candidates_jsonl": output / "seed_candidates.jsonl",
         "seed_candidates_json": output / "seed_candidates.json",
@@ -138,6 +134,14 @@ def render_seed_candidates_markdown(candidates: Sequence[Mapping[str, Any]]) -> 
             f"{int(candidate.get('case_count') or 0)} | "
             f"{', '.join(f'`{case_id}`' for case_id in _sequence(candidate.get('example_case_ids'))[:5])} |"
         )
+    lines += [
+        "",
+        "## Ops Workflow",
+        "",
+        "Each candidate includes a `seed_patch` object that can be reviewed and sent to ",
+        "`POST /admin/api/eval-runs/{run_id}/cases/{case_id}/seed-intent-answer-draft`.",
+        "`autopromote=false` means these rows are review-only and never activate product answers automatically.",
+    ]
     return "\n".join(lines) + "\n"
 
 
@@ -273,6 +277,92 @@ def _answer_title(slots: Mapping[str, Any], target_type: str) -> str:
     area = str(slots.get("area") or slots.get("city") or "这个区域")
     food = str(slots.get("cuisine") or slots.get("food_item") or "餐厅")
     return f"{area}{food}首选"
+
+
+def _seed_patch(
+    *,
+    intent_key: str,
+    domain: str,
+    location_state: str,
+    target_type: str,
+    slots: Mapping[str, Any],
+    source_cases: Sequence[Mapping[str, Any]],
+    priority: str,
+) -> dict[str, Any]:
+    constraints = _constraints_from_slots(slots)
+    intent_text = _intent_text(slots)
+    answer_title = _answer_title(slots, target_type)
+    patch = {
+        "intent_key": intent_key,
+        "intent_text": intent_text,
+        "intent_name": intent_text,
+        "answer_type": _answer_type(target_type),
+        "answer_title": answer_title,
+        "answer_summary": _answer_summary(slots, target_type),
+        "target_type": target_type,
+        "location_state": location_state,
+        "domain": domain,
+        "constraints": constraints,
+        "decision_factor": {
+            "key": "ops_seed_candidate",
+            "text": "运营补齐 approved answer 后，皮皮可直接给一个选择。",
+        },
+        "decision_factor_count": 1,
+        "requires_evidence": True,
+        "confidence": 0.72,
+        "priority": _seed_priority(priority),
+        "tags": [
+            "seed_candidate",
+            domain,
+            location_state,
+            target_type,
+        ],
+        "source_case_ids": [
+            str(case.get("case_id"))
+            for case in source_cases[:10]
+            if str(case.get("case_id") or "").strip()
+        ],
+        "draft": True,
+        "approved": False,
+        "notes": "从 seed_gap 自动生成；需人工补证据并审核通过后才可激活。",
+    }
+    patch.update(constraints)
+    return patch
+
+
+def _constraints_from_slots(slots: Mapping[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "city",
+        "area",
+        "venue",
+        "cuisine",
+        "food_item",
+        "task",
+        "party_size",
+        "spice_preference",
+        "taste_preference",
+        "budget_preference",
+        "user_profile",
+        "location_state",
+        "target_type",
+    }
+    return {
+        key: value
+        for key, value in slots.items()
+        if key in allowed and value not in (None, "", [], {})
+    }
+
+
+def _answer_summary(slots: Mapping[str, Any], target_type: str) -> str:
+    text = _intent_text(slots)
+    if target_type == "ordering_bundle":
+        venue = str(slots.get("venue") or "这家店")
+        return f"待补：{venue}店内点单的 approved answer，需要一个稳定点单包和单一决策因子。"
+    return f"待补：{text or '这个现场决策'} 的 approved answer，需要一个可直接照做的首选和单一决策因子。"
+
+
+def _seed_priority(priority: str) -> int:
+    return {"P0": 90, "P1": 80, "P2": 70}.get(priority, 70)
 
 
 def _slug(value: Any) -> str:
