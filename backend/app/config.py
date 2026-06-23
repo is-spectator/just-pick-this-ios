@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     llm_provider: LlmProvider = Field(default="none", validation_alias="LLM_PROVIDER")
     llm_model: str = Field(default="none", validation_alias="LLM_MODEL")
     llm_timeout_seconds: float = Field(default=10.0, validation_alias="LLM_TIMEOUT_SECONDS")
+    pipi_tool_timeout_seconds: float = Field(default=8.0, validation_alias="PIPI_TOOL_TIMEOUT_SECONDS")
     openai_api_key: SecretStr | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     openai_base_url: str = Field(default="https://api.openai.com/v1", validation_alias="OPENAI_BASE_URL")
     openai_model: str = Field(default="gpt-4.1-mini", validation_alias="OPENAI_MODEL")

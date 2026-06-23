@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 from datetime import date, datetime
 from time import perf_counter
@@ -10,6 +11,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from app.agent.reasoner import DeterministicReasoner
 from app.agent.schemas import AnswerDecision, PipiLoopResult, ReasonerDecision, ToolDecision, ToolResult
 from app.agent.shadow_reasoner import ShadowReasonerResult
+from app.config import get_settings
 
 
 class PipiState(BaseModel):
@@ -83,6 +85,7 @@ class PipiLoop:
         trace_store: Any | None = None,
         shadow_reasoner: ShadowReasoner | None = None,
         shadow_enabled: bool | None = None,
+        tool_timeout_seconds: float | None = None,
         max_iters: int = 6,
     ) -> None:
         self.reasoner = reasoner or DeterministicReasoner()
@@ -95,6 +98,11 @@ class PipiLoop:
             bool(getattr(shadow_reasoner, "enabled", shadow_reasoner is not None))
             if shadow_enabled is None
             else bool(shadow_enabled)
+        )
+        self.tool_timeout_seconds = (
+            float(get_settings().pipi_tool_timeout_seconds)
+            if tool_timeout_seconds is None
+            else float(tool_timeout_seconds)
         )
         self.max_iters = max_iters
 
@@ -185,9 +193,7 @@ class PipiLoop:
                 }
             )
             tool_started = perf_counter()
-            tool_result = await _maybe_await(
-                self.ability_center.call(decision.tool_name, decision.tool_args, state=current)
-            )
+            tool_result = await self._call_tool_with_budget(decision, current)
             tool_latency_ms = _elapsed_ms(tool_started)
             trace.append(
                 {
@@ -279,6 +285,38 @@ class PipiLoop:
         method = getattr(self.trace_store, method_name, None)
         if method is not None:
             await _maybe_await(method(*args))
+
+    async def _call_tool_with_budget(
+        self,
+        decision: ToolDecision,
+        current: PipiState,
+    ) -> ToolResult:
+        try:
+            result_or_awaitable = self.ability_center.call(
+                decision.tool_name,
+                decision.tool_args,
+                state=current,
+            )
+            if not inspect.isawaitable(result_or_awaitable):
+                return result_or_awaitable
+            if self.tool_timeout_seconds > 0:
+                return await asyncio.wait_for(result_or_awaitable, timeout=self.tool_timeout_seconds)
+            return await result_or_awaitable
+        except TimeoutError:
+            return ToolResult(
+                ok=False,
+                tool_name=decision.tool_name,
+                status="unavailable",
+                data={
+                    "timeout": True,
+                    "timeout_seconds": self.tool_timeout_seconds,
+                    "tool_args": decision.tool_args,
+                },
+                error_message=(
+                    f"{decision.tool_name} timed out after "
+                    f"{self.tool_timeout_seconds:g} seconds"
+                ),
+            )
 
 
 class DeferredAbilityCenter:
