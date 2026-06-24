@@ -115,7 +115,6 @@ async def test_food_preference_followup_inherits_previous_location(async_client)
         async_client,
         message="我想吃川菜啊",
         conversation_id=conversation_id,
-        include_debug=True,
     )
 
     assert third["response_kind"] != "clarification"
