@@ -77,6 +77,7 @@ from app.services.intent_answer_import import (
     import_intent_answer_drafts,
     serialize_imported_intent_answer,
 )
+from app.services.intent_answer_metrics import intent_answer_memory_summary
 from app.services.help_feed import help_feed_conversion_summary
 from app.services.reward_loop_metrics import reward_loop_summary
 from app.services.runtime_latency import runtime_latency_summary
@@ -709,6 +710,14 @@ def import_admin_intent_answer_drafts(
     )
     session.commit()
     return {"ok": True, "count": len(imported), "items": imported}
+
+
+@router.get("/api/intent-answers/memory-summary")
+def get_intent_answer_memory_summary(
+    top_limit: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    return intent_answer_memory_summary(session, top_limit=top_limit)
 
 
 @router.get("/api/sessions/{conversation_id}")

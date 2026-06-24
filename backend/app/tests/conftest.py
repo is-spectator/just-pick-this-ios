@@ -44,6 +44,7 @@ NO_DB_TEST_FILES = {
     "test_help_feed_ranking.py",
     "test_input_gate_reasoner_contract.py",
     "test_input_gate_slot_extraction.py",
+    "test_intent_answer_memory_metrics.py",
     "test_no_old_graph_nodes_in_main_path.py",
     "test_no_secrets_committed.py",
     "test_one_liner_quality.py",
