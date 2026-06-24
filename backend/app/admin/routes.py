@@ -75,6 +75,7 @@ from app.services.eval_review_service import (
     review_workflow_summary,
     routing_quality_summary,
 )
+from app.services.finalizer_metrics import finalizer_summary
 from app.services.intent_answer_import import (
     import_intent_answer_drafts,
     serialize_imported_intent_answer,
@@ -426,6 +427,29 @@ def admin_image_policy_summary(
         actor=actor,
         action="view_image_policy_summary",
         table_name="image_policy_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/finalizer/summary")
+def admin_finalizer_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = finalizer_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_finalizer_summary",
+        table_name="finalizer_summary",
         target_record_id=None,
         request_json=_request_json(request, {"since_hours": since_hours}),
         before_json=None,
