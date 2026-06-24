@@ -2184,6 +2184,30 @@ struct MyAnswersScreen: View {
     @State private var snapshot = UserDashboardSnapshot.empty
     @State private var isLoading = false
 
+    private var localPendingAnswers: [SubmittedAnswerRecord] {
+        session.submittedAnswers.filter { $0.status == .pending }
+    }
+
+    private var pendingAnswerCount: Int {
+        max(
+            localPendingAnswers.count,
+            snapshot.rewardStatusCounts["pending"] ?? 0,
+            snapshot.answerStatusCounts["submitted"] ?? 0
+        )
+    }
+
+    private var acceptedAnswerCount: Int {
+        snapshot.rewardStatusCounts["granted"] ?? 0
+    }
+
+    private var rejectedAnswerCount: Int {
+        snapshot.rewardStatusCounts["rejected"] ?? 0
+    }
+
+    private var submittedCount: Int {
+        max(snapshot.answeredCount, session.submittedAnswers.count)
+    }
+
     var body: some View {
         ProductListScreen(
             title: "我的回答",
@@ -2193,12 +2217,32 @@ struct MyAnswersScreen: View {
             emptyMessage: "去来一句 Deck，写完后待采纳和奖励会显示在这里。",
             isEmpty: false
         ) {
-            ProductSection(title: "概览") {
+            ProductSection(title: "状态") {
                 HStack(spacing: 10) {
-                    ProfileMetricTile(value: "\(snapshot.answeredCount)", label: "已提交", secondary: answerTierLabel)
-                    ProfileMetricTile(value: "\(session.answerQueue.count)", label: "可回答", secondary: session.answerQueue.isEmpty ? nil : "现在可刷")
-                    ProfileMetricTile(value: "\(snapshot.pendingReward)", label: "待确认", secondary: nil)
+                    ProfileMetricTile(
+                        value: "\(pendingAnswerCount)",
+                        label: "待采纳",
+                        secondary: pendingAnswerCount > 0 ? "\(snapshot.pendingReward) 待确认" : answerTierLabel
+                    )
+                    ProfileMetricTile(
+                        value: "\(acceptedAnswerCount)",
+                        label: "已采纳",
+                        secondary: acceptedAnswerCount > 0 ? "+\(snapshot.grantedReward)" : nil
+                    )
+                    ProfileMetricTile(
+                        value: "\(rejectedAnswerCount)",
+                        label: "未采用",
+                        secondary: rejectedAnswerCount > 0 ? "+\(snapshot.rejectedReward)" : nil
+                    )
                 }
+            }
+
+            ProductSection(title: "总览") {
+                ProductActionCard(
+                    icon: "checkmark.bubble",
+                    title: "已提交 \(submittedCount) 句",
+                    subtitle: "待采纳、已采纳和未采用都会在这里归档。"
+                )
             }
 
             ProductSection(title: "继续帮别人") {
@@ -2210,6 +2254,16 @@ struct MyAnswersScreen: View {
                     )
                 }
                 .buttonStyle(.plain)
+            }
+
+            if !session.submittedAnswers.isEmpty {
+                ProductSection(title: "最近提交") {
+                    VStack(spacing: 12) {
+                        ForEach(session.submittedAnswers) { answer in
+                            SubmittedAnswerRow(answer: answer)
+                        }
+                    }
+                }
             }
 
             if !session.answerQueue.isEmpty {
@@ -2626,6 +2680,57 @@ private struct FavoriteChoiceRow: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("取消收藏")
+            }
+        }
+        .productPanel()
+    }
+}
+
+private struct SubmittedAnswerRow: View {
+    let answer: SubmittedAnswerRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "quote.bubble.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .frame(width: 34, height: 34)
+                    .background(AppTheme.bubble)
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(answer.status.label)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.green)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(AppTheme.green.opacity(0.12))
+                            .clipShape(Capsule())
+
+                        Text(answer.rewardLabel)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+
+                        Spacer(minLength: 0)
+
+                        Text(answer.timeLabel)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.textMuted)
+                    }
+
+                    Text(answer.questionTitle)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                        .lineLimit(2)
+
+                    Text(answer.text)
+                        .font(.system(size: 14))
+                        .lineSpacing(4)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(3)
+                }
             }
         }
         .productPanel()

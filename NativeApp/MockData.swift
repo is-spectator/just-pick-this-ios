@@ -603,6 +603,8 @@ struct UserDashboardSnapshot: Equatable, Sendable {
     let rejectedReward: Int
     let answeredCount: Int
     let qualityTier: String
+    let answerStatusCounts: [String: Int]
+    let rewardStatusCounts: [String: Int]
     let lightEvents: [UserLightEvent]
 
     static let empty = UserDashboardSnapshot(
@@ -611,8 +613,58 @@ struct UserDashboardSnapshot: Equatable, Sendable {
         rejectedReward: 0,
         answeredCount: 0,
         qualityTier: "new",
+        answerStatusCounts: [:],
+        rewardStatusCounts: [:],
         lightEvents: []
     )
+}
+
+enum SubmittedAnswerStatus: String, Codable, Hashable, Sendable {
+    case pending
+    case accepted
+    case rejected
+
+    var label: String {
+        switch self {
+        case .pending:
+            "待采纳"
+        case .accepted:
+            "已采纳"
+        case .rejected:
+            "未采用"
+        }
+    }
+}
+
+struct SubmittedAnswerRecord: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let helpRequestId: UUID
+    let questionTitle: String
+    let questionContext: String
+    let text: String
+    let rewardLabel: String
+    let status: SubmittedAnswerStatus
+    let timeLabel: String
+
+    init(
+        id: UUID = UUID(),
+        helpRequestId: UUID,
+        questionTitle: String,
+        questionContext: String,
+        text: String,
+        rewardLabel: String,
+        status: SubmittedAnswerStatus = .pending,
+        timeLabel: String = "刚刚"
+    ) {
+        self.id = id
+        self.helpRequestId = helpRequestId
+        self.questionTitle = questionTitle
+        self.questionContext = questionContext
+        self.text = text
+        self.rewardLabel = rewardLabel
+        self.status = status
+        self.timeLabel = timeLabel
+    }
 }
 
 struct ProfileAPIService: Sendable {
@@ -630,6 +682,8 @@ struct ProfileAPIService: Sendable {
             rejectedReward: rewards?.rejectedValue ?? 0,
             answeredCount: quality?.answers.submittedCount ?? 0,
             qualityTier: quality?.quality.tier ?? "new",
+            answerStatusCounts: quality?.answers.statusCounts ?? [:],
+            rewardStatusCounts: quality?.rewards?.statusCounts ?? [:],
             lightEvents: (lights?.items ?? []).map { item in
                 UserLightEvent(
                     id: item.id,
@@ -711,6 +765,7 @@ private struct V1ProfileRewardsResponse: Decodable {
 private struct V1ProfileAnswererQualityResponse: Decodable {
     let quality: V1ProfileQuality
     let answers: V1ProfileAnswers
+    let rewards: V1ProfileAnswerRewards?
 }
 
 private struct V1ProfileQuality: Decodable {
@@ -719,9 +774,43 @@ private struct V1ProfileQuality: Decodable {
 
 private struct V1ProfileAnswers: Decodable {
     let submittedCount: Int
+    let statusCounts: [String: Int]
 
     enum CodingKeys: String, CodingKey {
         case submittedCount = "submitted_count"
+        case statusCounts = "status_counts"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        submittedCount = try container.decodeIfPresent(Int.self, forKey: .submittedCount) ?? 0
+        statusCounts = try container.decodeIfPresent([String: Int].self, forKey: .statusCounts) ?? [:]
+    }
+}
+
+private struct V1ProfileAnswerRewards: Decodable {
+    let pendingCount: Int
+    let grantedCount: Int
+    let rejectedCount: Int
+    let statusCounts: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case pendingCount = "pending_count"
+        case grantedCount = "granted_count"
+        case rejectedCount = "rejected_count"
+        case statusCounts = "status_counts"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pendingCount = try container.decodeIfPresent(Int.self, forKey: .pendingCount) ?? 0
+        grantedCount = try container.decodeIfPresent(Int.self, forKey: .grantedCount) ?? 0
+        rejectedCount = try container.decodeIfPresent(Int.self, forKey: .rejectedCount) ?? 0
+        statusCounts = try container.decodeIfPresent([String: Int].self, forKey: .statusCounts) ?? [
+            "pending": pendingCount,
+            "granted": grantedCount,
+            "rejected": rejectedCount
+        ]
     }
 }
 
@@ -1707,6 +1796,7 @@ final class AppSession {
     private(set) var history: [QuestionHistory] = []
     private(set) var favoriteChoices: [QuestionHistory] = []
     private(set) var hiddenFavoriteChoiceIds: Set<UUID> = []
+    private(set) var submittedAnswers: [SubmittedAnswerRecord] = []
     private(set) var answerQueue: [HelpRequest] = []
     private(set) var answerTarget: HelpRequest?
     private(set) var submitState: SubmitState = .idle
@@ -1860,6 +1950,15 @@ final class AppSession {
 
         guard let request = answerRequest else { return }
         let updated = await service.answer(answer, for: request)
+        let record = SubmittedAnswerRecord(
+            helpRequestId: request.id,
+            questionTitle: request.title,
+            questionContext: request.context,
+            text: answer,
+            rewardLabel: updated.rewardLabel.isEmpty ? request.rewardLabel : updated.rewardLabel
+        )
+        submittedAnswers.removeAll { $0.helpRequestId == request.id }
+        submittedAnswers.insert(record, at: 0)
 
         if currentHelpRequest?.id == updated.id {
             currentHelpRequest = updated
