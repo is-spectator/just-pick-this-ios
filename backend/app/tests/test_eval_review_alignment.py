@@ -84,6 +84,66 @@ def test_review_alignment_tracks_human_agreement_without_database(tmp_path: Path
     assert summary["disagreement_items"][0]["case_id"] == "agent-bug-case"
 
 
+def test_review_alignment_exposes_false_positive_rate(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run-false-positive"
+    run_dir.mkdir()
+    _write_jsonl(
+        run_dir / "quality_attribution.jsonl",
+        [
+            {
+                "case_id": "false-positive-case",
+                "primary_cause": "agent_bug",
+                "quality": {"overall": 0.52},
+            },
+            {
+                "case_id": "true-not-issue-case",
+                "primary_cause": "not_issue",
+                "quality": {"overall": 0.96},
+            },
+        ],
+    )
+    _write_jsonl(
+        run_dir / "case_quality_scores.jsonl",
+        [
+            {"case_id": "false-positive-case", "quality_score": 0.52, "status": "failed"},
+            {"case_id": "true-not-issue-case", "quality_score": 0.96, "status": "passed"},
+        ],
+    )
+    append_case_review(
+        tmp_path,
+        "run-false-positive",
+        review_payload(
+            run_id="run-false-positive",
+            case_id="false-positive-case",
+            action="mark_not_issue",
+            reviewer="human",
+        ),
+    )
+    append_case_review(
+        tmp_path,
+        "run-false-positive",
+        review_payload(
+            run_id="run-false-positive",
+            case_id="true-not-issue-case",
+            action="mark_not_issue",
+            reviewer="human",
+        ),
+    )
+
+    summary = review_alignment_summary(tmp_path, "run-false-positive")
+
+    assert summary["comparable_reviews"] == 2
+    assert summary["agreements"] == 1
+    assert summary["quality_human_agreement"] == 0.5
+    assert summary["false_positive_count"] == 1
+    assert summary["false_positive_rate"] == 0.5
+    assert summary["false_negative_count"] == 0
+    assert summary["false_positive_items"][0]["case_id"] == "false-positive-case"
+    assert summary["false_positive_items"][0]["expected_cause"] == "not_issue"
+    assert summary["false_positive_items"][0]["predicted_cause"] == "agent_bug"
+    assert summary["metadata"]["false_positive_definition"].startswith("human marks not_issue")
+
+
 def test_review_alignment_marks_passed_case_as_not_issue(tmp_path: Path) -> None:
     run_dir = tmp_path / "run-2"
     run_dir.mkdir()

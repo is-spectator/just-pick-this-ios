@@ -525,6 +525,8 @@ def review_alignment_summary(reports_root: Path, run_id: str) -> dict[str, Any]:
         predicted_cause = _predicted_cause(attributions.get(case_id), scores.get(case_id))
         comparable_item = expected_cause not in {"unknown", "needs_more_data"} and predicted_cause != "unknown"
         agreed = comparable_item and expected_cause == predicted_cause
+        false_positive = comparable_item and expected_cause == "not_issue" and predicted_cause != "not_issue"
+        false_negative = comparable_item and expected_cause != "not_issue" and predicted_cause == "not_issue"
         if comparable_item:
             comparable += 1
             if agreed:
@@ -537,6 +539,8 @@ def review_alignment_summary(reports_root: Path, run_id: str) -> dict[str, Any]:
                 "predicted_cause": predicted_cause,
                 "agreed": agreed,
                 "comparable": comparable_item,
+                "false_positive": false_positive,
+                "false_negative": false_negative,
                 "reviewer": review.get("reviewer"),
                 "notes": review.get("notes") or "",
             }
@@ -544,6 +548,8 @@ def review_alignment_summary(reports_root: Path, run_id: str) -> dict[str, Any]:
 
     total_reviews = len(latest_reviews)
     disagreements = [item for item in items if item["comparable"] and not item["agreed"]]
+    false_positive_items = [item for item in items if item["false_positive"]]
+    false_negative_items = [item for item in items if item["false_negative"]]
     return {
         "run_id": run_id,
         "review_file": str(run_dir / "human_reviews.jsonl"),
@@ -552,12 +558,25 @@ def review_alignment_summary(reports_root: Path, run_id: str) -> dict[str, Any]:
         "agreements": agreements,
         "disagreements": len(disagreements),
         "agreement_rate": round(agreements / comparable, 4) if comparable else 0.0,
+        "quality_human_agreement": round(agreements / comparable, 4) if comparable else 0.0,
+        "false_positive_count": len(false_positive_items),
+        "false_positive_rate": round(len(false_positive_items) / comparable, 4) if comparable else 0.0,
+        "false_negative_count": len(false_negative_items),
+        "false_negative_rate": round(len(false_negative_items) / comparable, 4) if comparable else 0.0,
         "target_agreement_rate": 0.75,
         "target_met": bool(comparable and agreements / comparable >= 0.75),
         "by_review_action": _count_by(items, "review_action"),
         "by_predicted_cause": _count_by(items, "predicted_cause"),
         "items": items,
         "disagreement_items": disagreements,
+        "false_positive_items": false_positive_items,
+        "false_negative_items": false_negative_items,
+        "metadata": {
+            "version": "review_alignment_summary_v2",
+            "contract": "compare evaluator attribution against latest human review and expose false positives",
+            "false_positive_definition": "human marks not_issue but evaluator predicted a problem cause",
+            "false_negative_definition": "human marks a problem cause but evaluator predicted not_issue",
+        },
     }
 
 
