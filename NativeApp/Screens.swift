@@ -46,12 +46,16 @@ struct InputScreen: View {
     @State private var manualLocationText = ""
     @State private var isLocating = false
     @State private var locationMessage: String?
+    @State private var isComposerFocused = false
 
     var body: some View {
         AppChrome(
             showsBack: false,
             backAction: nil,
-            onHistory: onMenu,
+            onHistory: {
+                dismissKeyboard()
+                onMenu()
+            },
             onNewConversation: startNewConversation,
             showsHistoryBadge: showsMessageBadge
         ) {
@@ -60,6 +64,7 @@ struct InputScreen: View {
                     location: decisionLocation,
                     isLocating: isLocating,
                     action: {
+                        dismissKeyboard()
                         manualLocationText = decisionLocation?.label ?? ""
                         showsLocationPicker = true
                     }
@@ -88,6 +93,10 @@ struct InputScreen: View {
                     }
                     .scrollIndicators(.hidden)
                     .scrollDismissesKeyboard(.interactively)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 8)
+                            .onChanged { _ in dismissKeyboard() }
+                    )
                     .onChange(of: entries.count) { _, _ in
                         scrollToBottom(with: proxy)
                     }
@@ -100,6 +109,7 @@ struct InputScreen: View {
             BottomComposer(
                 text: $draft,
                 placeholder: MockData.queryPlaceholder,
+                focused: $isComposerFocused,
                 isSending: session.isSubmitting
             ) {
                 submit()
@@ -338,6 +348,7 @@ struct InputScreen: View {
     }
 
     private func dismissKeyboard() {
+        isComposerFocused = false
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }

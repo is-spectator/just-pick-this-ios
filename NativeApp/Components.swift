@@ -160,6 +160,7 @@ struct TopBar: View {
 
 struct BottomComposer: View {
     @Binding var text: String
+    @Binding private var externalFocus: Bool
     let placeholder: String
     let isSending: Bool
     let onSend: () -> Void
@@ -173,16 +174,19 @@ struct BottomComposer: View {
     private func send() {
         guard canSend else { return }
         isFocused = false
+        externalFocus = false
         onSend()
     }
 
     init(
         text: Binding<String>,
         placeholder: String,
+        focused: Binding<Bool> = .constant(false),
         isSending: Bool = false,
         onSend: @escaping () -> Void
     ) {
         self._text = text
+        self._externalFocus = focused
         self.placeholder = placeholder
         self.isSending = isSending
         self.onSend = onSend
@@ -243,14 +247,24 @@ struct BottomComposer: View {
                 Spacer()
                 Button("收起") {
                     isFocused = false
+                    externalFocus = false
                 }
                 .font(.system(size: 15, weight: .semibold))
                 .accessibilityLabel("收起键盘")
             }
         }
+        .onChange(of: externalFocus) { _, focused in
+            guard focused != isFocused else { return }
+            isFocused = focused
+        }
+        .onChange(of: isFocused) { _, focused in
+            guard focused != externalFocus else { return }
+            externalFocus = focused
+        }
         .onChange(of: isSending) { _, sending in
             if sending {
                 isFocused = false
+                externalFocus = false
             }
         }
     }
