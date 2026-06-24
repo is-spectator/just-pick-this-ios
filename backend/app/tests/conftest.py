@@ -26,6 +26,7 @@ NO_DB_TEST_FILES = {
     "test_area_food_evidence_policy_profiles.py",
     "test_benchmark_500_distribution.py",
     "test_benchmark_non_empty_guard.py",
+    "test_card_feedback_metrics.py",
     "test_card_contract_and_answer_gate.py",
     "test_checkpoint_runtime_guard.py",
     "test_context_builder.py",
