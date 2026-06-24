@@ -15,6 +15,7 @@ from app.models import AdminAuditLog, Intent, IntentAnswer
 
 
 OPS_SEED_PATCH_SOURCE_TYPE = "ops_seed_patch"
+PUBLISHABLE_SEED_SOURCE_TYPES = {OPS_SEED_PATCH_SOURCE_TYPE, "admin_intent_answer_import"}
 
 
 def latest_accepted_seed_patch(
@@ -124,6 +125,61 @@ def serialize_seed_intent_answer_draft(answer: IntentAnswer) -> dict[str, Any]:
     }
 
 
+def publish_seed_intent_answer(
+    session: Session,
+    *,
+    answer_id: str,
+    reviewer: str,
+) -> IntentAnswer:
+    """Activate an ops-managed IntentAnswer draft for product retrieval."""
+
+    answer = _seed_intent_answer_by_id(session, answer_id)
+    evidence = dict(answer.evidence_json or {})
+    evidence.update(
+        {
+            "draft": False,
+            "approved": True,
+            "published_by": reviewer,
+            "published_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    answer.evidence_json = evidence
+    answer.is_active = True
+    if "published" not in (answer.tags_json or []):
+        answer.tags_json = [*(answer.tags_json or []), "published"]
+    session.flush()
+    return answer
+
+
+def rollback_seed_intent_answer(
+    session: Session,
+    *,
+    answer_id: str,
+    reviewer: str,
+    reason: str | None = None,
+) -> IntentAnswer:
+    """Deactivate an ops-managed IntentAnswer without deleting audit history."""
+
+    answer = _seed_intent_answer_by_id(session, answer_id)
+    evidence = dict(answer.evidence_json or {})
+    evidence.update(
+        {
+            "approved": False,
+            "rolled_back": True,
+            "rolled_back_by": reviewer,
+            "rolled_back_at": datetime.now(timezone.utc).isoformat(),
+            "rollback_reason": reason,
+        }
+    )
+    answer.evidence_json = evidence
+    answer.is_active = False
+    answer.tags_json = [tag for tag in (answer.tags_json or []) if tag != "published"]
+    if "rolled_back" not in answer.tags_json:
+        answer.tags_json = [*answer.tags_json, "rolled_back"]
+    session.flush()
+    return answer
+
+
 def seed_workflow_summary(
     session: Session,
     *,
@@ -165,6 +221,8 @@ def seed_workflow_summary(
     review_by_case: dict[str, list[AdminAuditLog]] = {}
     draft_by_case: dict[str, list[AdminAuditLog]] = {}
     import_by_case: dict[str, list[AdminAuditLog]] = {}
+    publish_by_case: dict[str, list[AdminAuditLog]] = {}
+    rollback_by_case: dict[str, list[AdminAuditLog]] = {}
     for audit in audits:
         if audit.action == "review_eval_case" and audit.target_record_id:
             review_by_case.setdefault(str(audit.target_record_id), []).append(audit)
@@ -175,12 +233,22 @@ def seed_workflow_summary(
         elif audit.action == "import_intent_answer_drafts":
             for source_ref in _source_refs_from_import_audit(audit):
                 import_by_case.setdefault(source_ref, []).append(audit)
+        elif audit.action == "publish_seed_intent_answer":
+            source_ref = _source_ref_from_audit(audit)
+            if source_ref:
+                publish_by_case.setdefault(source_ref, []).append(audit)
+        elif audit.action == "rollback_seed_intent_answer":
+            source_ref = _source_ref_from_audit(audit)
+            if source_ref:
+                rollback_by_case.setdefault(source_ref, []).append(audit)
 
     items: list[dict[str, Any]] = []
     processed_count = 0
     reviewed_count = 0
     accepted_count = 0
     drafted_count = 0
+    published_count = 0
+    rolled_back_count = 0
     processing_hours: list[float] = []
     for candidate in selected:
         case_ids = _candidate_case_ids(candidate)
@@ -188,6 +256,8 @@ def seed_workflow_summary(
         reviews = [audit for key in keys for audit in review_by_case.get(key, [])]
         drafts = [audit for key in keys for audit in draft_by_case.get(key, [])]
         imports = [audit for key in keys for audit in import_by_case.get(key, [])]
+        publishes = [audit for key in keys for audit in publish_by_case.get(key, [])]
+        rollbacks = [audit for key in keys for audit in rollback_by_case.get(key, [])]
         accepted_reviews = [
             audit
             for audit in reviews
@@ -196,17 +266,23 @@ def seed_workflow_summary(
         reviewed = bool(reviews)
         accepted = bool(accepted_reviews)
         drafted = bool(drafts or imports)
-        processed = bool(reviewed or drafted)
+        published = bool(publishes)
+        rolled_back = bool(rollbacks)
+        processed = bool(reviewed or drafted or published)
         if reviewed:
             reviewed_count += 1
         if accepted:
             accepted_count += 1
         if drafted:
             drafted_count += 1
+        if published:
+            published_count += 1
+        if rolled_back:
+            rolled_back_count += 1
         if processed:
             processed_count += 1
 
-        event_at = _first_audit_at([*reviews, *drafts, *imports])
+        event_at = _first_audit_at([*reviews, *drafts, *imports, *publishes, *rollbacks])
         hours = None
         if event_at and candidate_created_at:
             hours = max(0.0, (event_at - candidate_created_at).total_seconds() / 3600.0)
@@ -221,6 +297,8 @@ def seed_workflow_summary(
                 "reviewed": reviewed,
                 "accepted_seed_gap": accepted,
                 "intent_answer_drafted": drafted,
+                "intent_answer_published": published,
+                "intent_answer_rolled_back": rolled_back,
                 "processed": processed,
                 "first_processed_at": event_at.isoformat() if event_at else None,
                 "processing_hours": round(hours, 2) if hours is not None else None,
@@ -240,9 +318,12 @@ def seed_workflow_summary(
         "reviewed_count": reviewed_count,
         "accepted_seed_gap_count": accepted_count,
         "intent_answer_draft_count": drafted_count,
+        "intent_answer_publish_count": published_count,
+        "intent_answer_rollback_count": rolled_back_count,
         "processed_count": processed_count,
         "processing_rate": round(processing_rate, 4),
         "intent_answer_draft_rate": round(draft_rate, 4),
+        "intent_answer_publish_rate": round(published_count / total, 4) if total else 0.0,
         "target_processing_rate": target_processing_rate,
         "processing_rate_target_met": bool(total and processing_rate >= target_processing_rate),
         "average_processing_hours": round(avg_hours, 2) if avg_hours is not None else None,
@@ -263,6 +344,21 @@ def _upsert_intent(session: Session, *, intent_key: str, seed_patch: Mapping[str
     intent.is_active = True
     session.flush()
     return intent
+
+
+def _seed_intent_answer_by_id(session: Session, answer_id: str) -> IntentAnswer:
+    try:
+        import uuid
+
+        resolved_id = uuid.UUID(str(answer_id))
+    except ValueError as exc:
+        raise ValueError("invalid intent_answer id") from exc
+    answer = session.get(IntentAnswer, resolved_id)
+    if answer is None:
+        raise ValueError("intent_answer not found")
+    if answer.source_type not in PUBLISHABLE_SEED_SOURCE_TYPES:
+        raise ValueError("intent_answer is not managed by seed ops workflow")
+    return answer
 
 
 def _intent_name(seed_patch: Mapping[str, Any]) -> str:
@@ -342,7 +438,12 @@ def _seed_workflow_audits(session: Session, *, case_keys: list[str]) -> list[Adm
     if not case_keys:
         return []
     direct_actions = {"review_eval_case"}
-    indirect_actions = {"create_seed_intent_answer_draft", "import_intent_answer_drafts"}
+    indirect_actions = {
+        "create_seed_intent_answer_draft",
+        "import_intent_answer_drafts",
+        "publish_seed_intent_answer",
+        "rollback_seed_intent_answer",
+    }
     audits = session.scalars(
         select(AdminAuditLog)
         .where(AdminAuditLog.action.in_(direct_actions | indirect_actions))
@@ -358,6 +459,9 @@ def _seed_workflow_audits(session: Session, *, case_keys: list[str]) -> list[Adm
             filtered.append(audit)
             continue
         if audit.action == "import_intent_answer_drafts" and (set(_source_refs_from_import_audit(audit)) & key_set):
+            filtered.append(audit)
+            continue
+        if audit.action in {"publish_seed_intent_answer", "rollback_seed_intent_answer"} and _source_ref_from_audit(audit) in key_set:
             filtered.append(audit)
     return filtered
 
@@ -472,6 +576,8 @@ __all__ = [
     "OPS_SEED_PATCH_SOURCE_TYPE",
     "create_seed_intent_answer_draft",
     "latest_accepted_seed_patch",
+    "publish_seed_intent_answer",
+    "rollback_seed_intent_answer",
     "seed_workflow_summary",
     "serialize_seed_intent_answer_draft",
 ]

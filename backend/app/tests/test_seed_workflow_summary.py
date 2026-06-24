@@ -82,9 +82,15 @@ def test_seed_workflow_summary_counts_review_and_draft_without_db(tmp_path: Path
         after_json={"source_ref_id": "run-1:seed-gap-case"},
         created_at="2026-06-25T00:00:00+00:00",
     )
+    publish = _audit(
+        action="publish_seed_intent_answer",
+        target_record_id="intent-answer-id",
+        after_json={"source_ref_id": "run-1:seed-gap-case"},
+        created_at="2026-06-25T01:00:00+00:00",
+    )
 
     summary = seed_workflow_summary(
-        _FakeSession([review, draft]),  # type: ignore[arg-type]
+        _FakeSession([review, draft, publish]),  # type: ignore[arg-type]
         reports_root=tmp_path,
         run_id="run-1",
         top_limit=1,
@@ -95,12 +101,15 @@ def test_seed_workflow_summary_counts_review_and_draft_without_db(tmp_path: Path
     assert summary["reviewed_count"] == 1
     assert summary["accepted_seed_gap_count"] == 1
     assert summary["intent_answer_draft_count"] == 1
+    assert summary["intent_answer_publish_count"] == 1
     assert summary["processing_rate"] == 1
     assert summary["intent_answer_draft_rate"] == 1
+    assert summary["intent_answer_publish_rate"] == 1
     assert summary["processing_rate_target_met"] is True
     assert summary["average_processing_hours"] == 12
     assert summary["processing_time_target_met"] is True
     assert summary["items"][0]["case_ids"] == ["seed-gap-case"]
+    assert summary["items"][0]["intent_answer_published"] is True
 
 
 def test_seed_workflow_summary_exposes_unprocessed_candidates(tmp_path: Path) -> None:
@@ -117,5 +126,6 @@ def test_seed_workflow_summary_exposes_unprocessed_candidates(tmp_path: Path) ->
     assert summary["processed_count"] == 0
     assert summary["processing_rate"] == 0
     assert summary["processing_rate_target_met"] is False
+    assert summary["intent_answer_publish_count"] == 0
     assert summary["average_processing_hours"] is None
     assert summary["items"][0]["processed"] is False

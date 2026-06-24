@@ -261,6 +261,48 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert drafted_body["processing_time_target_met"] is True
     assert drafted_body["items"][0]["intent_answer_drafted"] is True
 
+    publish = await client.post(
+        f"/admin/api/intent-answers/{draft_body['id']}/publish",
+        headers=_headers(),
+        json={"notes": "publish reviewed seed"},
+    )
+    assert publish.status_code == 200, publish.text
+    published = publish.json()["intent_answer"]
+    assert published["id"] == draft_body["id"]
+    assert published["is_active"] is True
+    assert published["evidence"]["approved"] is True
+    assert published["evidence"]["draft"] is False
+
+    published_summary = await client.get(
+        "/admin/api/eval-runs/run-1/seed-workflow-summary?top_limit=1",
+        headers=_headers(),
+    )
+    assert published_summary.status_code == 200, published_summary.text
+    published_body = published_summary.json()
+    assert published_body["intent_answer_publish_count"] == 1
+    assert published_body["intent_answer_publish_rate"] == 1
+    assert published_body["items"][0]["intent_answer_published"] is True
+
+    rollback = await client.post(
+        f"/admin/api/intent-answers/{draft_body['id']}/rollback",
+        headers=_headers(),
+        json={"reason": "bad evidence"},
+    )
+    assert rollback.status_code == 200, rollback.text
+    rolled_back = rollback.json()["intent_answer"]
+    assert rolled_back["is_active"] is False
+    assert rolled_back["evidence"]["approved"] is False
+    assert rolled_back["evidence"]["rolled_back"] is True
+
+    rollback_summary = await client.get(
+        "/admin/api/eval-runs/run-1/seed-workflow-summary?top_limit=1",
+        headers=_headers(),
+    )
+    assert rollback_summary.status_code == 200, rollback_summary.text
+    rollback_body = rollback_summary.json()
+    assert rollback_body["intent_answer_rollback_count"] == 1
+    assert rollback_body["items"][0]["intent_answer_rolled_back"] is True
+
     with session_scope() as session:
         audit = session.scalar(
             select(AdminAuditLog)
@@ -287,6 +329,22 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
         assert draft_audit is not None
         assert draft_audit.target_table == "intent_answers"
         assert draft_audit.after_json["id"] == draft_body["id"]
+        publish_audit = session.scalar(
+            select(AdminAuditLog)
+            .where(AdminAuditLog.action == "publish_seed_intent_answer")
+            .order_by(AdminAuditLog.created_at.desc())
+            .limit(1)
+        )
+        assert publish_audit is not None
+        assert publish_audit.after_json["is_active"] is True
+        rollback_audit = session.scalar(
+            select(AdminAuditLog)
+            .where(AdminAuditLog.action == "rollback_seed_intent_answer")
+            .order_by(AdminAuditLog.created_at.desc())
+            .limit(1)
+        )
+        assert rollback_audit is not None
+        assert rollback_audit.after_json["is_active"] is False
 
     invalid = await client.post(
         "/admin/api/eval-runs/run-1/cases/seed-gap-case/review",

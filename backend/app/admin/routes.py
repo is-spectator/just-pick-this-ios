@@ -98,6 +98,8 @@ from app.services.prompt_config import (
 from app.services.seed_patch_workflow import (
     create_seed_intent_answer_draft,
     latest_accepted_seed_patch,
+    publish_seed_intent_answer,
+    rollback_seed_intent_answer,
     seed_workflow_summary,
     serialize_seed_intent_answer_draft,
 )
@@ -776,6 +778,72 @@ def create_eval_seed_intent_answer_draft(
     )
     session.commit()
     return {"ok": True, "intent_answer": draft}
+
+
+@router.post("/api/intent-answers/{answer_id}/publish")
+def publish_admin_intent_answer(
+    request: Request,
+    answer_id: str,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    _require_admin_role(request, {"admin", "content_ops"})
+    actor = _admin_actor(request)
+    before = _intent_answer_snapshot(session, answer_id)
+    try:
+        answer = publish_seed_intent_answer(session, answer_id=answer_id, reviewer=actor)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    after = serialize_seed_intent_answer_draft(answer)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="publish_seed_intent_answer",
+        table_name="intent_answers",
+        target_record_id=str(answer.id),
+        request_json=_request_json(request, extra=dict(payload or {})),
+        before_json=before,
+        after_json=after,
+    )
+    session.commit()
+    return {"ok": True, "intent_answer": after}
+
+
+@router.post("/api/intent-answers/{answer_id}/rollback")
+def rollback_admin_intent_answer(
+    request: Request,
+    answer_id: str,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    _require_admin_role(request, {"admin", "content_ops"})
+    actor = _admin_actor(request)
+    body = payload or {}
+    before = _intent_answer_snapshot(session, answer_id)
+    try:
+        answer = rollback_seed_intent_answer(
+            session,
+            answer_id=answer_id,
+            reviewer=actor,
+            reason=str(body.get("reason") or "").strip() or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    after = serialize_seed_intent_answer_draft(answer)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="rollback_seed_intent_answer",
+        table_name="intent_answers",
+        target_record_id=str(answer.id),
+        request_json=_request_json(request, extra=body),
+        before_json=before,
+        after_json=after,
+    )
+    session.commit()
+    return {"ok": True, "intent_answer": after}
 
 
 @router.post("/api/intent-answers/import-drafts")
@@ -2208,6 +2276,17 @@ def _pagination(*, page: int, page_size: int, total: int) -> dict[str, int | boo
         "total": total,
         "has_next": page * page_size < total,
     }
+
+
+def _intent_answer_snapshot(session: Session, answer_id: str) -> dict[str, Any] | None:
+    try:
+        resolved_id = uuid.UUID(str(answer_id))
+    except ValueError:
+        return None
+    answer = session.get(IntentAnswer, resolved_id)
+    if answer is None:
+        return None
+    return serialize_seed_intent_answer_draft(answer)
 
 
 def _write_audit(
