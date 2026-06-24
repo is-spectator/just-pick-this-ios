@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.services.eval_review_service import (
     append_case_review,
+    low_quality_queue_summary,
     review_alignment_summary,
     review_payload,
 )
@@ -101,3 +102,68 @@ def test_review_alignment_marks_passed_case_as_not_issue(tmp_path: Path) -> None
     assert summary["agreement_rate"] == 1.0
     assert summary["target_met"] is True
     assert summary["items"][0]["predicted_cause"] == "not_issue"
+
+
+def test_low_quality_queue_summary_tracks_cause_review_and_trace_coverage(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run-3"
+    run_dir.mkdir()
+    _write_jsonl(
+        run_dir / "quality_attribution.jsonl",
+        [
+            {
+                "case_id": "seed-gap-case",
+                "group": "area_food",
+                "message": "朝阳区热干面",
+                "primary_cause": "seed_gap",
+                "quality": {"overall": 0.42},
+                "trace": {"agent_run_id": "agent-1", "runtime_path": "product"},
+            },
+            {
+                "case_id": "agent-bug-case",
+                "group": "venue_order",
+                "message": "三里屯海底捞帮我点",
+                "primary_cause": "agent_bug",
+                "quality": {"overall": 0.31},
+                "trace": {"agent_run_id": "agent-2", "runtime_path": "product"},
+            },
+            {
+                "case_id": "passed-case",
+                "group": "smalltalk_app_help_unknown",
+                "message": "你好",
+                "primary_cause": "not_issue",
+                "quality": {"overall": 0.96},
+            },
+        ],
+    )
+    _write_jsonl(
+        run_dir / "case_quality_scores.jsonl",
+        [
+            {"case_id": "seed-gap-case", "quality_score": 0.42, "status": "failed"},
+            {"case_id": "agent-bug-case", "quality_score": 0.31, "status": "failed"},
+            {"case_id": "passed-case", "quality_score": 0.96, "status": "passed"},
+        ],
+    )
+    append_case_review(
+        tmp_path,
+        "run-3",
+        review_payload(
+            run_id="run-3",
+            case_id="seed-gap-case",
+            action="accept_seed_gap",
+            reviewer="human",
+        ),
+    )
+
+    summary = low_quality_queue_summary(tmp_path, "run-3")
+
+    assert summary["low_quality_count"] == 2
+    assert summary["reviewed_count"] == 1
+    assert summary["pending_review_count"] == 1
+    assert summary["processing_rate"] == 0.5
+    assert summary["trace_available_count"] == 2
+    assert summary["trace_coverage_rate"] == 1.0
+    assert summary["by_primary_cause"] == {"agent_bug": 1, "seed_gap": 1}
+    assert summary["by_review_action"] == {"accept_seed_gap": 1}
+    assert [item["case_id"] for item in summary["top_cases"]] == ["agent-bug-case", "seed-gap-case"]
+    assert summary["top_cases"][1]["reviewed"] is True
+    assert summary["top_cases"][1]["trace_replay"]["admin_trace_api_path"] == "/admin/api/traces/agent-1"

@@ -64,6 +64,7 @@ from app.services.eval_review_service import (
     case_detail as eval_case_detail,
     list_eval_runs as list_eval_report_runs,
     low_quality_cases as eval_low_quality_cases,
+    low_quality_queue_summary,
     resolve_reports_root,
     review_payload as build_eval_review_payload,
     review_alignment_summary,
@@ -494,6 +495,16 @@ def list_eval_low_quality_cases(
             primary_cause=primary_cause,
         ),
     }
+
+
+@router.get("/api/eval-runs/{run_id}/low-quality-summary")
+def get_eval_low_quality_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return low_quality_queue_summary(reports_root, run_id, limit=limit)
 
 
 @router.get("/api/eval-runs/{run_id}/cases/{case_id}")

@@ -107,6 +107,14 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert low_quality.json()["items"][0]["case_id"] == "seed-gap-case"
     assert low_quality.json()["items"][0]["primary_cause"] == "seed_gap"
 
+    queue_summary = await client.get("/admin/api/eval-runs/run-1/low-quality-summary", headers=_headers())
+    assert queue_summary.status_code == 200, queue_summary.text
+    queue_body = queue_summary.json()
+    assert queue_body["low_quality_count"] == 1
+    assert queue_body["pending_review_count"] == 1
+    assert queue_body["by_primary_cause"] == {"seed_gap": 1}
+    assert queue_body["top_cases"][0]["trace_replay"]["admin_trace_api_path"] == "/admin/api/traces/agent-review"
+
     detail = await client.get("/admin/api/eval-runs/run-1/cases/seed-gap-case", headers=_headers())
     assert detail.status_code == 200
     assert detail.json()["quality"]["case_id"] == "seed-gap-case"

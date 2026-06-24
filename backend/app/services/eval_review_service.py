@@ -80,6 +80,70 @@ def low_quality_cases(
     return items
 
 
+def low_quality_queue_summary(
+    reports_root: Path,
+    run_id: str,
+    *,
+    limit: int = 50,
+    low_quality_threshold: float = 0.75,
+) -> dict[str, Any]:
+    run_dir = _run_dir(reports_root, run_id)
+    attributions = _load_jsonl(run_dir / "quality_attribution.jsonl")
+    scores = {str(item.get("case_id")): item for item in _load_jsonl(run_dir / "case_quality_scores.jsonl")}
+    latest_reviews = _latest_reviews_by_case(_load_jsonl(run_dir / "human_reviews.jsonl"))
+
+    low_quality_items: list[dict[str, Any]] = []
+    for attribution in attributions:
+        case_id = str(attribution.get("case_id") or "")
+        score = scores.get(case_id, {})
+        quality = _mapping(attribution.get("quality"))
+        if float(quality.get("overall") or score.get("quality_score") or 1.0) >= low_quality_threshold:
+            continue
+        item = _case_summary_payload(attribution, score=score)
+        review = latest_reviews.get(case_id)
+        item["reviewed"] = review is not None
+        item["review_action"] = review.get("action") if review else None
+        item["reviewer"] = review.get("reviewer") if review else None
+        low_quality_items.append(item)
+
+    total = len(low_quality_items)
+    reviewed_count = sum(1 for item in low_quality_items if item["reviewed"])
+    trace_available_count = sum(
+        1
+        for item in low_quality_items
+        if _mapping(item.get("trace_replay")).get("trace_available") is True
+    )
+    sorted_items = sorted(
+        low_quality_items,
+        key=lambda item: (float(item.get("quality_score") or 1.0), str(item.get("case_id") or "")),
+    )
+    return {
+        "run_id": run_id,
+        "low_quality_threshold": low_quality_threshold,
+        "low_quality_count": total,
+        "reviewed_count": reviewed_count,
+        "pending_review_count": max(0, total - reviewed_count),
+        "processing_rate": round(reviewed_count / total, 4) if total else 0.0,
+        "trace_available_count": trace_available_count,
+        "trace_coverage_rate": round(trace_available_count / total, 4) if total else 0.0,
+        "by_primary_cause": _count_by(low_quality_items, "primary_cause"),
+        "by_review_action": _count_by(
+            [item for item in low_quality_items if item.get("review_action")],
+            "review_action",
+        ),
+        "top_cases": sorted_items[: max(1, int(limit or 1))],
+        "metadata": {
+            "version": "low_quality_queue_summary_v1",
+            "review_file": str(run_dir / "human_reviews.jsonl"),
+            "source_files": [
+                "quality_attribution.jsonl",
+                "case_quality_scores.jsonl",
+                "human_reviews.jsonl",
+            ],
+        },
+    }
+
+
 def case_detail(reports_root: Path, run_id: str, case_id: str) -> dict[str, Any]:
     run_dir = _run_dir(reports_root, run_id)
     result = _find_jsonl(run_dir / "results.jsonl", case_id)
