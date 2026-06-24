@@ -476,17 +476,33 @@ def _provider_fallback_summary(provider_fallbacks: list[dict[str, Any]]) -> dict
     statuses = [str(item.get("status") or "unknown") for item in provider_fallbacks]
     error_types = [str(item.get("error_type") or "unknown") for item in provider_fallbacks]
     providers = [str(item.get("provider")) for item in provider_fallbacks if item.get("provider")]
+    total = len(provider_fallbacks)
+    fallbacks = statuses.count("fallback")
+    disabled = statuses.count("disabled")
+    schema_errors = error_types.count("schema_error")
+    provider_errors = error_types.count("provider_error")
+    timeouts = error_types.count("timeout")
     return {
         "enabled": True,
         "provider": providers[0] if providers else None,
-        "calls": len(provider_fallbacks),
-        "fallbacks": statuses.count("fallback"),
-        "disabled": statuses.count("disabled"),
-        "schema_errors": error_types.count("schema_error"),
-        "provider_errors": error_types.count("provider_error"),
-        "timeouts": error_types.count("timeout"),
+        "calls": total,
+        "fallbacks": fallbacks,
+        "disabled": disabled,
+        "schema_errors": schema_errors,
+        "provider_errors": provider_errors,
+        "timeouts": timeouts,
+        "fallback_rate": _rate(fallbacks, total),
+        "schema_error_rate": _rate(schema_errors, total),
+        "provider_error_rate": _rate(provider_errors, total),
+        "timeout_rate": _rate(timeouts, total),
         "product_output_unchanged": True,
     }
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 4)
 
 
 def _shadow_state_snapshot(state: PipiState) -> dict[str, Any]:

@@ -257,5 +257,7 @@ def test_openai_product_reasoner_invalid_schema_falls_back_to_deterministic(
         assert fallback_events[0].get("data", {}).get("error_type") == "schema_error"
         summary = body.get("metadata", {}).get("loop", {}).get("reasoner_provider_fallback")
         assert summary["schema_errors"] >= 1
+        assert summary["schema_error_rate"] > 0
+        assert summary["fallback_rate"] > 0
 
     run_async(scenario)

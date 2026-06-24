@@ -84,6 +84,10 @@ def test_openai_provider_error_records_fallback_event_without_changing_answer(
         summary = result.state["reasoner_provider_fallback_summary"]
         assert summary["fallbacks"] == 1
         assert summary["provider_errors"] == 1
+        assert summary["fallback_rate"] == 1.0
+        assert summary["provider_error_rate"] == 1.0
+        assert summary["schema_error_rate"] == 0.0
+        assert summary["timeout_rate"] == 0.0
 
     try:
         run_async(scenario)
@@ -122,6 +126,8 @@ def test_openai_schema_error_records_fallback_event_without_changing_tools(
         assert fallback["data"]["error_type"] == "schema_error"
         summary = result.state["reasoner_provider_fallback_summary"]
         assert summary["schema_errors"] == 1
+        assert summary["fallback_rate"] == 1.0
+        assert summary["schema_error_rate"] == 1.0
         assert summary["product_output_unchanged"] is True
 
     try:
