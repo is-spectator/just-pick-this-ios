@@ -92,7 +92,7 @@ def render_experiment_lift_markdown(report: Mapping[str, Any]) -> str:
             "",
             f"- Baseline: `{payload.get('baseline_variant')}`",
             "",
-            "| Variant | Cases | Pass Rate | Avg Quality | Accept Rate | Δ Pass | Δ Quality |",
+            "| Variant | Cases | Pass Rate | Variant Quality | Accept Rate | Δ Pass | Δ Quality |",
             "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
         variants = _mapping(payload.get("variants"))
@@ -102,9 +102,9 @@ def render_experiment_lift_markdown(report: Mapping[str, Any]) -> str:
             delta = _mapping(deltas.get(variant_id))
             lines.append(
                 f"| `{variant_id}` | {item.get('case_count', 0)} | "
-                f"{item.get('pass_rate', 0):.3f} | {item.get('average_quality', 0):.3f} | "
+                f"{item.get('pass_rate', 0):.3f} | {item.get('variant_quality', item.get('average_quality', 0)):.3f} | "
                 f"{item.get('accept_rate', 0):.3f} | {delta.get('pass_rate_delta', 0):.3f} | "
-                f"{delta.get('average_quality_delta', 0):.3f} |"
+                f"{delta.get('variant_quality_delta', delta.get('average_quality_delta', 0)):.3f} |"
             )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
@@ -120,6 +120,7 @@ def _summarize_variant(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "passed_count": passed,
         "pass_rate": round(passed / total, 4) if total else 0.0,
         "average_quality": round(sum(score.quality_score for score in scores) / total, 4) if total else 0.0,
+        "variant_quality": round(sum(score.quality_score for score in scores) / total, 4) if total else 0.0,
         "accepted_count": accepted,
         "accept_rate": round(accepted / total, 4) if total else 0.0,
         "case_ids": [str(row.get("case_id") or row.get("id") or "") for row in rows[:20]],
@@ -139,6 +140,10 @@ def _variant_deltas(
             "pass_rate_delta": round(float(_mapping(item).get("pass_rate") or 0) - float(baseline.get("pass_rate") or 0), 4),
             "average_quality_delta": round(
                 float(_mapping(item).get("average_quality") or 0) - float(baseline.get("average_quality") or 0),
+                4,
+            ),
+            "variant_quality_delta": round(
+                float(_mapping(item).get("variant_quality") or 0) - float(baseline.get("variant_quality") or 0),
                 4,
             ),
             "accept_rate_delta": round(float(_mapping(item).get("accept_rate") or 0) - float(baseline.get("accept_rate") or 0), 4),
@@ -174,4 +179,3 @@ def _is_accepted(row: Mapping[str, Any]) -> bool:
 
 def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
-

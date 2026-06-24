@@ -80,12 +80,17 @@ def test_experiment_lift_report_groups_quality_by_variant(tmp_path) -> None:
     variants = report["experiments"]["pipi_card_copy_v1"]["variants"]
     assert variants["control"]["case_count"] == 1
     assert variants["control"]["accept_rate"] == 1.0
+    assert variants["control"]["variant_quality"] == variants["control"]["average_quality"]
     assert variants["concise_copy"]["case_count"] == 2
+    deltas = report["experiments"]["pipi_card_copy_v1"]["deltas"]
+    assert "variant_quality_delta" in deltas["concise_copy"]
 
     paths = write_quality_reports(rows, tmp_path)
     assert paths["experiment_lift_markdown"].exists()
     assert paths["experiment_lift_json"].exists()
-    assert "Experiment Lift Report" in paths["experiment_lift_markdown"].read_text(encoding="utf-8")
+    markdown = paths["experiment_lift_markdown"].read_text(encoding="utf-8")
+    assert "Experiment Lift Report" in markdown
+    assert "Variant Quality" in markdown
 
 
 def _result_row(
