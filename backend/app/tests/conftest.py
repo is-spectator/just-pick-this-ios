@@ -49,6 +49,7 @@ NO_DB_TEST_FILES = {
     "test_no_secrets_committed.py",
     "test_one_liner_quality.py",
     "test_openai_guardrails.py",
+    "test_personalization_metrics.py",
     "test_post_experience_review_summary.py",
     "test_product_benchmark_readiness.py",
     "test_product_benchmark_runtime_gate.py",
