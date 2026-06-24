@@ -136,6 +136,13 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert "average_routing_score" in routing_body
     assert routing_body["metadata"]["contract"].startswith("venue+ordering")
 
+    evidence = await client.get("/admin/api/eval-runs/run-1/evidence-summary", headers=_headers())
+    assert evidence.status_code == 200, evidence.text
+    evidence_body = evidence.json()
+    assert evidence_body["scored_case_count"] == 1
+    assert "average_evidence_grounding_score" in evidence_body
+    assert evidence_body["metadata"]["contract"].startswith("recommendation cards need evidence")
+
     detail = await client.get("/admin/api/eval-runs/run-1/cases/seed-gap-case", headers=_headers())
     assert detail.status_code == 200
     assert detail.json()["quality"]["case_id"] == "seed-gap-case"

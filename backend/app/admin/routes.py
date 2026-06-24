@@ -63,6 +63,7 @@ from app.services.eval_review_service import (
     append_case_review,
     card_contract_summary,
     case_detail as eval_case_detail,
+    evidence_quality_summary,
     help_card_quality_summary,
     list_eval_runs as list_eval_report_runs,
     low_quality_cases as eval_low_quality_cases,
@@ -540,6 +541,16 @@ def get_eval_routing_summary(
 ) -> dict[str, Any]:
     reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
     return routing_quality_summary(reports_root, run_id, limit=limit)
+
+
+@router.get("/api/eval-runs/{run_id}/evidence-summary")
+def get_eval_evidence_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return evidence_quality_summary(reports_root, run_id, limit=limit)
 
 
 @router.get("/api/eval-runs/{run_id}/cases/{case_id}")

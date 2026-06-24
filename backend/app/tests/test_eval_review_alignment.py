@@ -6,6 +6,7 @@ from pathlib import Path
 from app.services.eval_review_service import (
     append_case_review,
     card_contract_summary,
+    evidence_quality_summary,
     help_card_quality_summary,
     low_quality_queue_summary,
     review_alignment_summary,
@@ -432,4 +433,69 @@ def test_review_workflow_summary_tracks_throughput_fix_and_seed_patch_counts(
     assert summary["by_label"] == {"area_food": 1, "router": 1, "seed": 1}
     assert summary["metadata"]["contract"] == (
         "human review with suggested_fix/seed_patch and low-quality processing visibility"
+    )
+
+
+def test_evidence_quality_summary_tracks_missing_evidence_and_image_policy_issues(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run-8"
+    run_dir.mkdir()
+    _write_jsonl(
+        run_dir / "case_quality_scores.jsonl",
+        [
+            {
+                "case_id": "missing-evidence",
+                "quality_score": 0.55,
+                "status": "failed",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"evidence_grounding": 0.45},
+                "metadata": {"category": "area_food", "message": "朝阳区热干面"},
+                "issues": [
+                    {"code": "recommendation_card_missing_evidence_ids"},
+                    {"code": "recommendation_card_image_asset_missing_source_domain"},
+                ],
+            },
+            {
+                "case_id": "bad-image",
+                "quality_score": 0.7,
+                "status": "degraded",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"evidence_safety": 0.7},
+                "metadata": {"category": "product_decision"},
+                "issues": [
+                    {"code": "recommendation_card_image_asset_not_verified"},
+                    {"code": "recommendation_card_image_asset_not_displayable"},
+                    {"code": "recommendation_card_image_asset_ai_generated"},
+                ],
+            },
+            {
+                "case_id": "clean-evidence",
+                "quality_score": 1.0,
+                "status": "passed",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"evidence_grounding": 1.0},
+                "metadata": {"category": "area_food"},
+                "issues": [],
+            },
+        ],
+    )
+
+    summary = evidence_quality_summary(tmp_path, "run-8")
+
+    assert summary["scored_case_count"] == 3
+    assert summary["average_evidence_grounding_score"] == 0.7167
+    assert summary["evidence_issue_case_count"] == 2
+    assert summary["missing_evidence_count"] == 1
+    assert summary["image_not_verified_count"] == 1
+    assert summary["image_not_displayable_count"] == 1
+    assert summary["ai_image_count"] == 1
+    assert summary["image_missing_source_domain_count"] == 1
+    assert summary["by_category"] == {"area_food": 1, "product_decision": 1}
+    assert [item["case_id"] for item in summary["top_cases"]] == ["missing-evidence", "bad-image"]
+    assert summary["metadata"]["contract"] == (
+        "recommendation cards need evidence_ids; optional images must be verified/displayable/non-AI"
     )

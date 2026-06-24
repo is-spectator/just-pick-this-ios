@@ -371,6 +371,82 @@ def routing_quality_summary(
     }
 
 
+def evidence_quality_summary(
+    reports_root: Path,
+    run_id: str,
+    *,
+    limit: int = 50,
+) -> dict[str, Any]:
+    run_dir = _run_dir(reports_root, run_id)
+    scores = _load_jsonl(run_dir / "case_quality_scores.jsonl")
+    issue_counts: dict[str, int] = {}
+    evidence_cases: list[dict[str, Any]] = []
+    total_evidence_score = 0.0
+    scored_count = 0
+    for score in scores:
+        dimensions = _mapping(score.get("dimensions"))
+        evidence_score = _safe_float(
+            dimensions.get("evidence_grounding", dimensions.get("evidence_safety")),
+            default=1.0,
+        )
+        total_evidence_score += evidence_score
+        scored_count += 1
+        issues = [_mapping(issue) for issue in (score.get("issues") or []) if isinstance(issue, Mapping)]
+        for issue in issues:
+            code = str(issue.get("code") or "unknown")
+            issue_counts[code] = issue_counts.get(code, 0) + 1
+        evidence_issue_codes = [str(issue.get("code") or "") for issue in issues if _is_evidence_quality_issue(issue)]
+        if evidence_score < 1.0 or evidence_issue_codes:
+            metadata = _mapping(score.get("metadata"))
+            evidence_cases.append(
+                {
+                    "case_id": score.get("case_id"),
+                    "category": metadata.get("category") or score.get("category") or score.get("group"),
+                    "message": metadata.get("message") or score.get("message"),
+                    "quality_score": score.get("quality_score"),
+                    "evidence_grounding_score": evidence_score,
+                    "status": score.get("status"),
+                    "actual_kind": score.get("actual_kind"),
+                    "expected_kind": score.get("expected_kind"),
+                    "issues": evidence_issue_codes,
+                }
+            )
+
+    sorted_cases = sorted(
+        evidence_cases,
+        key=lambda item: (float(item.get("evidence_grounding_score") or 1.0), str(item.get("case_id") or "")),
+    )
+    return {
+        "run_id": run_id,
+        "scored_case_count": scored_count,
+        "average_evidence_grounding_score": round(total_evidence_score / scored_count, 4) if scored_count else 0.0,
+        "evidence_issue_case_count": len(evidence_cases),
+        "missing_evidence_count": _sum_issue_counts(
+            issue_counts,
+            {
+                "recommendation_card_missing_evidence",
+                "recommendation_card_missing_evidence_ids",
+                "missing_evidence",
+            },
+        ),
+        "image_not_verified_count": issue_counts.get("recommendation_card_image_asset_not_verified", 0),
+        "image_not_displayable_count": issue_counts.get("recommendation_card_image_asset_not_displayable", 0),
+        "ai_image_count": issue_counts.get("recommendation_card_image_asset_ai_generated", 0),
+        "image_missing_source_domain_count": issue_counts.get(
+            "recommendation_card_image_asset_missing_source_domain",
+            0,
+        ),
+        "issue_counts": dict(sorted(issue_counts.items())),
+        "by_category": _count_by(evidence_cases, "category"),
+        "top_cases": sorted_cases[: max(1, int(limit or 1))],
+        "metadata": {
+            "version": "evidence_quality_summary_v1",
+            "source_files": ["case_quality_scores.jsonl"],
+            "contract": "recommendation cards need evidence_ids; optional images must be verified/displayable/non-AI",
+        },
+    }
+
+
 def case_detail(reports_root: Path, run_id: str, case_id: str) -> dict[str, Any]:
     run_dir = _run_dir(reports_root, run_id)
     result = _find_jsonl(run_dir / "results.jsonl", case_id)
@@ -642,6 +718,11 @@ def _is_routing_issue(issue: Mapping[str, Any]) -> bool:
         }
         or code.startswith("venue_order_")
     )
+
+
+def _is_evidence_quality_issue(issue: Mapping[str, Any]) -> bool:
+    code = str(issue.get("code") or "")
+    return "evidence" in code or "image_asset" in code or code in {"missing_evidence"}
 
 
 def _sum_issue_counts(issue_counts: Mapping[str, int], codes: set[str]) -> int:
