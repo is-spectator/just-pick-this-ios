@@ -4,6 +4,10 @@ enum AppRoute: Hashable {
     case resultDatong
     case askKorea
     case answerDeck
+    case myHelp
+    case myAnswers
+    case favorites
+    case rewards
     case profile
 }
 
@@ -56,6 +60,10 @@ struct RootView: View {
                     onNewConversation: startNewConversationFromDrawer,
                     onSelectHistory: openHistoryItem,
                     onOpenAnswerDeck: { openDrawerRoute(.answerDeck) },
+                    onOpenMyHelp: { openDrawerRoute(.myHelp) },
+                    onOpenMyAnswers: { openDrawerRoute(.myAnswers) },
+                    onOpenFavorites: { openDrawerRoute(.favorites) },
+                    onOpenRewards: { openDrawerRoute(.rewards) },
                     onOpenProfile: { openDrawerRoute(.profile) },
                     onLogin: {
                         closeDrawer()
@@ -127,6 +135,17 @@ struct RootView: View {
                     )
                 case .answerDeck:
                     AnswerScreen(session: session)
+                case .myHelp:
+                    MyHelpScreen(session: session, onSelectHistory: openHistoryItem)
+                case .myAnswers:
+                    MyAnswersScreen(session: session, onOpenAnswerDeck: {
+                        path.removeAll()
+                        path.append(.answerDeck)
+                    })
+                case .favorites:
+                    FavoritesScreen(session: session, onSelectHistory: openHistoryItem)
+                case .rewards:
+                    RewardsScreen(authRevision: authRevision)
                 case .profile:
                     ProfileScreen(
                         session: session,
@@ -226,6 +245,10 @@ private struct ChatDrawer: View {
     let onNewConversation: () -> Void
     let onSelectHistory: (QuestionHistory) -> Void
     let onOpenAnswerDeck: () -> Void
+    let onOpenMyHelp: () -> Void
+    let onOpenMyAnswers: () -> Void
+    let onOpenFavorites: () -> Void
+    let onOpenRewards: () -> Void
     let onOpenProfile: () -> Void
     let onLogin: () -> Void
 
@@ -392,9 +415,10 @@ private struct ChatDrawer: View {
     private var featureEntrances: some View {
         VStack(spacing: AppTheme.Spacing.xs) {
             DrawerActionRow(icon: "bubble.left.and.bubble.right", title: "来一句", subtitle: "帮别人少纠结一次", action: onOpenAnswerDeck)
-            DrawerActionRow(icon: "questionmark.bubble", title: "我的求一个", subtitle: "草稿、收集中和已完成", action: onOpenProfile)
-            DrawerActionRow(icon: "bookmark", title: "收藏", subtitle: "保存过的选择", action: onOpenProfile)
-            DrawerActionRow(icon: "gift", title: "奖励", subtitle: "积分和采纳明细", action: onOpenProfile)
+            DrawerActionRow(icon: "questionmark.bubble", title: "我的求一个", subtitle: "草稿、收集中和已完成", action: onOpenMyHelp)
+            DrawerActionRow(icon: "quote.bubble", title: "我的回答", subtitle: "待采纳、已采纳和未采用", action: onOpenMyAnswers)
+            DrawerActionRow(icon: "bookmark", title: "收藏", subtitle: "保存过的选择", action: onOpenFavorites)
+            DrawerActionRow(icon: "gift", title: "奖励", subtitle: "积分和采纳明细", action: onOpenRewards)
         }
     }
 

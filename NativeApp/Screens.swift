@@ -1744,6 +1744,471 @@ struct ProfileScreen: View {
     }
 }
 
+struct MyHelpScreen: View {
+    let session: AppSession
+    let onSelectHistory: (QuestionHistory) -> Void
+
+    private var helpItems: [QuestionHistory] {
+        session.history.filter { item in
+            item.helpRequestId != nil
+            || item.status == "waiting_for_human"
+            || item.status == "answer_received"
+        }
+    }
+
+    private var currentDraft: HelpRequest? {
+        guard session.currentHelpRequest?.status == .draft else { return nil }
+        return session.currentHelpRequest
+    }
+
+    var body: some View {
+        ProductListScreen(
+            title: "我的求一个",
+            subtitle: "草稿、收集中和已有结果都在这里。",
+            systemImage: "questionmark.bubble",
+            emptyTitle: "还没有求一个",
+            emptyMessage: "在聊天里点“求一个”，发出去后就会出现在这里。",
+            isEmpty: currentDraft == nil && helpItems.isEmpty
+        ) {
+            if let currentDraft {
+                ProductSection(title: "草稿") {
+                    RequestCard(request: currentDraft)
+                }
+            }
+
+            if !helpItems.isEmpty {
+                ProductSection(title: "历史") {
+                    VStack(spacing: 0) {
+                        ForEach(Array(helpItems.enumerated()), id: \.element.id) { index, item in
+                            Button {
+                                onSelectHistory(item)
+                            } label: {
+                                ProfileHistoryRow(item: item)
+                            }
+                            .buttonStyle(.plain)
+
+                            if index < helpItems.count - 1 {
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    }
+                    .productPanel()
+                }
+            }
+        }
+    }
+}
+
+struct MyAnswersScreen: View {
+    let session: AppSession
+    let onOpenAnswerDeck: () -> Void
+
+    @State private var snapshot = UserDashboardSnapshot.empty
+    @State private var isLoading = false
+
+    var body: some View {
+        ProductListScreen(
+            title: "我的回答",
+            subtitle: "看你来过的一句，以及还有哪些题可以顺手帮忙。",
+            systemImage: "quote.bubble",
+            emptyTitle: "还没来过一句",
+            emptyMessage: "去来一句 Deck，写完后待采纳和奖励会显示在这里。",
+            isEmpty: false
+        ) {
+            ProductSection(title: "概览") {
+                HStack(spacing: 10) {
+                    ProfileMetricTile(value: "\(snapshot.answeredCount)", label: "已提交", secondary: answerTierLabel)
+                    ProfileMetricTile(value: "\(session.answerQueue.count)", label: "可回答", secondary: session.answerQueue.isEmpty ? nil : "现在可刷")
+                    ProfileMetricTile(value: "\(snapshot.pendingReward)", label: "待确认", secondary: nil)
+                }
+            }
+
+            ProductSection(title: "继续帮别人") {
+                Button(action: onOpenAnswerDeck) {
+                    ProductActionCard(
+                        icon: "bubble.left.and.bubble.right.fill",
+                        title: "打开来一句",
+                        subtitle: "一屏一张求助卡，写一句就切下一张。"
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if !session.answerQueue.isEmpty {
+                ProductSection(title: "可回答") {
+                    VStack(spacing: 12) {
+                        ForEach(session.answerQueue.prefix(3)) { request in
+                            AnswerRequestSquareCard(request: request, reward: request.rewardLabel)
+                        }
+                    }
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await loadSnapshot() }
+                } label: {
+                    if isLoading {
+                        ProgressView()
+                            .tint(AppTheme.text)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+                .disabled(isLoading)
+                .accessibilityLabel("刷新")
+            }
+        }
+        .refreshable {
+            await loadSnapshot()
+        }
+        .task {
+            await loadSnapshot()
+            await session.loadAnswerQueue()
+        }
+    }
+
+    private var answerTierLabel: String? {
+        switch snapshot.qualityTier {
+        case "reliable": "靠谱答主"
+        case "promising": "正在变靠谱"
+        case "at_risk": "需要更认真"
+        default: nil
+        }
+    }
+
+    @MainActor
+    private func loadSnapshot() async {
+        guard !isLoading else { return }
+        isLoading = true
+        snapshot = await ProfileAPIService().fetchSnapshot()
+        isLoading = false
+    }
+}
+
+struct FavoritesScreen: View {
+    let session: AppSession
+    let onSelectHistory: (QuestionHistory) -> Void
+
+    private var savedChoices: [QuestionHistory] {
+        session.history.filter { item in
+            item.topPick != nil || item.status == "completed" || item.status == "top1"
+        }
+    }
+
+    var body: some View {
+        ProductListScreen(
+            title: "收藏",
+            subtitle: "保存过、采纳过和值得回看的选择。",
+            systemImage: "bookmark",
+            emptyTitle: "还没有收藏",
+            emptyMessage: "推荐卡右上角的“…”里可以收藏。已经采纳的选择也会先放在这里。",
+            isEmpty: savedChoices.isEmpty
+        ) {
+            if !savedChoices.isEmpty {
+                ProductSection(title: "最近保存") {
+                    VStack(spacing: 12) {
+                        ForEach(savedChoices) { item in
+                            Button {
+                                onSelectHistory(item)
+                            } label: {
+                                FavoriteChoiceRow(item: item)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct RewardsScreen: View {
+    let authRevision: Int
+
+    @State private var snapshot = UserDashboardSnapshot.empty
+    @State private var isLoading = false
+
+    var body: some View {
+        ProductListScreen(
+            title: "奖励",
+            subtitle: "待确认、已获得和未采用奖励都在这里。",
+            systemImage: "gift",
+            emptyTitle: "还没有奖励明细",
+            emptyMessage: "帮别人来一句，被采纳后奖励会出现在这里。",
+            isEmpty: false
+        ) {
+            ProductSection(title: "积分") {
+                HStack(spacing: 10) {
+                    ProfileMetricTile(value: "\(snapshot.grantedReward)", label: "已获得", secondary: nil)
+                    ProfileMetricTile(value: "\(snapshot.pendingReward)", label: "待确认", secondary: nil)
+                    ProfileMetricTile(value: "\(snapshot.rejectedReward)", label: "未采用", secondary: nil)
+                }
+            }
+
+            ProductSection(title: "说明") {
+                VStack(alignment: .leading, spacing: 12) {
+                    RewardExplanationRow(icon: "clock", title: "待确认", subtitle: "对方还没采纳，先挂起。")
+                    RewardExplanationRow(icon: "checkmark.seal", title: "已获得", subtitle: "你的来一句被采纳，奖励入账。")
+                    RewardExplanationRow(icon: "minus.circle", title: "未采用", subtitle: "这次没被选中，不影响继续回答。")
+                }
+                .productPanel()
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await loadSnapshot() }
+                } label: {
+                    if isLoading {
+                        ProgressView()
+                            .tint(AppTheme.text)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+                .disabled(isLoading)
+                .accessibilityLabel("刷新")
+            }
+        }
+        .refreshable {
+            await loadSnapshot()
+        }
+        .task(id: authRevision) {
+            await loadSnapshot()
+        }
+    }
+
+    @MainActor
+    private func loadSnapshot() async {
+        guard !isLoading else { return }
+        isLoading = true
+        snapshot = await ProfileAPIService().fetchSnapshot()
+        isLoading = false
+    }
+}
+
+private struct ProductListScreen<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let emptyTitle: String
+    let emptyMessage: String
+    let isEmpty: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                ProductHeroHeader(title: title, subtitle: subtitle, systemImage: systemImage)
+
+                content
+
+                if isEmpty {
+                    ProductEmptyState(title: emptyTitle, message: emptyMessage, systemImage: systemImage)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+            .padding(.bottom, 32)
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.large)
+    }
+}
+
+private struct ProductHeroHeader: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(AppTheme.text)
+                .frame(width: 48, height: 48)
+                .background(AppTheme.bubble)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+
+                Text(subtitle)
+                    .font(.system(size: 14))
+                    .lineSpacing(4)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AppTheme.border, lineWidth: 1)
+        )
+    }
+}
+
+private struct ProductSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ProfileSectionHeader(title: title)
+            content
+        }
+    }
+}
+
+private struct ProductEmptyState: View {
+    let title: String
+    let message: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(AppTheme.textMuted)
+
+            Text(title)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppTheme.text)
+
+            Text(message)
+                .font(.system(size: 14))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .productPanel()
+    }
+}
+
+private struct ProductActionCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(AppTheme.text)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                Text(subtitle)
+                    .font(.system(size: 13))
+                    .lineSpacing(3)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.textMuted)
+        }
+        .padding(16)
+        .background(AppTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(AppTheme.border, lineWidth: 1)
+        )
+    }
+}
+
+private struct FavoriteChoiceRow: View {
+    let item: QuestionHistory
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .frame(width: 34, height: 34)
+                    .background(AppTheme.bubble)
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.topPick?.title ?? item.query)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                        .lineLimit(2)
+
+                    Text(item.topPick?.reason ?? item.statusLabel)
+                        .font(.system(size: 13))
+                        .lineSpacing(3)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+        .productPanel()
+    }
+}
+
+private struct RewardExplanationRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+                .frame(width: 32, height: 32)
+                .background(AppTheme.bubble)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                Text(subtitle)
+                    .font(.system(size: 13))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            Spacer()
+        }
+    }
+}
+
+private extension View {
+    func productPanel() -> some View {
+        self
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+    }
+}
+
 private struct ProfileSectionHeader: View {
     let title: String
 
