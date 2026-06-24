@@ -101,6 +101,12 @@ async def run_product_benchmark(config: ProductBenchmarkConfig) -> dict[str, Any
         "evaluated_cases": len(rows),
         "guard": guard,
         "runtime_gate": runtime_gate,
+        "benchmark_coverage": _benchmark_coverage_summary(
+            benchmark_path=config.benchmark_path,
+            rows=rows,
+            total_case_count=len(cases),
+            limit=config.limit,
+        ),
         "stats": _benchmark_stats(rows),
         "report_paths": report_paths,
     }
@@ -410,6 +416,7 @@ def _write_latest_pointer(output_dir: Path, summary: Mapping[str, Any]) -> None:
         "results_path": summary.get("results_path"),
         "evaluated_cases": summary.get("evaluated_cases"),
         "runtime_gate": summary.get("runtime_gate"),
+        "benchmark_coverage": summary.get("benchmark_coverage"),
         "stats": summary.get("stats"),
     }
     (output_dir.parent / "latest.json").write_text(
@@ -471,6 +478,18 @@ def _write_blocked_benchmark_summary(
             "runtime_path_counts": {},
             "slowest_cases": [],
         },
+        "benchmark_coverage": {
+            "suite_id": _suite_id(config.benchmark_path),
+            "target_case_count": None,
+            "case_count": 0,
+            "evaluated_case_count": 0,
+            "is_limited_run": config.limit is not None,
+            "coverage_complete": False,
+            "runtime_path_required": "product",
+            "by_category": {},
+            "evaluated_by_category": {},
+            "expected_distribution": {},
+        },
         "runtime_gate": {
             "ok": False,
             "total_rows": 0,
@@ -530,11 +549,17 @@ def _render_summary_markdown(summary: Mapping[str, Any]) -> str:
     guard = summary.get("guard") if isinstance(summary.get("guard"), Mapping) else {}
     stats = summary.get("stats") if isinstance(summary.get("stats"), Mapping) else {}
     latency = stats.get("latency") if isinstance(stats.get("latency"), Mapping) else {}
+    coverage = summary.get("benchmark_coverage") if isinstance(summary.get("benchmark_coverage"), Mapping) else {}
     lines = [
         "# Product Benchmark Summary",
         "",
         f"- OK: `{bool(summary.get('ok'))}`",
         f"- Evaluated cases: `{int(summary.get('evaluated_cases') or 0)}`",
+        f"- Suite: `{coverage.get('suite_id') or 'unknown'}`",
+        f"- Target case count: `{_display(coverage.get('target_case_count'))}`",
+        f"- Benchmark case count: `{_display(coverage.get('case_count'))}`",
+        f"- Coverage complete: `{bool(coverage.get('coverage_complete'))}`",
+        f"- Limited run: `{bool(coverage.get('is_limited_run'))}`",
         f"- Results path: `{summary.get('results_path')}`",
         f"- Rows with latency: `{int(guard.get('latency_rows') or 0)}`",
         f"- Runtime gate failed rows: `{int(_runtime_gate(summary).get('failed_rows') or 0)}`",
@@ -543,6 +568,21 @@ def _render_summary_markdown(summary: Mapping[str, Any]) -> str:
         f"- Max latency: `{_display(latency.get('max_ms'))}` ms",
         "",
     ]
+    if coverage:
+        by_category = coverage.get("by_category") if isinstance(coverage.get("by_category"), Mapping) else {}
+        evaluated_by_category = (
+            coverage.get("evaluated_by_category")
+            if isinstance(coverage.get("evaluated_by_category"), Mapping)
+            else {}
+        )
+        lines += ["## Benchmark Coverage", ""]
+        if by_category:
+            lines += ["| Category | Cases | Evaluated |", "| --- | ---: | ---: |"]
+            for category, count in sorted(by_category.items()):
+                lines.append(f"| `{category}` | {count} | {evaluated_by_category.get(category, 0)} |")
+            lines.append("")
+        else:
+            lines += ["None.", ""]
     runtime_gate = _runtime_gate(summary)
     failure_samples = runtime_gate.get("failure_samples")
     if isinstance(failure_samples, list) and failure_samples:
@@ -613,6 +653,51 @@ def _render_blocked_summary_markdown(summary: Mapping[str, Any]) -> str:
         "Start the database or use `./scripts/test.sh` for the managed integration test path, then rerun the benchmark.",
     ]
     return "\n".join(lines) + "\n"
+
+
+def _benchmark_coverage_summary(
+    *,
+    benchmark_path: Path,
+    rows: Sequence[Mapping[str, Any]],
+    total_case_count: int,
+    limit: int | None,
+) -> dict[str, Any]:
+    payload = _safe_benchmark_payload(benchmark_path)
+    cases = payload.get("cases") if isinstance(payload.get("cases"), list) else []
+    expected_distribution = payload.get("expected_distribution")
+    expected_distribution = expected_distribution if isinstance(expected_distribution, Mapping) else {}
+    target_case_count = payload.get("target_case_count")
+    by_category = Counter(str(case.get("category") or "unknown") for case in cases if isinstance(case, Mapping))
+    evaluated_by_category = Counter(str(row.get("category") or row.get("group") or "unknown") for row in rows)
+    return {
+        "suite_id": str(payload.get("suite_id") or _suite_id(benchmark_path)),
+        "target_case_count": target_case_count,
+        "case_count": total_case_count,
+        "evaluated_case_count": len(rows),
+        "is_limited_run": limit is not None,
+        "coverage_complete": limit is None
+        and len(rows) == total_case_count
+        and (target_case_count is None or total_case_count == _safe_int(target_case_count)),
+        "runtime_path_required": "product",
+        "by_category": dict(sorted(by_category.items())),
+        "evaluated_by_category": dict(sorted(evaluated_by_category.items())),
+        "expected_distribution": dict(expected_distribution),
+    }
+
+
+def _safe_benchmark_payload(path: Path) -> Mapping[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, Mapping) else {}
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _display(value: Any) -> str:
