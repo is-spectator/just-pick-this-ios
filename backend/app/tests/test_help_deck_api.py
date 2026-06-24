@@ -781,6 +781,7 @@ def test_one_liner_rejects_low_quality_and_cross_user_duplicate(
         assert low_quality.status_code == 422
         assert low_quality.json()["detail"]["code"] == "one_liner_low_quality"
         assert _help_answer_count(help_card_id) == 0
+        assert _reward_event_count_for_help_card(help_card_id) == 0
 
         first = await async_client.post(
             f"/v1/help-cards/{help_card_id}/one-liner",
@@ -803,6 +804,7 @@ def test_one_liner_rejects_low_quality_and_cross_user_duplicate(
         assert duplicate.status_code == 409
         assert duplicate.json()["detail"] == "duplicate_answer"
         assert _help_answer_count(help_card_id) == 1
+        assert _reward_event_count_for_help_card(help_card_id) == 1
 
     run_async(scenario)
 

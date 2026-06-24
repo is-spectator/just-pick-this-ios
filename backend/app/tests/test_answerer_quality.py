@@ -69,6 +69,7 @@ def test_answerer_quality_rates_track_granted_and_spam_answers() -> None:
 def test_answerer_quality_summary_handles_empty_denominators() -> None:
     summary = answerer_quality_summary_from_counts(
         submitted_count=0,
+        reward_pending_count=0,
         reward_granted_count=0,
         reward_rejected_count=0,
         review_rejection_count=0,
@@ -77,3 +78,31 @@ def test_answerer_quality_summary_handles_empty_denominators() -> None:
     assert summary["rates"]["granted_rate"] is None
     assert summary["rates"]["spam_answer_rate"] is None
     assert summary["negative_answer_count"] == 0
+    assert summary["reward_eligible_answer_count"] == 0
+    assert summary["reward_eligibility"] == {
+        "eligible_rate": None,
+        "pending_rate": None,
+        "granted_rate": None,
+        "rejected_rate": None,
+    }
+
+
+def test_answerer_quality_summary_tracks_reward_eligibility() -> None:
+    summary = answerer_quality_summary_from_counts(
+        submitted_count=10,
+        reward_pending_count=2,
+        reward_granted_count=5,
+        reward_rejected_count=1,
+        review_rejection_count=2,
+        reward_status_counts={"pending": 2, "granted": 5, "rejected": 1},
+    )
+
+    assert summary["reward_eligible_answer_count"] == 8
+    assert summary["reward_pending_count"] == 2
+    assert summary["reward_eligibility"] == {
+        "eligible_rate": 0.8,
+        "pending_rate": 0.2,
+        "granted_rate": 0.5,
+        "rejected_rate": 0.1,
+    }
+    assert summary["rates"]["spam_answer_rate"] == 0.3

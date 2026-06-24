@@ -194,6 +194,7 @@ def answerer_quality_summary(
     )
     return answerer_quality_summary_from_counts(
         submitted_count=submitted_count,
+        reward_pending_count=reward_counts.get("pending", 0),
         reward_granted_count=reward_counts.get("granted", 0),
         reward_rejected_count=reward_counts.get("rejected", 0),
         review_rejection_count=review_rejection_count,
@@ -208,6 +209,7 @@ def answerer_quality_summary_from_counts(
     submitted_count: int,
     reward_granted_count: int,
     reward_rejected_count: int,
+    reward_pending_count: int = 0,
     review_rejection_count: int = 0,
     window_start: Any | None = None,
     window_hours: int | None = None,
@@ -223,17 +225,33 @@ def answerer_quality_summary_from_counts(
         "window_start": window_start.isoformat() if hasattr(window_start, "isoformat") else window_start,
         "window_hours": window_hours,
         "submitted_count": max(0, int(submitted_count or 0)),
+        "reward_pending_count": max(0, int(reward_pending_count or 0)),
         "reward_granted_count": max(0, int(reward_granted_count or 0)),
         "reward_rejected_count": max(0, int(reward_rejected_count or 0)),
         "review_rejection_count": max(0, int(review_rejection_count or 0)),
         "negative_answer_count": max(0, int(reward_rejected_count or 0))
         + max(0, int(review_rejection_count or 0)),
+        "reward_eligible_answer_count": max(0, int(reward_pending_count or 0))
+        + max(0, int(reward_granted_count or 0))
+        + max(0, int(reward_rejected_count or 0)),
         "rates": rates,
+        "reward_eligibility": {
+            "eligible_rate": _rate(
+                max(0, int(reward_pending_count or 0))
+                + max(0, int(reward_granted_count or 0))
+                + max(0, int(reward_rejected_count or 0)),
+                submitted_count,
+            ),
+            "pending_rate": _rate(reward_pending_count, submitted_count),
+            "granted_rate": rates["granted_rate"],
+            "rejected_rate": rates["reward_rejected_rate"],
+        },
         "reward_status_counts": reward_status_counts or {},
         "metadata": {
             "version": "answerer_quality_summary_v1",
             "spam_answer_rate": "(reward_rejected + one_liner_rejected_review_tasks) / submitted_count",
             "granted_rate": "reward_granted / submitted_count",
+            "reward_eligibility_rate": "(reward_pending + reward_granted + reward_rejected) / submitted_count",
         },
     }
 
