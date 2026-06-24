@@ -30,8 +30,7 @@ private enum ChatEntry: Identifiable {
 struct InputScreen: View {
     let session: AppSession
     let onDecision: (RecommendationDecision) -> Void
-    let onAnswerEntry: (() -> Void)?
-    let onAccountEntry: () -> Void
+    let onMenu: () -> Void
     let onHistorySelect: (QuestionHistory) -> Void
 
     @State private var draft = ""
@@ -40,17 +39,14 @@ struct InputScreen: View {
     @State private var toastTask: Task<Void, Never>?
     @State private var isAcceptingPick = false
     @State private var isPublishingHelp = false
-    @State private var showsHistory = false
     @State private var showsNewConversationToast = false
 
     var body: some View {
         AppChrome(
             showsBack: false,
             backAction: nil,
-            onHistory: { showsHistory = true },
-            onNewConversation: startNewConversation,
-            onAnswerEntry: onAnswerEntry,
-            onAccountEntry: onAccountEntry
+            onHistory: onMenu,
+            onNewConversation: startNewConversation
         ) {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -107,22 +103,6 @@ struct InputScreen: View {
                     .padding(.top, 8)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
-        }
-        .sheet(isPresented: $showsHistory) {
-            ChatHistorySheet(
-                history: session.history,
-                onAccountEntry: {
-                    showsHistory = false
-                    onAccountEntry()
-                },
-                onNewConversation: {
-                    showsHistory = false
-                    startNewConversation()
-                },
-                onSelect: openHistoryItem
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
         .animation(.easeOut(duration: 0.18), value: session.isSubmitting)
     }
@@ -252,7 +232,6 @@ struct InputScreen: View {
     }
 
     private func openHistoryItem(_ item: QuestionHistory) {
-        showsHistory = false
         submitTask?.cancel()
         dismissKeyboard()
         draft = ""
@@ -261,78 +240,6 @@ struct InputScreen: View {
 
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-    }
-}
-
-private struct ChatHistorySheet: View {
-    let history: [QuestionHistory]
-    let onAccountEntry: () -> Void
-    let onNewConversation: () -> Void
-    let onSelect: (QuestionHistory) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if history.isEmpty {
-                    EmptyHistoryView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(history) { item in
-                                Button {
-                                    dismiss()
-                                    onSelect(item)
-                                } label: {
-                                    HistorySessionRow(item: item)
-                                }
-                                .buttonStyle(.plain)
-
-                                Divider()
-                                    .padding(.leading, 16)
-                            }
-                        }
-                        .background(AppTheme.card)
-                    }
-                    .scrollIndicators(.hidden)
-                }
-            }
-            .background(AppTheme.background)
-            .navigationTitle("历史")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("关闭") {
-                        dismiss()
-                    }
-                    .foregroundStyle(AppTheme.text)
-                }
-
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                        onAccountEntry()
-                    } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 17, weight: .medium))
-                    }
-                    .foregroundStyle(AppTheme.text)
-                    .accessibilityLabel("账号")
-
-                    Button {
-                        dismiss()
-                        onNewConversation()
-                    } label: {
-                        Image(systemName: "plus.message")
-                            .font(.system(size: 17, weight: .medium))
-                    }
-                    .foregroundStyle(AppTheme.text)
-                    .accessibilityLabel("新对话")
-                }
-            }
-        }
     }
 }
 
@@ -527,56 +434,6 @@ struct EmailLoginView: View {
             isSubmitting = false
             message = "已退出。"
         }
-    }
-}
-
-private struct HistorySessionRow: View {
-    let item: QuestionHistory
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.query)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(AppTheme.text)
-                    .lineLimit(1)
-
-                Text(item.statusLabel)
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.textMuted)
-            }
-
-            Spacer(minLength: 12)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.textMuted)
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 64)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("打开 \(item.query), \(item.statusLabel)")
-    }
-}
-
-private struct EmptyHistoryView: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(AppTheme.textMuted)
-
-            Text("还没有历史")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(AppTheme.text)
-
-            Text("问过的问题会出现在这里。")
-                .font(.system(size: 13))
-                .foregroundStyle(AppTheme.textSecondary)
-        }
-        .padding(.horizontal, 24)
-        .multilineTextAlignment(.center)
     }
 }
 
@@ -1473,96 +1330,6 @@ struct ServiceNoticePill: View {
     }
 }
 
-struct HistoryPanel: View {
-    let history: [QuestionHistory]
-    let onSelect: (QuestionHistory) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("最近问过")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(AppTheme.textMuted)
-
-            ForEach(history) { item in
-                Button {
-                    onSelect(item)
-                } label: {
-                    HStack(spacing: 10) {
-                        Text(item.query)
-                            .font(.system(size: 13))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        Text(item.statusLabel)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AppTheme.textMuted)
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(AppTheme.textMuted)
-                    }
-                    .frame(minHeight: 36)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("打开最近问过 \(item.query)")
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(AppTheme.border, lineWidth: 1)
-        )
-    }
-}
-
-struct HistoryRail: View {
-    let history: [QuestionHistory]
-    @Binding var isExpanded: Bool
-    let onSelect: (QuestionHistory) -> Void
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                VStack(spacing: 7) {
-                    Image(systemName: isExpanded ? "chevron.left" : "clock.arrow.circlepath")
-                        .font(.system(size: 14, weight: .semibold))
-
-                    Text("最近")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(AppTheme.text)
-                .frame(width: 42, height: 92)
-                .background(AppTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(AppTheme.border, lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.06), radius: 16, x: 0, y: 8)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? "收起最近问过" : "展开最近问过")
-
-            if isExpanded {
-                HistoryPanel(history: history, onSelect: onSelect)
-                    .frame(width: 292)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-            }
-        }
-        .padding(.leading, -4)
-    }
-}
-
 struct EmptyAnswerQueueCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2079,8 +1846,7 @@ private struct BottomComposerPreviewHost: View {
     InputScreen(
         session: AppSession(service: MockCloudRecommendationService()),
         onDecision: { _ in },
-        onAnswerEntry: {},
-        onAccountEntry: {},
+        onMenu: {},
         onHistorySelect: { _ in }
     )
 }

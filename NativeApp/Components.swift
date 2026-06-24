@@ -5,8 +5,6 @@ struct AppChrome<Content: View, Footer: View>: View {
     let backAction: (() -> Void)?
     let onHistory: (() -> Void)?
     let onNewConversation: (() -> Void)?
-    let onAnswerEntry: (() -> Void)?
-    let onAccountEntry: (() -> Void)?
     let showsTopBar: Bool
     @ViewBuilder let content: Content
     @ViewBuilder let footer: Footer
@@ -18,8 +16,6 @@ struct AppChrome<Content: View, Footer: View>: View {
         backAction: (() -> Void)?,
         onHistory: (() -> Void)? = nil,
         onNewConversation: (() -> Void)? = nil,
-        onAnswerEntry: (() -> Void)? = nil,
-        onAccountEntry: (() -> Void)? = nil,
         showsTopBar: Bool = true,
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
@@ -28,8 +24,6 @@ struct AppChrome<Content: View, Footer: View>: View {
         self.backAction = backAction
         self.onHistory = onHistory
         self.onNewConversation = onNewConversation
-        self.onAnswerEntry = onAnswerEntry
-        self.onAccountEntry = onAccountEntry
         self.showsTopBar = showsTopBar
         self.content = content()
         self.footer = footer()
@@ -41,9 +35,7 @@ struct AppChrome<Content: View, Footer: View>: View {
                 TopBar(
                     showsBack: showsBack,
                     onHistory: onHistory,
-                    onNewConversation: onNewConversation,
-                    onAnswerEntry: onAnswerEntry,
-                    onAccountEntry: onAccountEntry
+                    onNewConversation: onNewConversation
                 ) {
                     if let backAction {
                         backAction()
@@ -67,8 +59,6 @@ struct TopBar: View {
     let showsBack: Bool
     let onHistory: (() -> Void)?
     let onNewConversation: (() -> Void)?
-    let onAnswerEntry: (() -> Void)?
-    let onAccountEntry: (() -> Void)?
     let onBack: () -> Void
 
     var body: some View {
@@ -96,56 +86,46 @@ struct TopBar: View {
             .padding(.horizontal, 16)
             .frame(height: 50)
         } else {
-            HStack(spacing: 14) {
+            HStack(spacing: 0) {
+                if let onHistory {
+                    Button(action: onHistory) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(AppTheme.Icon.toolbar)
+                            .foregroundStyle(AppTheme.text)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("打开菜单")
+                } else {
+                    Color.clear
+                        .frame(width: 44, height: 44)
+                }
+
+                Spacer()
+
                 Text("皮皮")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(AppTheme.Typography.nav)
                     .foregroundStyle(AppTheme.text)
                     .accessibilityAddTraits(.isHeader)
 
                 Spacer()
 
-                if let onHistory {
-                    Button(action: onHistory) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(AppTheme.text)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("历史")
-                }
-
                 if let onNewConversation {
                     Button(action: onNewConversation) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "plus.message")
-                                .font(.system(size: 15, weight: .semibold))
-                            Text("新对话")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundStyle(AppTheme.text)
-                        .padding(.horizontal, 12)
-                        .frame(height: 36)
-                        .background(AppTheme.bubble)
-                        .clipShape(Capsule())
+                        Image(systemName: "square.and.pencil")
+                            .font(AppTheme.Icon.toolbar)
+                            .foregroundStyle(AppTheme.text)
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("新对话")
-                }
-
-                if let onAnswerEntry {
-                    Button(action: onAnswerEntry) {
-                        Image(systemName: "bubble.left.and.bubble.right")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(AppTheme.text)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("来一句")
+                } else {
+                    Color.clear
+                        .frame(width: 44, height: 44)
                 }
             }
-            .padding(.horizontal, 18)
-            .frame(height: 56)
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .frame(height: 58)
         }
     }
 }
@@ -218,7 +198,7 @@ struct BottomComposer: View {
         .padding(.leading, 18)
         .padding(.trailing, 6)
         .padding(.vertical, 7)
-        .frame(minHeight: 60)
+        .frame(minHeight: 56, maxHeight: 120)
         .background(AppTheme.card)
         .clipShape(Capsule())
         .overlay(
