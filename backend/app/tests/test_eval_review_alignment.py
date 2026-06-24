@@ -6,6 +6,7 @@ from pathlib import Path
 from app.services.eval_review_service import (
     append_case_review,
     card_contract_summary,
+    help_card_quality_summary,
     low_quality_queue_summary,
     review_alignment_summary,
     review_payload,
@@ -225,4 +226,63 @@ def test_card_contract_summary_tracks_single_decision_factor_and_legacy_field_vi
     assert [item["case_id"] for item in summary["top_cases"]] == ["too-many-factors", "legacy-fields"]
     assert summary["metadata"]["contract"] == (
         "single item + single decision_factor + no reasons/bullets/followups/warning"
+    )
+
+
+def test_help_card_quality_summary_tracks_generic_help_card_issues(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run-5"
+    run_dir.mkdir()
+    _write_jsonl(
+        run_dir / "case_quality_scores.jsonl",
+        [
+            {
+                "case_id": "generic-title",
+                "quality_score": 0.4,
+                "status": "failed",
+                "expected_kind": "help_card_draft",
+                "actual_kind": "help_card_draft",
+                "dimensions": {"help_card_quality": 0.3},
+                "issues": [
+                    {"code": "help_card_title_too_generic"},
+                    {"code": "help_card_missing_context"},
+                    {"code": "help_card_wants_too_generic"},
+                ],
+            },
+            {
+                "case_id": "product-rule-avoid",
+                "quality_score": 0.65,
+                "status": "degraded",
+                "expected_kind": "help_card_draft",
+                "actual_kind": "help_card_draft",
+                "dimensions": {"help_card_specificity": 0.7},
+                "issues": [
+                    {"code": "help_card_avoids_contains_product_rule"},
+                    {"code": "help_card_contains_generic_wants"},
+                ],
+            },
+            {
+                "case_id": "structured-help",
+                "quality_score": 1.0,
+                "status": "passed",
+                "expected_kind": "help_card_draft",
+                "actual_kind": "help_card_draft",
+                "dimensions": {"help_card_quality": 1.0},
+                "issues": [],
+            },
+        ],
+    )
+
+    summary = help_card_quality_summary(tmp_path, "run-5")
+
+    assert summary["scored_case_count"] == 3
+    assert summary["average_help_card_quality_score"] == 0.6667
+    assert summary["help_card_issue_case_count"] == 2
+    assert summary["generic_title_count"] == 1
+    assert summary["thin_context_count"] == 1
+    assert summary["generic_wants_count"] == 2
+    assert summary["product_rule_avoids_count"] == 1
+    assert summary["issue_counts"]["help_card_avoids_contains_product_rule"] == 1
+    assert [item["case_id"] for item in summary["top_cases"]] == ["generic-title", "product-rule-avoid"]
+    assert summary["metadata"]["contract"] == (
+        "specific title + structured context + concrete wants/avoids/constraints"
     )

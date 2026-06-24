@@ -221,6 +221,86 @@ def card_contract_summary(
     }
 
 
+def help_card_quality_summary(
+    reports_root: Path,
+    run_id: str,
+    *,
+    limit: int = 50,
+) -> dict[str, Any]:
+    run_dir = _run_dir(reports_root, run_id)
+    scores = _load_jsonl(run_dir / "case_quality_scores.jsonl")
+    issue_counts: dict[str, int] = {}
+    help_card_cases: list[dict[str, Any]] = []
+    total_help_card_quality_score = 0.0
+    scored_count = 0
+    for score in scores:
+        dimensions = _mapping(score.get("dimensions"))
+        help_score = _safe_float(
+            dimensions.get("help_card_quality", dimensions.get("help_card_specificity")),
+            default=1.0,
+        )
+        total_help_card_quality_score += help_score
+        scored_count += 1
+        issues = [_mapping(issue) for issue in (score.get("issues") or []) if isinstance(issue, Mapping)]
+        for issue in issues:
+            code = str(issue.get("code") or "unknown")
+            issue_counts[code] = issue_counts.get(code, 0) + 1
+        help_issue_codes = [str(issue.get("code") or "") for issue in issues if _is_help_card_quality_issue(issue)]
+        if help_score < 1.0 or help_issue_codes:
+            help_card_cases.append(
+                {
+                    "case_id": score.get("case_id"),
+                    "quality_score": score.get("quality_score"),
+                    "help_card_quality_score": help_score,
+                    "status": score.get("status"),
+                    "actual_kind": score.get("actual_kind"),
+                    "expected_kind": score.get("expected_kind"),
+                    "issues": help_issue_codes,
+                }
+            )
+
+    sorted_cases = sorted(
+        help_card_cases,
+        key=lambda item: (float(item.get("help_card_quality_score") or 1.0), str(item.get("case_id") or "")),
+    )
+    return {
+        "run_id": run_id,
+        "scored_case_count": scored_count,
+        "average_help_card_quality_score": (
+            round(total_help_card_quality_score / scored_count, 4) if scored_count else 0.0
+        ),
+        "help_card_issue_case_count": len(help_card_cases),
+        "generic_title_count": _sum_issue_counts(
+            issue_counts,
+            {"help_card_title_too_generic", "help_card_missing_title"},
+        ),
+        "thin_context_count": _sum_issue_counts(
+            issue_counts,
+            {"help_card_context_too_generic", "help_card_missing_context", "help_card_context_too_thin"},
+        ),
+        "generic_wants_count": _sum_issue_counts(
+            issue_counts,
+            {"help_card_wants_too_generic", "help_card_contains_generic_wants", "help_card_missing_wants"},
+        ),
+        "product_rule_avoids_count": _sum_issue_counts(
+            issue_counts,
+            {
+                "help_card_avoids_too_generic",
+                "help_card_contains_generic_avoids",
+                "help_card_avoids_contains_product_rule",
+                "help_card_missing_avoids",
+            },
+        ),
+        "issue_counts": dict(sorted(issue_counts.items())),
+        "top_cases": sorted_cases[: max(1, int(limit or 1))],
+        "metadata": {
+            "version": "help_card_quality_summary_v1",
+            "source_files": ["case_quality_scores.jsonl"],
+            "contract": "specific title + structured context + concrete wants/avoids/constraints",
+        },
+    }
+
+
 def case_detail(reports_root: Path, run_id: str, case_id: str) -> dict[str, Any]:
     run_dir = _run_dir(reports_root, run_id)
     result = _find_jsonl(run_dir / "results.jsonl", case_id)
@@ -393,6 +473,14 @@ def _is_card_contract_issue(issue: Mapping[str, Any]) -> bool:
         or code in {"too_many_decision_factors", "decision_factor_missing", "decision_factor_too_weak"}
         or "decision_factor" in code
     )
+
+
+def _is_help_card_quality_issue(issue: Mapping[str, Any]) -> bool:
+    return str(issue.get("code") or "").startswith("help_card_")
+
+
+def _sum_issue_counts(issue_counts: Mapping[str, int], codes: set[str]) -> int:
+    return sum(count for code, count in issue_counts.items() if code in codes)
 
 
 def _safe_float(value: Any, *, default: float = 0.0) -> float:
