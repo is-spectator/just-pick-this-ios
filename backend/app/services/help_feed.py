@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from collections.abc import Mapping
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.jobs.finalizer_job import run_finalize_graph_for_help_card
 from app.models import ContentReviewTask, HelpAnswer, HelpCard, RewardEvent, UserBehaviorEvent
@@ -110,6 +111,79 @@ def list_help_feed(
             ],
             "next_cursor": next_cursor,
         }
+
+
+def help_feed_conversion_summary(
+    session: Session,
+    *,
+    since_hours: int = 24 * 7,
+    target_uplift: float = 0.2,
+) -> dict[str, Any]:
+    start = datetime.now(timezone.utc) - timedelta(hours=max(1, int(since_hours or 1)))
+    events = session.scalars(
+        select(UserBehaviorEvent)
+        .where(
+            UserBehaviorEvent.event_type.in_(["help_feed_impression", "one_liner_submitted"]),
+            UserBehaviorEvent.created_at >= start,
+        )
+        .order_by(UserBehaviorEvent.created_at.asc())
+    ).all()
+    return help_feed_conversion_summary_from_events(
+        events,
+        target_uplift=target_uplift,
+        window_start=start,
+        window_hours=since_hours,
+    )
+
+
+def help_feed_conversion_summary_from_events(
+    events: list[Any],
+    *,
+    target_uplift: float = 0.2,
+    window_start: datetime | None = None,
+    window_hours: int | None = None,
+) -> dict[str, Any]:
+    impression_segments: dict[tuple[str, str], str] = {}
+    impression_scores: dict[tuple[str, str], int] = {}
+    for event in events:
+        if getattr(event, "event_type", None) != "help_feed_impression":
+            continue
+        key = _user_help_event_key(event)
+        if key is None:
+            continue
+        score = _feed_preference_score(getattr(event, "payload_json", None) or {})
+        previous = impression_scores.get(key)
+        if previous is None or score > previous:
+            impression_scores[key] = score
+            impression_segments[key] = "matched" if score > 0 else "baseline"
+
+    submitted_keys = {
+        key
+        for event in events
+        if getattr(event, "event_type", None) == "one_liner_submitted"
+        for key in [_user_help_event_key(event)]
+        if key is not None
+    }
+
+    segments = {
+        "matched": _conversion_segment(impression_segments, submitted_keys, segment="matched"),
+        "baseline": _conversion_segment(impression_segments, submitted_keys, segment="baseline"),
+    }
+    matched_rate = float(segments["matched"]["submit_rate"])
+    baseline_rate = float(segments["baseline"]["submit_rate"])
+    uplift = (matched_rate / baseline_rate - 1.0) if baseline_rate > 0 else None
+    return {
+        "window_start": window_start.isoformat() if window_start else None,
+        "window_hours": window_hours,
+        "target_uplift": target_uplift,
+        "segments": segments,
+        "matched_submit_rate": matched_rate,
+        "baseline_submit_rate": baseline_rate,
+        "one_liner_submit_rate_uplift": round(uplift, 4) if uplift is not None else None,
+        "target_met": bool(uplift is not None and uplift >= target_uplift),
+        "total_impression_pairs": len(impression_segments),
+        "total_submitted_after_impression": len(submitted_keys & set(impression_segments)),
+    }
 
 
 def get_help_card(id: str) -> dict[str, Any]:
@@ -646,6 +720,40 @@ def _help_feed_score(
     return float(reward_value * 100 + remaining_answers * 20 - answer_count * 5 + preference_score)
 
 
+def _user_help_event_key(event: Any) -> tuple[str, str] | None:
+    user_id = getattr(event, "user_id", None)
+    help_card_id = getattr(event, "help_card_id", None)
+    if user_id is None or help_card_id is None:
+        return None
+    return (str(user_id), str(help_card_id))
+
+
+def _feed_preference_score(payload: Mapping[str, Any]) -> int:
+    ranking = payload.get("feed_ranking") if isinstance(payload.get("feed_ranking"), Mapping) else {}
+    match = ranking.get("preference_match") if isinstance(ranking.get("preference_match"), Mapping) else {}
+    try:
+        return int(match.get("score") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _conversion_segment(
+    impression_segments: Mapping[tuple[str, str], str],
+    submitted_keys: set[tuple[str, str]],
+    *,
+    segment: str,
+) -> dict[str, Any]:
+    impression_keys = {key for key, value in impression_segments.items() if value == segment}
+    submitted = len(impression_keys & submitted_keys)
+    impressions = len(impression_keys)
+    submit_rate = submitted / impressions if impressions else 0.0
+    return {
+        "impression_pairs": impressions,
+        "submitted_pairs": submitted,
+        "submit_rate": round(submit_rate, 4),
+    }
+
+
 def _answerer_preference_summary(user: Any | None) -> dict[str, Any]:
     if user is None:
         return {}
@@ -779,6 +887,8 @@ __all__ = [
     "create_one_liner",
     "get_help_card",
     "get_my_rewards",
+    "help_feed_conversion_summary",
+    "help_feed_conversion_summary_from_events",
     "help_feed_rank_payload",
     "help_feed_sort_key",
     "list_help_feed",

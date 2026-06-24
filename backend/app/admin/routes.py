@@ -69,6 +69,7 @@ from app.services.intent_answer_import import (
     import_intent_answer_drafts,
     serialize_imported_intent_answer,
 )
+from app.services.help_feed import help_feed_conversion_summary
 from app.services.runtime_latency import runtime_latency_summary
 from app.services.prompt_config import (
     list_prompt_configs,
@@ -315,6 +316,34 @@ def admin_runtime_latency(
         table_name="runtime_latency",
         target_record_id=None,
         request_json=_request_json(request, {"hours": hours, "limit": limit}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/help-feed/conversion-summary")
+def admin_help_feed_conversion_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 7, ge=1, le=24 * 90),
+    target_uplift: float = Query(default=0.2, ge=0.0, le=10.0),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = help_feed_conversion_summary(
+        session,
+        since_hours=since_hours,
+        target_uplift=target_uplift,
+    )
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_help_feed_conversion_summary",
+        table_name="help_feed_conversion_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours, "target_uplift": target_uplift}),
         before_json=None,
         after_json=None,
     )

@@ -3,7 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from app.services.help_feed import help_feed_rank_payload, help_feed_sort_key
+from app.services.help_feed import (
+    help_feed_conversion_summary_from_events,
+    help_feed_rank_payload,
+    help_feed_sort_key,
+)
 
 
 def _card(
@@ -79,3 +83,72 @@ def test_help_feed_sort_uses_preferences_as_same_tier_tiebreaker() -> None:
     )
 
     assert ordered == [matching, generic]
+
+
+def _event(
+    event_type: str,
+    *,
+    user_id: str,
+    help_card_id: str,
+    preference_score: int | None = None,
+) -> SimpleNamespace:
+    payload_json = {}
+    if preference_score is not None:
+        payload_json = {"feed_ranking": {"preference_match": {"score": preference_score}}}
+    return SimpleNamespace(
+        event_type=event_type,
+        user_id=user_id,
+        help_card_id=help_card_id,
+        payload_json=payload_json,
+    )
+
+
+def test_help_feed_conversion_summary_measures_preference_match_uplift() -> None:
+    events = [
+        *[
+            _event("help_feed_impression", user_id=f"baseline-user-{index}", help_card_id=f"baseline-card-{index}")
+            for index in range(5)
+        ],
+        _event("one_liner_submitted", user_id="baseline-user-0", help_card_id="baseline-card-0"),
+        *[
+            _event(
+                "help_feed_impression",
+                user_id=f"matched-user-{index}",
+                help_card_id=f"matched-card-{index}",
+                preference_score=3,
+            )
+            for index in range(5)
+        ],
+        _event("one_liner_submitted", user_id="matched-user-0", help_card_id="matched-card-0"),
+        _event("one_liner_submitted", user_id="matched-user-1", help_card_id="matched-card-1"),
+    ]
+
+    summary = help_feed_conversion_summary_from_events(events, target_uplift=0.2)
+
+    assert summary["segments"]["baseline"] == {
+        "impression_pairs": 5,
+        "submitted_pairs": 1,
+        "submit_rate": 0.2,
+    }
+    assert summary["segments"]["matched"] == {
+        "impression_pairs": 5,
+        "submitted_pairs": 2,
+        "submit_rate": 0.4,
+    }
+    assert summary["one_liner_submit_rate_uplift"] == 1.0
+    assert summary["target_met"] is True
+
+
+def test_help_feed_conversion_summary_handles_missing_baseline() -> None:
+    events = [
+        _event("help_feed_impression", user_id="matched-user", help_card_id="matched-card", preference_score=1),
+        _event("one_liner_submitted", user_id="matched-user", help_card_id="matched-card"),
+    ]
+
+    summary = help_feed_conversion_summary_from_events(events, target_uplift=0.2)
+
+    assert summary["segments"]["baseline"]["impression_pairs"] == 0
+    assert summary["matched_submit_rate"] == 1.0
+    assert summary["baseline_submit_rate"] == 0.0
+    assert summary["one_liner_submit_rate_uplift"] is None
+    assert summary["target_met"] is False
