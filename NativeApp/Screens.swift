@@ -609,8 +609,10 @@ private struct ChatRecommendationCard: View {
 
     @State private var hasAppeared = false
     @State private var acceptFeedbackCount = 0
+    @State private var imageLoadFailed = false
 
     private var imageURL: URL? {
+        guard !imageLoadFailed else { return nil }
         guard let url = pick.referenceImage?.url else { return nil }
         return URL(string: url)
     }
@@ -634,6 +636,15 @@ private struct ChatRecommendationCard: View {
         VStack(alignment: .leading, spacing: 20) {
             if imageURL != nil {
                 heroImage
+                    .overlay(alignment: .topTrailing) {
+                        RecommendationOverflowMenu()
+                            .padding(12)
+                    }
+            } else {
+                HStack {
+                    Spacer()
+                    RecommendationOverflowMenu()
+                }
             }
 
             VStack(alignment: .leading, spacing: 12) {
@@ -736,6 +747,9 @@ private struct ChatRecommendationCard: View {
                         .scaledToFill()
                 case .failure:
                     Color.clear
+                        .task {
+                            imageLoadFailed = true
+                        }
                 case .empty:
                     ZStack {
                         AppTheme.bubble
@@ -788,6 +802,8 @@ private struct ChatHelpCard: View {
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            HelpStructuredSummary(request: request, compact: true)
 
             if request.status == .draft {
                 Button(action: onPublish) {
@@ -1042,6 +1058,7 @@ struct AnswerScreen: View {
     let session: AppSession
     var showsTopBar: Bool = true
 
+    @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
     @State private var isLoading = true
     @State private var isSending = false
@@ -1073,6 +1090,14 @@ struct AnswerScreen: View {
                         isLoading: isLoading,
                         onAdvance: {
                             session.advanceAnswerRequest()
+                        },
+                        onRefresh: {
+                            Task { @MainActor in
+                                await reloadAnswerQueue()
+                            }
+                        },
+                        onBackToChat: {
+                            dismiss()
                         }
                     )
 
@@ -1093,9 +1118,7 @@ struct AnswerScreen: View {
             }
         }
         .task {
-            isLoading = true
-            await session.loadAnswerQueue()
-            isLoading = false
+            await reloadAnswerQueue()
         }
         .onDisappear {
             toastTask?.cancel()
@@ -1121,6 +1144,12 @@ struct AnswerScreen: View {
             guard !Task.isCancelled else { return }
             showsToast = false
         }
+    }
+
+    private func reloadAnswerQueue() async {
+        isLoading = true
+        await session.loadAnswerQueue()
+        isLoading = false
     }
 
     private func flashToast() {
@@ -1153,6 +1182,8 @@ struct HelpDeckStack: View {
     let next: HelpRequest?
     let isLoading: Bool
     let onAdvance: () -> Void
+    let onRefresh: () -> Void
+    let onBackToChat: () -> Void
 
     @State private var dragOffset: CGFloat = 0
     @State private var committedSwipeCount = 0
@@ -1207,7 +1238,7 @@ struct HelpDeckStack: View {
                                 }
                         )
                 } else {
-                    EmptyAnswerQueueCard()
+                    EmptyAnswerQueueCard(onRefresh: onRefresh, onBackToChat: onBackToChat)
                         .frame(width: cardWidth)
                 }
             }
@@ -1254,6 +1285,9 @@ struct HelpDeckCard: View {
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 18)
+
+            HelpStructuredSummary(request: request, compact: true)
+                .padding(.top, 20)
 
             Spacer(minLength: 26)
 
@@ -1331,8 +1365,11 @@ struct ServiceNoticePill: View {
 }
 
 struct EmptyAnswerQueueCard: View {
+    let onRefresh: () -> Void
+    let onBackToChat: () -> Void
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("暂时没有求一个")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppTheme.text)
@@ -1341,6 +1378,35 @@ struct EmptyAnswerQueueCard: View {
                 .font(.system(size: 14))
                 .lineSpacing(4)
                 .foregroundStyle(AppTheme.textSecondary)
+
+            HStack(spacing: 12) {
+                Button(action: onRefresh) {
+                    Text("刷新")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(AppTheme.card)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(AppTheme.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onBackToChat) {
+                    Text("回聊天")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(AppTheme.text)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 6)
         }
         .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)

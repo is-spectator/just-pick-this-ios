@@ -258,7 +258,10 @@ struct DecisionCard: View {
     let onReject: () -> Void
     let onAccept: () -> Void
 
+    @State private var imageLoadFailed = false
+
     private var imageURL: URL? {
+        guard !imageLoadFailed else { return nil }
         guard let url = pick.referenceImage?.url else { return nil }
         return URL(string: url)
     }
@@ -282,6 +285,15 @@ struct DecisionCard: View {
         VStack(alignment: .leading, spacing: 20) {
             if imageURL != nil {
                 heroImage
+                    .overlay(alignment: .topTrailing) {
+                        RecommendationOverflowMenu()
+                            .padding(12)
+                    }
+            } else {
+                HStack {
+                    Spacer()
+                    RecommendationOverflowMenu()
+                }
             }
 
             VStack(alignment: .leading, spacing: 12) {
@@ -372,6 +384,9 @@ struct DecisionCard: View {
                         .scaledToFill()
                 case .failure:
                     Color.clear
+                        .task {
+                            imageLoadFailed = true
+                        }
                 case .empty:
                     ZStack {
                         AppTheme.bubble
@@ -387,6 +402,36 @@ struct DecisionCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .clipped()
         }
+    }
+}
+
+struct RecommendationOverflowMenu: View {
+    var body: some View {
+        Menu {
+            Button {
+            } label: {
+                Label("收藏", systemImage: "bookmark")
+            }
+
+            Button {
+            } label: {
+                Label("分享", systemImage: "square.and.arrow.up")
+            }
+
+            Button(role: .destructive) {
+            } label: {
+                Label("信息有误", systemImage: "exclamationmark.bubble")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial)
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("更多推荐操作")
     }
 }
 
@@ -723,6 +768,9 @@ struct RequestCard: View {
                 .foregroundStyle(AppTheme.textSecondary)
                 .padding(.top, 12)
 
+            HelpStructuredSummary(request: request)
+                .padding(.top, 16)
+
             if !request.answers.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("已收到一句")
@@ -753,6 +801,111 @@ struct RequestCard: View {
             }
         }
         .cardStyle()
+    }
+}
+
+struct HelpStructuredSummary: View {
+    let request: HelpRequest
+    var compact: Bool = false
+
+    private var rows: [(String, String)] {
+        var result: [(String, String)] = []
+        if let location {
+            result.append(("地点/场景", location))
+        }
+        result.append(("想要", wantText))
+        if let avoidText {
+            result.append(("不要", avoidText))
+        }
+        if let constraintText {
+            result.append(("限制", constraintText))
+        }
+        return result
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 8 : 10) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .top, spacing: 10) {
+                    Text(row.0)
+                        .font(.system(size: compact ? 11 : 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .frame(width: compact ? 58 : 70, alignment: .leading)
+
+                    Text(row.1)
+                        .font(.system(size: compact ? 13 : 14, weight: .medium))
+                        .lineSpacing(3)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(compact ? 12 : 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.bubble.opacity(0.78))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+    }
+
+    private var searchableText: String {
+        "\(request.title) \(request.context)"
+    }
+
+    private var location: String? {
+        let candidates = ["韩国", "明洞", "圣水", "五道口", "海底捞", "三里屯", "朝阳", "望京", "北京", "上海", "互联宝地", "南锣鼓巷"]
+        let matches = candidates.filter { searchableText.localizedCaseInsensitiveContains($0) }
+        guard !matches.isEmpty else { return trimmedContextLine }
+        return matches.prefix(3).joined(separator: " · ")
+    }
+
+    private var wantText: String {
+        if searchableText.contains("点菜") || searchableText.contains("帮我点") || searchableText.contains("怎么点") {
+            return "直接给一套点单"
+        }
+        if searchableText.contains("小众") {
+            return "小众一点，别太游客"
+        }
+        if searchableText.contains("清淡") || searchableText.contains("清爽") || searchableText.contains("不辣") {
+            return "清淡、稳妥、不折腾"
+        }
+        if searchableText.contains("韩餐") {
+            return "韩餐里直接选一个"
+        }
+        return "让懂的人直接给一个选择"
+    }
+
+    private var avoidText: String? {
+        if searchableText.contains("不去明洞") {
+            return "不去明洞"
+        }
+        if searchableText.contains("不辣") || searchableText.contains("不能吃辣") || searchableText.contains("不太能吃辣") {
+            return "重辣、红油锅"
+        }
+        if searchableText.contains("不要游客") || searchableText.contains("游客区") {
+            return "游客区"
+        }
+        return nil
+    }
+
+    private var constraintText: String? {
+        if searchableText.contains("两个人") || searchableText.contains("2个人") || searchableText.contains("两人") {
+            return "两个人"
+        }
+        if request.answerCount > 0 {
+            return "\(request.answerCount) 人已来一句"
+        }
+        if request.status != .draft {
+            return request.status.label
+        }
+        return nil
+    }
+
+    private var trimmedContextLine: String? {
+        let trimmed = request.context.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let separators = CharacterSet(charactersIn: "。；;\n")
+        let first = trimmed.components(separatedBy: separators).first?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first, !first.isEmpty else { return nil }
+        return first
     }
 }
 
