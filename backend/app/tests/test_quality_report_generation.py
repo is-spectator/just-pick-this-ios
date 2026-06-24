@@ -266,6 +266,7 @@ def test_quality_report_generates_shadow_comparison_files(tmp_path) -> None:
     assert report["summary"]["timeout_count"] == 1
     assert report["summary"]["deterministic_vs_shadow_mismatch_count"] == 1
     assert report["summary"]["deterministic_shadow_mismatch_count"] == 1
+    assert report["summary"]["shadow_improvement_candidates"] == 0
     assert "unsafe_shadow_count" in report["summary"]
     assert report["mismatch_by_group"] == {"area_food": 1}
     assert report["top_20_mismatches"][0]["case_id"] == "shadow-mismatch"
@@ -312,10 +313,16 @@ def test_quality_report_generates_shadow_comparison_files(tmp_path) -> None:
         paths["shadow_promotion_candidates_json"].read_text(encoding="utf-8")
     )
     assert promotion_json["total"] == len(promotion_candidates)
+    assert promotion_json["shadow_improvement_candidates"] == 0
+    assert promotion_json["unsafe_shadow_count"] >= 0
+    assert promotion_json["autopromote_count"] == 0
+    assert promotion_json["review_required_count"] == len(promotion_candidates)
+    assert "candidate_type_counts" in promotion_json
     promotion_markdown = paths["shadow_promotion_candidates_markdown"].read_text(
         encoding="utf-8"
     )
     assert "autopromote=false" in promotion_markdown
+    assert "Shadow improvement candidates" in promotion_markdown
     assert "shadow-mismatch" in promotion_markdown
 
 

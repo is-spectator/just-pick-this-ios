@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 import json
 from pathlib import Path
@@ -58,7 +59,15 @@ def write_shadow_promotion_candidate_reports(
         encoding="utf-8",
     )
     paths["shadow_promotion_candidates_json"].write_text(
-        json.dumps({"total": len(candidates), "items": candidates}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            {
+                **summarize_shadow_promotion_candidates(candidates),
+                "items": candidates,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
     paths["shadow_promotion_candidates_markdown"].write_text(
@@ -69,10 +78,17 @@ def write_shadow_promotion_candidate_reports(
 
 
 def render_shadow_promotion_candidates_markdown(candidates: Sequence[Mapping[str, Any]]) -> str:
+    summary = summarize_shadow_promotion_candidates(candidates)
     lines = [
         "# Shadow Promotion Candidates",
         "",
         "Shadow output is audit-only. Every candidate here requires human review and has `autopromote=false`.",
+        "",
+        "| Metric | Value |",
+        "| --- | ---: |",
+        f"| Total candidates | {summary['total']} |",
+        f"| Shadow improvement candidates | {summary['shadow_improvement_candidates']} |",
+        f"| Unsafe shadow count | {summary['unsafe_shadow_count']} |",
         "",
     ]
     if not candidates:
@@ -91,6 +107,27 @@ def render_shadow_promotion_candidates_markdown(candidates: Sequence[Mapping[str
             f"{actions or '-'} | `{candidate.get('trace_id') or ''}` |"
         )
     return "\n".join(lines) + "\n"
+
+
+def summarize_shadow_promotion_candidates(candidates: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    candidate_type_counts = Counter(str(candidate.get("candidate_type") or "unknown") for candidate in candidates)
+    priority_counts = Counter(str(candidate.get("priority") or "unknown") for candidate in candidates)
+    action_counts: Counter[str] = Counter()
+    for candidate in candidates:
+        for action in candidate.get("suggested_actions") or []:
+            action_counts[str(action)] += 1
+    return {
+        "total": len(candidates),
+        "shadow_improvement_candidates": sum(
+            1 for candidate in candidates if candidate.get("candidate_type") == "possible_improvement"
+        ),
+        "unsafe_shadow_count": sum(1 for candidate in candidates if bool(candidate.get("unsafe"))),
+        "review_required_count": sum(1 for candidate in candidates if bool(candidate.get("review_required"))),
+        "autopromote_count": sum(1 for candidate in candidates if bool(candidate.get("autopromote"))),
+        "candidate_type_counts": dict(sorted(candidate_type_counts.items())),
+        "priority_counts": dict(sorted(priority_counts.items())),
+        "suggested_action_counts": dict(sorted(action_counts.items())),
+    }
 
 
 def _candidate_decisions(decisions: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -152,5 +189,6 @@ def _suggested_actions(decision: Mapping[str, Any]) -> list[str]:
 __all__ = [
     "generate_shadow_promotion_candidates",
     "render_shadow_promotion_candidates_markdown",
+    "summarize_shadow_promotion_candidates",
     "write_shadow_promotion_candidate_reports",
 ]

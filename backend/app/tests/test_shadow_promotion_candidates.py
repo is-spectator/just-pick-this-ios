@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from app.eval.shadow_promotion_generator import generate_shadow_promotion_candidates
+from app.eval.shadow_promotion_generator import (
+    generate_shadow_promotion_candidates,
+    summarize_shadow_promotion_candidates,
+)
 
 
 def test_shadow_promotion_candidates_are_review_only() -> None:
@@ -28,6 +31,13 @@ def test_shadow_promotion_candidates_are_review_only() -> None:
     assert candidate["autopromote"] is False
     assert candidate["review_required"] is True
     assert "review_seed_gap" in candidate["suggested_actions"]
+
+    summary = summarize_shadow_promotion_candidates(candidates)
+    assert summary["shadow_improvement_candidates"] == 1
+    assert summary["unsafe_shadow_count"] == 0
+    assert summary["review_required_count"] == 1
+    assert summary["autopromote_count"] == 0
+    assert summary["candidate_type_counts"] == {"possible_improvement": 1}
 
 
 def test_shadow_promotion_candidates_keep_runtime_errors_separate() -> None:
@@ -96,3 +106,7 @@ def test_shadow_promotion_candidates_filter_non_actionable_matches() -> None:
     assert candidates[0]["candidate_type"] == "unsafe_shadow_review"
     assert candidates[0]["priority"] == "P1"
     assert "keep_shadow_blocked" in candidates[0]["suggested_actions"]
+
+    summary = summarize_shadow_promotion_candidates(candidates)
+    assert summary["shadow_improvement_candidates"] == 0
+    assert summary["unsafe_shadow_count"] == 1

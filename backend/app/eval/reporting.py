@@ -628,6 +628,14 @@ def build_shadow_comparison_report(rows: Sequence[Mapping[str, Any]]) -> dict[st
         "better_shadow_count": sum(1 for item in decisions if float(item.get("quality_delta") or 0) > 0),
         "worse_shadow_count": sum(1 for item in decisions if float(item.get("quality_delta") or 0) < 0),
         "unsafe_shadow_count": sum(1 for item in decisions if item.get("unsafe")),
+        "shadow_improvement_candidates": sum(
+            1
+            for item in decisions
+            if item.get("schema_valid")
+            and item.get("mismatch")
+            and not item.get("unsafe")
+            and float(item.get("quality_delta") or 0) > 0
+        ),
     }
     top_unsafe = [
         {
@@ -701,6 +709,7 @@ def render_shadow_comparison_markdown(
             f"{int(summary.get('deterministic_vs_shadow_mismatch_count', 0))} |"
         ),
         f"| Better shadow count | {int(summary.get('better_shadow_count', 0))} |",
+        f"| Shadow improvement candidates | {int(summary.get('shadow_improvement_candidates', 0))} |",
         f"| Worse shadow count | {int(summary.get('worse_shadow_count', 0))} |",
         f"| Unsafe shadow count | {int(summary.get('unsafe_shadow_count', 0))} |",
         "",
