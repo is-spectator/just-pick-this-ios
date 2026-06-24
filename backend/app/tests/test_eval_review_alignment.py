@@ -10,6 +10,7 @@ from app.services.eval_review_service import (
     low_quality_queue_summary,
     review_alignment_summary,
     review_payload,
+    routing_quality_summary,
 )
 
 
@@ -285,4 +286,71 @@ def test_help_card_quality_summary_tracks_generic_help_card_issues(tmp_path: Pat
     assert [item["case_id"] for item in summary["top_cases"]] == ["generic-title", "product-rule-avoid"]
     assert summary["metadata"]["contract"] == (
         "specific title + structured context + concrete wants/avoids/constraints"
+    )
+
+
+def test_routing_quality_summary_tracks_location_target_and_venue_priority_issues(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run-6"
+    run_dir.mkdir()
+    _write_jsonl(
+        run_dir / "case_quality_scores.jsonl",
+        [
+            {
+                "case_id": "haidilao-overridden",
+                "quality_score": 0.35,
+                "status": "failed",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"routing": 0.35},
+                "metadata": {
+                    "category": "venue_order",
+                    "message": "我在三里屯海底捞，两个人不太能吃辣，帮我点",
+                },
+                "issues": [
+                    {"code": "venue_order_should_route_in_venue"},
+                    {"code": "venue_order_should_return_ordering_bundle"},
+                    {"code": "haidilao_route_overridden_by_area_restaurant"},
+                ],
+            },
+            {
+                "case_id": "area-target-type",
+                "quality_score": 0.7,
+                "status": "degraded",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"routing": 0.75},
+                "metadata": {"category": "area_food", "message": "三里屯川菜"},
+                "issues": [
+                    {"code": "location_state_mismatch"},
+                    {"code": "target_type_mismatch"},
+                ],
+            },
+            {
+                "case_id": "clean-route",
+                "quality_score": 1.0,
+                "status": "passed",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"routing": 1.0},
+                "metadata": {"category": "area_food"},
+                "issues": [],
+            },
+        ],
+    )
+
+    summary = routing_quality_summary(tmp_path, "run-6")
+
+    assert summary["scored_case_count"] == 3
+    assert summary["average_routing_score"] == 0.7
+    assert summary["routing_issue_case_count"] == 2
+    assert summary["location_state_mismatch_count"] == 1
+    assert summary["target_type_mismatch_count"] == 1
+    assert summary["venue_ordering_priority_issue_count"] == 3
+    assert summary["wrong_location_priority_count"] == 1
+    assert summary["by_category"] == {"area_food": 1, "venue_order": 1}
+    assert [item["case_id"] for item in summary["top_cases"]] == ["haidilao-overridden", "area-target-type"]
+    assert summary["metadata"]["contract"] == (
+        "venue+ordering before area, stable location_state and target_type"
     )

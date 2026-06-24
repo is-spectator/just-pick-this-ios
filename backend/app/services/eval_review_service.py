@@ -301,6 +301,76 @@ def help_card_quality_summary(
     }
 
 
+def routing_quality_summary(
+    reports_root: Path,
+    run_id: str,
+    *,
+    limit: int = 50,
+) -> dict[str, Any]:
+    run_dir = _run_dir(reports_root, run_id)
+    scores = _load_jsonl(run_dir / "case_quality_scores.jsonl")
+    issue_counts: dict[str, int] = {}
+    routing_cases: list[dict[str, Any]] = []
+    total_routing_score = 0.0
+    scored_count = 0
+    for score in scores:
+        dimensions = _mapping(score.get("dimensions"))
+        routing_score = _safe_float(dimensions.get("routing"), default=1.0)
+        total_routing_score += routing_score
+        scored_count += 1
+        issues = [_mapping(issue) for issue in (score.get("issues") or []) if isinstance(issue, Mapping)]
+        for issue in issues:
+            code = str(issue.get("code") or "unknown")
+            issue_counts[code] = issue_counts.get(code, 0) + 1
+        routing_issue_codes = [str(issue.get("code") or "") for issue in issues if _is_routing_issue(issue)]
+        if routing_score < 1.0 or routing_issue_codes:
+            metadata = _mapping(score.get("metadata"))
+            routing_cases.append(
+                {
+                    "case_id": score.get("case_id"),
+                    "category": metadata.get("category") or score.get("category") or score.get("group"),
+                    "message": metadata.get("message") or score.get("message"),
+                    "quality_score": score.get("quality_score"),
+                    "routing_score": routing_score,
+                    "status": score.get("status"),
+                    "actual_kind": score.get("actual_kind"),
+                    "expected_kind": score.get("expected_kind"),
+                    "issues": routing_issue_codes,
+                }
+            )
+
+    sorted_cases = sorted(
+        routing_cases,
+        key=lambda item: (float(item.get("routing_score") or 1.0), str(item.get("case_id") or "")),
+    )
+    return {
+        "run_id": run_id,
+        "scored_case_count": scored_count,
+        "average_routing_score": round(total_routing_score / scored_count, 4) if scored_count else 0.0,
+        "routing_issue_case_count": len(routing_cases),
+        "location_state_mismatch_count": issue_counts.get("location_state_mismatch", 0),
+        "target_type_mismatch_count": issue_counts.get("target_type_mismatch", 0),
+        "venue_ordering_priority_issue_count": _sum_issue_counts(
+            issue_counts,
+            {
+                "venue_order_should_route_in_venue",
+                "venue_order_should_return_ordering_bundle",
+                "haidilao_route_overridden_by_area_restaurant",
+            },
+        ),
+        "wrong_location_priority_count": issue_counts.get("wrong_location_priority", 0)
+        + issue_counts.get("haidilao_route_overridden_by_area_restaurant", 0),
+        "issue_counts": dict(sorted(issue_counts.items())),
+        "by_category": _count_by(routing_cases, "category"),
+        "top_cases": sorted_cases[: max(1, int(limit or 1))],
+        "metadata": {
+            "version": "routing_quality_summary_v1",
+            "source_files": ["case_quality_scores.jsonl"],
+            "contract": "venue+ordering before area, stable location_state and target_type",
+        },
+    }
+
+
 def case_detail(reports_root: Path, run_id: str, case_id: str) -> dict[str, Any]:
     run_dir = _run_dir(reports_root, run_id)
     result = _find_jsonl(run_dir / "results.jsonl", case_id)
@@ -477,6 +547,20 @@ def _is_card_contract_issue(issue: Mapping[str, Any]) -> bool:
 
 def _is_help_card_quality_issue(issue: Mapping[str, Any]) -> bool:
     return str(issue.get("code") or "").startswith("help_card_")
+
+
+def _is_routing_issue(issue: Mapping[str, Any]) -> bool:
+    code = str(issue.get("code") or "")
+    return (
+        code in {
+            "location_state_mismatch",
+            "target_type_mismatch",
+            "wrong_location_priority",
+            "wrong_target_type",
+            "haidilao_route_overridden_by_area_restaurant",
+        }
+        or code.startswith("venue_order_")
+    )
 
 
 def _sum_issue_counts(issue_counts: Mapping[str, int], codes: set[str]) -> int:
