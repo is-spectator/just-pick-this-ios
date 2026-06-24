@@ -68,6 +68,7 @@ NO_DB_TEST_FILES = {
     "test_test_scripts.py",
     "test_trace_store.py",
     "test_user_preference_memory.py",
+    "test_user_signal_metrics.py",
 }
 
 

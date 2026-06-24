@@ -72,6 +72,7 @@ from app.services.intent_answer_import import (
 )
 from app.services.help_feed import help_feed_conversion_summary
 from app.services.runtime_latency import runtime_latency_summary
+from app.services.user_signal_metrics import user_signal_summary
 from app.services.prompt_config import (
     list_prompt_configs,
     list_prompt_versions,
@@ -366,6 +367,29 @@ def admin_post_experience_summary(
         actor=actor,
         action="view_post_experience_summary",
         table_name="post_experience_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/user-signals/summary")
+def admin_user_signals_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = user_signal_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_user_signal_summary",
+        table_name="user_signal_summary",
         target_record_id=None,
         request_json=_request_json(request, {"since_hours": since_hours}),
         before_json=None,
