@@ -87,8 +87,10 @@ def post_experience_review_summary_from_events(
     accepted_count = len(accepted_cards)
     went_count = outcome_counts["went_satisfied"] + outcome_counts["went_regretted"]
     regret_rate = outcome_counts["went_regretted"] / went_count if went_count else None
+    satisfaction_rate = outcome_counts["went_satisfied"] / went_count if went_count else None
     post_review_rate = reviewed_count / accepted_count if accepted_count else None
     not_went_rate = outcome_counts["not_went"] / reviewed_count if reviewed_count else None
+    reviewed_after_acceptance_count = len(set(latest_review_by_card) & accepted_cards)
     return {
         "window_start": window_start.isoformat() if window_start else None,
         "window_hours": window_hours,
@@ -96,13 +98,19 @@ def post_experience_review_summary_from_events(
         "post_review_count": reviewed_count,
         "post_review_rate": round(post_review_rate, 4) if post_review_rate is not None else None,
         "regret_rate": round(regret_rate, 4) if regret_rate is not None else None,
+        "satisfaction_rate": round(satisfaction_rate, 4) if satisfaction_rate is not None else None,
         "not_went_rate": round(not_went_rate, 4) if not_went_rate is not None else None,
         "outcome_counts": outcome_counts,
-        "reviewed_after_acceptance_count": len(set(latest_review_by_card) & accepted_cards),
+        "reviewed_after_acceptance_count": reviewed_after_acceptance_count,
         "unaccepted_review_count": len(set(latest_review_by_card) - accepted_cards),
+        "reviewed_after_acceptance_rate": round(_rate(reviewed_after_acceptance_count, reviewed_count), 4)
+        if reviewed_count
+        else None,
         "metrics": {
             "post_review_rate": "post_review_count / recommendation_card_accepted",
             "regret_rate": "went_regretted / (went_satisfied + went_regretted)",
+            "satisfaction_rate": "went_satisfied / (went_satisfied + went_regretted)",
+            "reviewed_after_acceptance_rate": "reviews for accepted cards / post_review_count",
         },
     }
 
@@ -297,3 +305,9 @@ def _post_review_event_outcome(event: Any) -> str | None:
         if outcome in {"went_satisfied", "went_regretted", "not_went", "unknown"}:
             return outcome
     return None
+
+
+def _rate(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return numerator / denominator

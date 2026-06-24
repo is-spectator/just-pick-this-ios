@@ -38,7 +38,9 @@ def test_post_experience_summary_tracks_review_and_regret_rates() -> None:
     assert summary["post_review_count"] == 3
     assert summary["post_review_rate"] == 0.75
     assert summary["regret_rate"] == 0.5
+    assert summary["satisfaction_rate"] == 0.5
     assert summary["not_went_rate"] == 0.3333
+    assert summary["reviewed_after_acceptance_rate"] == 1.0
     assert summary["outcome_counts"] == {
         "went_satisfied": 1,
         "went_regretted": 1,
@@ -60,6 +62,7 @@ def test_post_experience_summary_uses_latest_review_per_card() -> None:
     assert summary["outcome_counts"]["unknown"] == 0
     assert summary["outcome_counts"]["went_satisfied"] == 1
     assert summary["regret_rate"] == 0.0
+    assert summary["satisfaction_rate"] == 1.0
 
 
 def test_post_experience_summary_accepts_payload_outcome_fallback() -> None:
@@ -72,3 +75,4 @@ def test_post_experience_summary_accepts_payload_outcome_fallback() -> None:
 
     assert summary["post_review_count"] == 1
     assert summary["outcome_counts"]["went_regretted"] == 1
+    assert summary["reviewed_after_acceptance_rate"] == 1.0
