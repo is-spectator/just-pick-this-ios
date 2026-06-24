@@ -81,6 +81,11 @@ def summarize_runtime_latency(
         group_key="source",
         slow_threshold_ms=DEFAULT_RETRIEVAL_SLOW_THRESHOLD_MS,
     )
+    cost_summary = _cost_summary(
+        agent_runs=agent_runs,
+        tool_calls=tool_calls,
+        retrieval_runs=retrieval_runs,
+    )
     return {
         "window": dict(window or {}),
         "agent_runs": agent_summary,
@@ -96,11 +101,7 @@ def summarize_runtime_latency(
             tool_summary=tool_summary,
             retrieval_summary=retrieval_summary,
         ),
-        "cost": {
-            "estimated_cost_usd": None,
-            "tracking_status": "not_available_until_llm_provider_costs",
-            "note": "Current product path is deterministic; token/provider cost tracking starts when product LLM mode is promoted.",
-        },
+        "cost": cost_summary,
         "metadata": {
             "version": "runtime_latency_v1",
             "slow_thresholds_ms": {
@@ -160,6 +161,8 @@ def render_runtime_latency_markdown(summary: Mapping[str, Any]) -> str:
         "",
         f"- Tracking: `{cost.get('tracking_status', 'unknown')}`",
         f"- Estimated cost: `{cost.get('estimated_cost_usd')}`",
+        f"- Cost per turn: `{cost.get('cost_per_turn_usd')}`",
+        f"- Rows with cost: `{cost.get('rows_with_cost', 0)}`",
         "",
     ]
     return "\n".join(lines).rstrip() + "\n"
@@ -193,6 +196,9 @@ def _latency_budget_summary(
         "failure_total": int(agent_summary.get("failure_count") or 0)
         + int(tool_summary.get("failure_count") or 0)
         + int(retrieval_summary.get("failure_count") or 0),
+        "timeout_total": int(agent_summary.get("timeout_count") or 0)
+        + int(tool_summary.get("timeout_count") or 0)
+        + int(retrieval_summary.get("timeout_count") or 0),
     }
 
 
@@ -216,6 +222,7 @@ def _summarize_group(
     durations = [_duration_ms(row) for row in rows]
     valid_durations = [value for value in durations if value is not None]
     failures = [row for row in rows if str(row.get("status") or "").lower() in {"failed", "error", "timeout"}]
+    timeouts = [row for row in rows if _has_timeout(row)]
     groups: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for row in rows:
         groups[str(row.get(group_key) or "unknown")].append(row)
@@ -228,6 +235,7 @@ def _summarize_group(
         "slow_threshold_ms": slow_threshold_ms,
         "slow_count": sum(1 for value in valid_durations if value > slow_threshold_ms),
         "failure_count": len(failures),
+        "timeout_count": len(timeouts),
         "status_counts": dict(Counter(str(row.get("status") or "unknown") for row in rows)),
         "by_group": {
             group: _summarize_group(
@@ -300,6 +308,8 @@ def _agent_run_record(row: AgentRun) -> dict[str, Any]:
         "status": row.status,
         "started_at": row.started_at,
         "finished_at": row.finished_at,
+        "output_json": row.output_json,
+        "metadata_json": row.metadata_json,
     }
 
 
@@ -310,6 +320,7 @@ def _tool_call_record(row: ToolCall) -> dict[str, Any]:
         "status": row.status,
         "started_at": row.started_at,
         "finished_at": row.finished_at,
+        "result_json": row.result_json,
     }
 
 
@@ -320,7 +331,98 @@ def _retrieval_run_record(row: RetrievalRun) -> dict[str, Any]:
         "status": row.status,
         "started_at": row.started_at,
         "finished_at": row.finished_at,
+        "metadata_json": row.metadata_json,
     }
+
+
+def _cost_summary(
+    *,
+    agent_runs: Sequence[Mapping[str, Any]],
+    tool_calls: Sequence[Mapping[str, Any]],
+    retrieval_runs: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    for source, rows in (
+        ("agent_run", agent_runs),
+        ("tool_call", tool_calls),
+        ("retrieval_run", retrieval_runs),
+    ):
+        for row in rows:
+            cost = _cost_usd(row)
+            if cost is not None:
+                entries.append(
+                    {
+                        "source": source,
+                        "id": str(row.get("id") or ""),
+                        "cost_usd": cost,
+                    }
+                )
+
+    estimated = round(sum(item["cost_usd"] for item in entries), 8) if entries else None
+    turn_count = max(1, len(agent_runs)) if entries else 0
+    by_source = Counter(item["source"] for item in entries)
+    return {
+        "tracking_status": "available" if entries else "not_available_until_llm_provider_costs",
+        "estimated_cost_usd": estimated,
+        "cost_per_turn_usd": round((estimated or 0.0) / turn_count, 8) if entries else None,
+        "rows_with_cost": len(entries),
+        "source_counts": dict(by_source),
+        "note": (
+            "Cost is estimated from runtime JSON payloads when providers/tools emit cost_usd fields."
+            if entries
+            else "Current product path is deterministic; token/provider cost tracking starts when product LLM mode is promoted."
+        ),
+    }
+
+
+def _cost_usd(row: Mapping[str, Any]) -> float | None:
+    for value in _walk_values(row):
+        if not isinstance(value, Mapping):
+            continue
+        for key in ("cost_usd", "estimated_cost_usd", "total_cost_usd"):
+            parsed = _positive_float(value.get(key))
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _has_timeout(row: Mapping[str, Any]) -> bool:
+    if str(row.get("status") or "").lower() == "timeout":
+        return True
+    for value in _walk_values(row):
+        if isinstance(value, Mapping):
+            if value.get("timeout") is True:
+                return True
+            status = str(value.get("status") or "").lower()
+            if status == "timeout":
+                return True
+            error = str(value.get("error") or value.get("error_type") or "").lower()
+            if "timeout" in error:
+                return True
+    return False
+
+
+def _walk_values(value: Any) -> list[Any]:
+    values = [value]
+    if isinstance(value, Mapping):
+        for item in value.values():
+            values.extend(_walk_values(item))
+    elif isinstance(value, list):
+        for item in value:
+            values.extend(_walk_values(item))
+    return values
+
+
+def _positive_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed < 0:
+        return None
+    return parsed
 
 
 def _datetime(value: Any) -> datetime | None:
