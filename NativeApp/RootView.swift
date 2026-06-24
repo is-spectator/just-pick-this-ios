@@ -164,6 +164,10 @@ struct RootView: View {
                         onManageAccount: {
                             showsEmailLogin = true
                         },
+                        onAuthChanged: {
+                            authRevision += 1
+                            refreshMessageBadge()
+                        },
                         onHistorySelect: openHistoryItem,
                         onOpenAnswerDeck: {
                             path.removeAll()

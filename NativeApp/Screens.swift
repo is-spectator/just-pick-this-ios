@@ -1764,11 +1764,15 @@ struct ProfileScreen: View {
     let session: AppSession
     let authRevision: Int
     let onManageAccount: () -> Void
+    let onAuthChanged: () -> Void
     let onHistorySelect: (QuestionHistory) -> Void
     let onOpenAnswerDeck: () -> Void
 
     @State private var snapshot = UserDashboardSnapshot.empty
     @State private var isLoading = false
+    @State private var isAccountActionRunning = false
+    @State private var accountActionMessage: String?
+    @State private var showsDeleteAccountConfirmation = false
 
     private var signedIn: Bool {
         AuthTokenStore.email != nil
@@ -1848,6 +1852,14 @@ struct ProfileScreen: View {
         }
         .task(id: authRevision) {
             await loadSnapshot()
+        }
+        .confirmationDialog("删除账号？", isPresented: $showsDeleteAccountConfirmation, titleVisibility: .visible) {
+            Button("删除账号", role: .destructive) {
+                deleteAccount()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("会清除当前邮箱登录、撤销会话，并把账号标记为已删除。这个操作不能在 App 内撤回。")
         }
     }
 
@@ -2019,14 +2031,26 @@ struct ProfileScreen: View {
 
     private var appInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ProfileSectionHeader(title: "关于")
+            ProfileSectionHeader(title: "设置")
 
             VStack(spacing: 0) {
                 Button(action: onManageAccount) {
-                    HStack {
-                        Label(signedIn ? "账号与登录" : "登录并同步", systemImage: "person.crop.circle")
-                            .font(.system(size: 15, weight: .medium))
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(AppTheme.text)
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(signedIn ? "账号与登录" : "登录并同步")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(AppTheme.text)
+                            Text(accountSubtitle)
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppTheme.textMuted)
+                                .lineLimit(1)
+                        }
+
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
@@ -2035,6 +2059,85 @@ struct ProfileScreen: View {
                     .padding(16)
                 }
                 .buttonStyle(.plain)
+
+                Divider()
+                    .padding(.leading, 16)
+
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "hand.raised")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                        .frame(width: 24)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("隐私与数据")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AppTheme.text)
+                        Text("只用于同步你的选择、求助、回答和奖励；不会在产品界面展示调试日志。")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+                }
+                .padding(16)
+
+                if signedIn {
+                    Divider()
+                        .padding(.leading, 16)
+
+                    Button {
+                        logoutAccount()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 17, weight: .semibold))
+                                .frame(width: 24)
+                            Text("退出登录")
+                                .font(.system(size: 15, weight: .medium))
+                            Spacer()
+                            if isAccountActionRunning {
+                                ProgressView()
+                                    .tint(AppTheme.textSecondary)
+                            }
+                        }
+                        .foregroundStyle(AppTheme.text)
+                        .padding(16)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isAccountActionRunning)
+
+                    Divider()
+                        .padding(.leading, 16)
+
+                    Button(role: .destructive) {
+                        showsDeleteAccountConfirmation = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 17, weight: .semibold))
+                                .frame(width: 24)
+                            Text("删除账号")
+                                .font(.system(size: 15, weight: .medium))
+                            Spacer()
+                        }
+                        .padding(16)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isAccountActionRunning)
+                }
+
+                if let accountActionMessage {
+                    Divider()
+                        .padding(.leading, 16)
+
+                    Text(accountActionMessage)
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                }
 
                 Divider()
                     .padding(.leading, 16)
@@ -2080,6 +2183,43 @@ struct ProfileScreen: View {
         isLoading = true
         snapshot = await ProfileAPIService().fetchSnapshot()
         isLoading = false
+    }
+
+    private func logoutAccount() {
+        guard !isAccountActionRunning else { return }
+        isAccountActionRunning = true
+        accountActionMessage = nil
+        Task {
+            await AuthAPIService().logout()
+            await MainActor.run {
+                snapshot = .empty
+                isAccountActionRunning = false
+                accountActionMessage = "已退出登录。"
+                onAuthChanged()
+            }
+        }
+    }
+
+    private func deleteAccount() {
+        guard !isAccountActionRunning else { return }
+        isAccountActionRunning = true
+        accountActionMessage = nil
+        Task {
+            do {
+                try await AuthAPIService().deleteAccount()
+                await MainActor.run {
+                    snapshot = .empty
+                    isAccountActionRunning = false
+                    accountActionMessage = "账号已删除，本机登录已清除。"
+                    onAuthChanged()
+                }
+            } catch {
+                await MainActor.run {
+                    isAccountActionRunning = false
+                    accountActionMessage = "删除失败，请稍后再试。"
+                }
+            }
+        }
     }
 }
 

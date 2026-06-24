@@ -75,6 +75,11 @@ class LogoutResponse(ApiModel):
     ok: bool = True
 
 
+class DeleteMeResponse(ApiModel):
+    ok: bool = True
+    deleted: bool = True
+
+
 class MeResponse(ApiModel):
     user: AuthUser
     metadata: dict[str, Any] = Field(default_factory=dict)

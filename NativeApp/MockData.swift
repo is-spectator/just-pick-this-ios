@@ -572,6 +572,20 @@ struct AuthAPIService: Sendable {
         AuthTokenStore.clear()
     }
 
+    func deleteAccount() async throws {
+        guard AuthTokenStore.accessToken?.isEmpty == false else {
+            AuthTokenStore.clear()
+            return
+        }
+
+        var request = URLRequest(url: endpoint("/v1/auth/me"))
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 12
+        request = authorized(request)
+        let _: V1AuthDeleteMeResponse = try await perform(request)
+        AuthTokenStore.clear()
+    }
+
     private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -1097,6 +1111,11 @@ private struct V1AuthRefreshResponse: Decodable {
 
 private struct V1AuthLogoutResponse: Decodable {
     let ok: Bool
+}
+
+private struct V1AuthDeleteMeResponse: Decodable {
+    let ok: Bool
+    let deleted: Bool?
 }
 
 private struct V1AuthUser: Decodable {

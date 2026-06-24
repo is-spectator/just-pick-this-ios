@@ -307,6 +307,50 @@ def update_me_from_authorization(
     return {"user": _auth_user(user), "metadata": {"auth_provider": user.auth_provider}}
 
 
+def delete_me_from_authorization(
+    session: Session,
+    authorization: str | None,
+    *,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> dict[str, Any]:
+    user = current_user_from_authorization(session, authorization)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+    old_email = user.email
+    old_display_name = user.display_name
+    deleted_at = utcnow()
+    for auth_session in user.auth_sessions:
+        if auth_session.status == "active":
+            auth_session.status = "revoked"
+            auth_session.revoked_at = deleted_at
+    user.email = None
+    user.email_verified_at = None
+    user.auth_provider = "deleted"
+    user.status = "deleted"
+    user.display_name = "已删除用户"
+    user.profile_json = {
+        **dict(user.profile_json or {}),
+        "deleted_at": deleted_at.isoformat(),
+    }
+    user.last_seen_at = deleted_at
+    _audit(
+        session,
+        user=user,
+        email=old_email,
+        action="delete_account",
+        ip_address=ip_address,
+        user_agent=user_agent,
+        metadata={
+            "old_display_name": old_display_name,
+            "soft_delete": True,
+        },
+    )
+    session.flush()
+    return {"ok": True, "deleted": True}
+
+
 def normalize_email(email: str) -> str:
     normalized = email.strip().lower()
     if not _EMAIL_RE.match(normalized):
