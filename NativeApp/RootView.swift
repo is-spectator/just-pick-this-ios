@@ -10,6 +10,7 @@ enum AppRoute: Hashable {
     case rewards
     case messages
     case profile
+    case helpDetail(QuestionHistory)
 }
 
 struct RootView: View {
@@ -144,7 +145,7 @@ struct RootView: View {
                 case .answerDeck:
                     AnswerScreen(session: session)
                 case .myHelp:
-                    MyHelpScreen(session: session, onSelectHistory: openHistoryItem)
+                    MyHelpScreen(session: session, onSelectHelpDetail: openHelpDetail)
                 case .myAnswers:
                     MyAnswersScreen(session: session, onOpenAnswerDeck: {
                         path.removeAll()
@@ -169,6 +170,8 @@ struct RootView: View {
                             path.append(.answerDeck)
                         }
                     )
+                case .helpDetail(let item):
+                    HelpResultDetailScreen(session: session, historyItem: item)
                 }
             }
         }
@@ -211,6 +214,11 @@ struct RootView: View {
                 path.append(.askKorea)
             }
         }
+    }
+
+    private func openHelpDetail(_ item: QuestionHistory) {
+        closeDrawer()
+        path.append(.helpDetail(item))
     }
 
     private func drawerGesture(edgeWidth: CGFloat) -> some Gesture {

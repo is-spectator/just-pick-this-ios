@@ -2085,7 +2085,7 @@ struct ProfileScreen: View {
 
 struct MyHelpScreen: View {
     let session: AppSession
-    let onSelectHistory: (QuestionHistory) -> Void
+    let onSelectHelpDetail: (QuestionHistory) -> Void
 
     private var helpItems: [QuestionHistory] {
         session.history.filter { item in
@@ -2158,7 +2158,7 @@ struct MyHelpScreen: View {
                     VStack(spacing: 0) {
                         ForEach(Array(helpItems.enumerated()), id: \.element.id) { index, item in
                             Button {
-                                onSelectHistory(item)
+                                onSelectHelpDetail(item)
                             } label: {
                                 ProfileHistoryRow(item: item)
                             }
@@ -2173,6 +2173,121 @@ struct MyHelpScreen: View {
                     .productPanel()
                 }
             }
+        }
+    }
+}
+
+struct HelpResultDetailScreen: View {
+    let session: AppSession
+    let historyItem: QuestionHistory
+
+    @State private var request: HelpRequest?
+    @State private var isLoading = false
+
+    private var displayRequest: HelpRequest {
+        request ?? initialRequest
+    }
+
+    private var humanAnswers: [HumanAnswer] {
+        displayRequest.answers.filter { $0.nickname != "皮皮" }
+    }
+
+    private var pipiAnswer: HumanAnswer? {
+        displayRequest.answers.first { $0.nickname == "皮皮" }
+    }
+
+    private var initialRequest: HelpRequest {
+        HelpRequest(
+            id: historyItem.helpRequestId ?? historyItem.id,
+            title: historyItem.query,
+            context: historyItem.topPick?.reason ?? historyItem.statusLabel,
+            status: status(from: historyItem.status),
+            answers: []
+        )
+    }
+
+    var body: some View {
+        ProductListScreen(
+            title: "求助详情",
+            subtitle: "看人类回答和皮皮最后帮你收口的选择。",
+            systemImage: "questionmark.bubble",
+            emptyTitle: "还没有求助详情",
+            emptyMessage: "这条求助还在同步。",
+            isEmpty: false
+        ) {
+            ProductSection(title: "求助内容") {
+                HelpDetailSummaryPanel(request: displayRequest, isLoading: isLoading)
+            }
+
+            ProductSection(title: "人类回答") {
+                if humanAnswers.isEmpty {
+                    ProductEmptyInline(
+                        title: displayRequest.answerCount > 0 ? "已有 \(displayRequest.answerCount) 句，正在同步" : "还在等来一句",
+                        message: "有新回答后会出现在这里，你不用看任何 Agent 日志。"
+                    )
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(humanAnswers) { answer in
+                            HelpAnswerDetailRow(answer: answer)
+                        }
+                    }
+                    .productPanel()
+                }
+            }
+
+            ProductSection(title: "皮皮最终推荐") {
+                if let pick = historyItem.topPick {
+                    HelpFinalRecommendationPanel(pick: pick)
+                } else if let pipiAnswer {
+                    HelpFinalTextPanel(answer: pipiAnswer)
+                } else {
+                    ProductEmptyInline(
+                        title: displayRequest.status == .answered || displayRequest.status == .completed ? "结果快好了" : "还没形成最终推荐",
+                        message: "等回答足够后，皮皮会把来一句合成一个最终选择。"
+                    )
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await loadDetail() }
+                } label: {
+                    if isLoading {
+                        ProgressView()
+                            .tint(AppTheme.text)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+                .disabled(isLoading)
+                .accessibilityLabel("刷新求助详情")
+            }
+        }
+        .task(id: historyItem.id) {
+            await loadDetail()
+        }
+    }
+
+    @MainActor
+    private func loadDetail() async {
+        guard !isLoading else { return }
+        isLoading = true
+        request = await session.helpRequestDetail(for: historyItem)
+        isLoading = false
+    }
+
+    private func status(from raw: String) -> HelpRequestStatus {
+        switch raw {
+        case "completed", "top1":
+            .completed
+        case "answer_received":
+            .answered
+        case "waiting_for_human":
+            .published
+        default:
+            .draft
         }
     }
 }
@@ -2785,6 +2900,136 @@ private struct SubmittedAnswerRow: View {
                         .lineLimit(3)
                 }
             }
+        }
+        .productPanel()
+    }
+}
+
+private struct HelpDetailSummaryPanel: View {
+    let request: HelpRequest
+    let isLoading: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                Text(request.status.label)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.bubble)
+                    .clipShape(Capsule())
+
+                Text(request.rewardLabel)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.green)
+
+                Spacer(minLength: 0)
+
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.72)
+                        .tint(AppTheme.textMuted)
+                } else {
+                    Text("\(request.answerCount) 句")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textMuted)
+                }
+            }
+
+            Text(request.title)
+                .font(.system(size: 20, weight: .semibold))
+                .lineSpacing(3)
+                .foregroundStyle(AppTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(request.context)
+                .font(.system(size: 14))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HelpStructuredSummary(request: request, compact: true)
+        }
+        .productPanel()
+    }
+}
+
+private struct HelpAnswerDetailRow: View {
+    let answer: HumanAnswer
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "quote.bubble")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppTheme.text)
+                .frame(width: 34, height: 34)
+                .background(AppTheme.bubble)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(answer.text)
+                    .font(.system(size: 15, weight: .medium))
+                    .lineSpacing(4)
+                    .foregroundStyle(AppTheme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("\(answer.nickname) · \(answer.timeLabel)")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+        }
+    }
+}
+
+private struct HelpFinalRecommendationPanel: View {
+    let pick: TopPick
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.green)
+                    .frame(width: 34, height: 34)
+                    .background(AppTheme.green.opacity(0.12))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("皮皮帮你收口")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppTheme.textMuted)
+                    Text(pick.title)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                        .lineLimit(2)
+                }
+            }
+
+            Text(pick.reason.isEmpty ? pick.subtitle : pick.reason)
+                .font(.system(size: 14))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .productPanel()
+    }
+}
+
+private struct HelpFinalTextPanel: View {
+    let answer: HumanAnswer
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("皮皮帮你收口")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.textMuted)
+
+            Text(answer.text)
+                .font(.system(size: 15, weight: .medium))
+                .lineSpacing(4)
+                .foregroundStyle(AppTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .productPanel()
     }

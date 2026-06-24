@@ -314,7 +314,12 @@ struct BackendRecommendationService: RecommendationService {
     }
 
     func fetchHelpRequest(id: UUID) async -> HelpRequest? {
-        nil
+        do {
+            let response: V1HelpCardDetailEnvelope = try await perform(URLRequest(url: endpoint("/v1/help-cards/\(id.uuidString)")))
+            return response.summary.model(fallbackTitle: "求一个")
+        } catch {
+            return nil
+        }
     }
 
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest] {
@@ -1514,6 +1519,23 @@ private struct V1HelpCardSummary: Decodable {
     }
 }
 
+private struct V1HelpCardDetailEnvelope: Decodable {
+    let summary: V1HelpCardSummary
+
+    enum CodingKeys: String, CodingKey {
+        case helpCard = "help_card"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        if let summary = try container?.decodeIfPresent(V1HelpCardSummary.self, forKey: .helpCard) {
+            self.summary = summary
+        } else {
+            self.summary = try V1HelpCardSummary(from: decoder)
+        }
+    }
+}
+
 private struct V1RewardPayload: Decodable {
     let label: String?
     let value: Int?
@@ -1985,6 +2007,19 @@ final class AppSession {
         return .result
     }
 
+    func helpRequestDetail(for item: QuestionHistory) async -> HelpRequest {
+        if currentHelpRequest?.id == item.helpRequestId {
+            return currentHelpRequest ?? fallbackHelpRequest(for: item)
+        }
+
+        if let helpRequestId = item.helpRequestId,
+           let request = await service.fetchHelpRequest(id: helpRequestId) {
+            return mergedLocalHelpAnswers(into: request, historyItem: item)
+        }
+
+        return fallbackHelpRequest(for: item)
+    }
+
     func makeHelpRequestFromCurrentTopPick() {
         let query = currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery
         let pick = topPick
@@ -2212,7 +2247,7 @@ final class AppSession {
     }
 
     private func fallbackHelpRequest(for item: QuestionHistory) -> HelpRequest {
-        HelpRequest(
+        let request = HelpRequest(
             id: item.helpRequestId ?? UUID(),
             title: item.query,
             context: item.status == "completed"
@@ -2221,6 +2256,26 @@ final class AppSession {
             status: helpRequestStatus(for: item),
             answers: []
         )
+        return mergedLocalHelpAnswers(into: request, historyItem: item)
+    }
+
+    private func mergedLocalHelpAnswers(into request: HelpRequest, historyItem: QuestionHistory) -> HelpRequest {
+        var merged = request
+        let localAnswers = submittedAnswers
+            .filter { $0.helpRequestId == historyItem.helpRequestId || $0.helpRequestId == request.id }
+            .map { answer in
+                HumanAnswer(
+                    id: answer.id,
+                    text: answer.text,
+                    nickname: "我",
+                    timeLabel: answer.timeLabel
+                )
+            }
+        for answer in localAnswers where !merged.answers.contains(where: { $0.id == answer.id || $0.text == answer.text }) {
+            merged.answers.append(answer)
+        }
+        merged.answerCount = max(merged.answerCount, merged.answers.count)
+        return merged
     }
 
     private func helpRequestStatus(for item: QuestionHistory) -> HelpRequestStatus {
