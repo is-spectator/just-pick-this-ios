@@ -37,6 +37,13 @@ def test_runtime_latency_summary_groups_tools_and_counts_slow_failures() -> None
     assert summary["retrieval_runs"]["slow_count"] == 1
     assert summary["slowest"]["tool_calls"][0]["id"] == "tool-3"
     assert summary["cost"]["tracking_status"] == "not_available_until_llm_provider_costs"
+    assert summary["latency_budget"]["agent_p95_target_ms"] == 1500.0
+    assert summary["latency_budget"]["agent_p95_target_met"] is False
+    assert summary["latency_budget"]["tool_p95_target_met"] is False
+    assert summary["latency_budget"]["retrieval_p95_target_met"] is False
+    assert summary["latency_budget"]["overall_target_met"] is False
+    assert summary["latency_budget"]["slow_total"] == 3
+    assert summary["latency_budget"]["failure_total"] == 2
 
 
 def test_runtime_latency_markdown_renders_sections() -> None:
@@ -53,6 +60,8 @@ def test_runtime_latency_markdown_renders_sections() -> None:
     assert "## Agent Runs" in markdown
     assert "## Tool Calls" in markdown
     assert "## Retrieval Runs" in markdown
+    assert "## Latency Budget" in markdown
+    assert "Agent P95 target" in markdown
     assert "not_available_until_llm_provider_costs" in markdown
 
 
@@ -72,4 +81,3 @@ def _row(
         "started_at": started_at,
         "finished_at": started_at + timedelta(milliseconds=duration_ms),
     }
-

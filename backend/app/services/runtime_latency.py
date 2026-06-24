@@ -66,28 +66,36 @@ def summarize_runtime_latency(
     retrieval_runs: Sequence[Mapping[str, Any]],
     window: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    agent_summary = _summarize_group(
+        agent_runs,
+        group_key="run_type",
+        slow_threshold_ms=DEFAULT_AGENT_SLOW_THRESHOLD_MS,
+    )
+    tool_summary = _summarize_group(
+        tool_calls,
+        group_key="tool_name",
+        slow_threshold_ms=DEFAULT_TOOL_SLOW_THRESHOLD_MS,
+    )
+    retrieval_summary = _summarize_group(
+        retrieval_runs,
+        group_key="source",
+        slow_threshold_ms=DEFAULT_RETRIEVAL_SLOW_THRESHOLD_MS,
+    )
     return {
         "window": dict(window or {}),
-        "agent_runs": _summarize_group(
-            agent_runs,
-            group_key="run_type",
-            slow_threshold_ms=DEFAULT_AGENT_SLOW_THRESHOLD_MS,
-        ),
-        "tool_calls": _summarize_group(
-            tool_calls,
-            group_key="tool_name",
-            slow_threshold_ms=DEFAULT_TOOL_SLOW_THRESHOLD_MS,
-        ),
-        "retrieval_runs": _summarize_group(
-            retrieval_runs,
-            group_key="source",
-            slow_threshold_ms=DEFAULT_RETRIEVAL_SLOW_THRESHOLD_MS,
-        ),
+        "agent_runs": agent_summary,
+        "tool_calls": tool_summary,
+        "retrieval_runs": retrieval_summary,
         "slowest": {
             "agent_runs": _slowest(agent_runs, label_key="run_type"),
             "tool_calls": _slowest(tool_calls, label_key="tool_name"),
             "retrieval_runs": _slowest(retrieval_runs, label_key="source"),
         },
+        "latency_budget": _latency_budget_summary(
+            agent_summary=agent_summary,
+            tool_summary=tool_summary,
+            retrieval_summary=retrieval_summary,
+        ),
         "cost": {
             "estimated_cost_usd": None,
             "tracking_status": "not_available_until_llm_provider_costs",
@@ -138,6 +146,15 @@ def render_runtime_latency_markdown(summary: Mapping[str, Any]) -> str:
                 )
             lines.append("")
     cost = _mapping(summary.get("cost"))
+    budget = _mapping(summary.get("latency_budget"))
+    lines += [
+        "## Latency Budget",
+        "",
+        f"- Overall target met: `{budget.get('overall_target_met')}`",
+        f"- Agent P95 target: `{budget.get('agent_p95_target_ms')}` ms",
+        f"- Agent P95 actual: `{budget.get('agent_p95_ms')}` ms",
+        "",
+    ]
     lines += [
         "## Cost",
         "",
@@ -146,6 +163,47 @@ def render_runtime_latency_markdown(summary: Mapping[str, Any]) -> str:
         "",
     ]
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _latency_budget_summary(
+    *,
+    agent_summary: Mapping[str, Any],
+    tool_summary: Mapping[str, Any],
+    retrieval_summary: Mapping[str, Any],
+) -> dict[str, Any]:
+    agent_met = _p95_target_met(agent_summary, DEFAULT_AGENT_SLOW_THRESHOLD_MS)
+    tool_met = _p95_target_met(tool_summary, DEFAULT_TOOL_SLOW_THRESHOLD_MS)
+    retrieval_met = _p95_target_met(retrieval_summary, DEFAULT_RETRIEVAL_SLOW_THRESHOLD_MS)
+    evaluated = [value for value in (agent_met, tool_met, retrieval_met) if value is not None]
+    return {
+        "version": "latency_budget_v1",
+        "agent_p95_target_ms": DEFAULT_AGENT_SLOW_THRESHOLD_MS,
+        "tool_p95_target_ms": DEFAULT_TOOL_SLOW_THRESHOLD_MS,
+        "retrieval_p95_target_ms": DEFAULT_RETRIEVAL_SLOW_THRESHOLD_MS,
+        "agent_p95_ms": agent_summary.get("p95_ms"),
+        "tool_p95_ms": tool_summary.get("p95_ms"),
+        "retrieval_p95_ms": retrieval_summary.get("p95_ms"),
+        "agent_p95_target_met": agent_met,
+        "tool_p95_target_met": tool_met,
+        "retrieval_p95_target_met": retrieval_met,
+        "overall_target_met": all(evaluated) if evaluated else None,
+        "slow_total": int(agent_summary.get("slow_count") or 0)
+        + int(tool_summary.get("slow_count") or 0)
+        + int(retrieval_summary.get("slow_count") or 0),
+        "failure_total": int(agent_summary.get("failure_count") or 0)
+        + int(tool_summary.get("failure_count") or 0)
+        + int(retrieval_summary.get("failure_count") or 0),
+    }
+
+
+def _p95_target_met(summary: Mapping[str, Any], target_ms: float) -> bool | None:
+    p95 = summary.get("p95_ms")
+    if p95 is None:
+        return None
+    try:
+        return float(p95) <= target_ms
+    except (TypeError, ValueError):
+        return None
 
 
 def _summarize_group(
