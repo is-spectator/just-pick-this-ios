@@ -156,8 +156,19 @@ protocol RecommendationService: Sendable {
     func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory]
 }
 
+enum AppAPIEnvironment {
+    static let baseURL: URL = {
+        if let configured = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
+           let url = URL(string: configured),
+           !configured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return url
+        }
+        return URL(string: "http://67.230.169.161:8788")!
+    }()
+}
+
 struct BackendRecommendationService: RecommendationService {
-    private let baseURL = URL(string: "http://67.230.169.161:8788")!
+    private let baseURL = AppAPIEnvironment.baseURL
     private let deviceUid = DeviceIdentity.uid
 
     func submit(query: String, sessionId: UUID?) async -> RecommendationResult {
@@ -395,7 +406,7 @@ struct AuthenticatedAccount: Equatable {
 }
 
 struct AuthAPIService: Sendable {
-    private let baseURL = URL(string: "http://67.230.169.161:8788")!
+    private let baseURL = AppAPIEnvironment.baseURL
 
     func requestCode(email: String) async throws {
         var request = URLRequest(url: endpoint("/v1/auth/request-code"))
@@ -500,6 +511,161 @@ struct AuthAPIService: Sendable {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
         return request
+    }
+}
+
+struct UserLightEvent: Identifiable, Equatable, Sendable {
+    let id: String
+    let title: String
+    let body: String
+    let createdAt: String?
+}
+
+struct UserDashboardSnapshot: Equatable, Sendable {
+    let pendingReward: Int
+    let grantedReward: Int
+    let rejectedReward: Int
+    let answeredCount: Int
+    let qualityTier: String
+    let lightEvents: [UserLightEvent]
+
+    static let empty = UserDashboardSnapshot(
+        pendingReward: 0,
+        grantedReward: 0,
+        rejectedReward: 0,
+        answeredCount: 0,
+        qualityTier: "new",
+        lightEvents: []
+    )
+}
+
+struct ProfileAPIService: Sendable {
+    private let baseURL = AppAPIEnvironment.baseURL
+    private let deviceUid = DeviceIdentity.uid
+
+    func fetchSnapshot() async -> UserDashboardSnapshot {
+        let rewards = try? await fetchRewards()
+        let quality = try? await fetchAnswererQuality()
+        let lights = try? await fetchLightEvents()
+
+        return UserDashboardSnapshot(
+            pendingReward: rewards?.pendingValue ?? 0,
+            grantedReward: rewards?.grantedValue ?? 0,
+            rejectedReward: rewards?.rejectedValue ?? 0,
+            answeredCount: quality?.answers.submittedCount ?? 0,
+            qualityTier: quality?.quality.tier ?? "new",
+            lightEvents: (lights?.items ?? []).prefix(5).map { item in
+                UserLightEvent(
+                    id: item.id,
+                    title: item.title ?? "有新消息",
+                    body: item.body ?? item.message ?? "皮皮有新进展。",
+                    createdAt: item.createdAt
+                )
+            }
+        )
+    }
+
+    private func fetchRewards() async throws -> V1ProfileRewardsResponse {
+        var components = URLComponents(url: endpoint("/v1/rewards/me"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "device_uid", value: deviceUid)]
+        guard let url = components.url else { throw BackendServiceError.decoding("invalid rewards URL", "") }
+        return try await perform(URLRequest(url: url))
+    }
+
+    private func fetchAnswererQuality() async throws -> V1ProfileAnswererQualityResponse {
+        var components = URLComponents(url: endpoint("/v1/answerers/me/quality"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "device_uid", value: deviceUid)]
+        guard let url = components.url else { throw BackendServiceError.decoding("invalid quality URL", "") }
+        return try await perform(URLRequest(url: url))
+    }
+
+    private func fetchLightEvents() async throws -> V1ProfileLightEventsResponse {
+        var components = URLComponents(url: endpoint("/v1/light-events"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "device_uid", value: deviceUid),
+            URLQueryItem(name: "limit", value: "10")
+        ]
+        guard let url = components.url else { throw BackendServiceError.decoding("invalid lights URL", "") }
+        return try await perform(URLRequest(url: url))
+    }
+
+    private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+        var request = authorized(request)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            if status == 401, await AuthAPIService().refreshIfPossible() {
+                request = authorized(request)
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: request)
+                if let retryHTTP = retryResponse as? HTTPURLResponse, (200..<300).contains(retryHTTP.statusCode) {
+                    return try JSONDecoder().decode(Response.self, from: retryData)
+                }
+            }
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw BackendServiceError.httpStatus(status, body)
+        }
+        return try JSONDecoder().decode(Response.self, from: data)
+    }
+
+    private func authorized(_ request: URLRequest) -> URLRequest {
+        var request = request
+        if let token = AuthTokenStore.accessToken, !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+
+    private func endpoint(_ path: String) -> URL {
+        URL(string: path, relativeTo: baseURL)!.absoluteURL
+    }
+}
+
+private struct V1ProfileRewardsResponse: Decodable {
+    let pendingValue: Int
+    let grantedValue: Int
+    let rejectedValue: Int
+
+    enum CodingKeys: String, CodingKey {
+        case pendingValue = "pending_value"
+        case grantedValue = "granted_value"
+        case rejectedValue = "rejected_value"
+    }
+}
+
+private struct V1ProfileAnswererQualityResponse: Decodable {
+    let quality: V1ProfileQuality
+    let answers: V1ProfileAnswers
+}
+
+private struct V1ProfileQuality: Decodable {
+    let tier: String
+}
+
+private struct V1ProfileAnswers: Decodable {
+    let submittedCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case submittedCount = "submitted_count"
+    }
+}
+
+private struct V1ProfileLightEventsResponse: Decodable {
+    let items: [V1ProfileLightEvent]
+}
+
+private struct V1ProfileLightEvent: Decodable {
+    let id: String
+    let title: String?
+    let body: String?
+    let message: String?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case body
+        case message
+        case createdAt = "created_at"
     }
 }
 

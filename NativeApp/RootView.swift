@@ -3,14 +3,21 @@ import SwiftUI
 enum AppRoute: Hashable {
     case resultDatong
     case askKorea
+}
+
+enum AppTab: Hashable {
+    case pipi
     case answer
+    case profile
 }
 
 struct RootView: View {
     @State private var path: [AppRoute]
+    @State private var selectedTab: AppTab
     @State private var session: AppSession
     @State private var answerPollTask: Task<Void, Never>?
     @State private var showsEmailLogin = false
+    @State private var authRevision = 0
 
     init() {
         let demoScreen = DocumentationDemoScreen.current
@@ -18,42 +25,71 @@ struct RootView: View {
 
         _session = State(initialValue: session)
         _path = State(initialValue: demoScreen?.initialPath ?? [])
+        _selectedTab = State(initialValue: demoScreen == .answer ? .answer : .pipi)
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            InputScreen(session: session) { decision in
-                switch decision {
-                case .none:
-                    break
-                case .top1:
-                    path.append(.resultDatong)
-                case .ask:
-                    path.append(.askKorea)
+        TabView(selection: $selectedTab) {
+            pipiTab
+                .tag(AppTab.pipi)
+                .tabItem {
+                    Label("皮皮", systemImage: "sparkles")
                 }
-            } onAnswerEntry: {
-                path.append(.answer)
-            } onAccountEntry: {
-                showsEmailLogin = true
-            } onHistorySelect: { item in
-                Task { @MainActor in
-                    let destination = await session.restoreHistoryItem(item)
-                    path.removeAll()
-                    switch destination {
-                    case .result:
+
+            answerTab
+                .tag(AppTab.answer)
+                .tabItem {
+                    Label("来一句", systemImage: "bubble.left.and.bubble.right")
+                }
+
+            profileTab
+                .tag(AppTab.profile)
+                .tabItem {
+                    Label("我的", systemImage: "person.crop.circle")
+                }
+        }
+        .tint(AppTheme.text)
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .sheet(isPresented: $showsEmailLogin) {
+            EmailLoginView(authService: AuthAPIService()) {
+                showsEmailLogin = false
+                authRevision += 1
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .onAppear {
+            startAnswerPolling()
+        }
+        .onDisappear {
+            answerPollTask?.cancel()
+        }
+    }
+
+    private var pipiTab: some View {
+        NavigationStack(path: $path) {
+            InputScreen(
+                session: session,
+                onDecision: { decision in
+                    selectedTab = .pipi
+                    switch decision {
+                    case .none:
+                        break
+                    case .top1:
                         path.append(.resultDatong)
                     case .ask:
                         path.append(.askKorea)
                     }
+                },
+                onAnswerEntry: nil,
+                onAccountEntry: {
+                    selectedTab = .profile
+                },
+                onHistorySelect: { item in
+                    openHistoryItem(item)
                 }
-            }
-            .sheet(isPresented: $showsEmailLogin) {
-                EmailLoginView(authService: AuthAPIService()) {
-                    showsEmailLogin = false
-                }
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-            }
+            )
             .navigationDestination(for: AppRoute.self) { route in
                 switch route {
                 case .resultDatong:
@@ -76,17 +112,47 @@ struct RootView: View {
                         session: session,
                         onHome: { path.removeAll() }
                     )
-                case .answer:
-                    AnswerScreen(session: session)
                 }
             }
         }
-        .tint(AppTheme.text)
-        .onAppear {
-            startAnswerPolling()
+    }
+
+    private var answerTab: some View {
+        NavigationStack {
+            AnswerScreen(session: session, showsTopBar: false)
+                .navigationBarHidden(true)
         }
-        .onDisappear {
-            answerPollTask?.cancel()
+    }
+
+    private var profileTab: some View {
+        NavigationStack {
+            ProfileScreen(
+                session: session,
+                authRevision: authRevision,
+                onManageAccount: {
+                    showsEmailLogin = true
+                },
+                onHistorySelect: { item in
+                    openHistoryItem(item)
+                },
+                onOpenAnswerDeck: {
+                    selectedTab = .answer
+                }
+            )
+        }
+    }
+
+    private func openHistoryItem(_ item: QuestionHistory) {
+        Task { @MainActor in
+            let destination = await session.restoreHistoryItem(item)
+            selectedTab = .pipi
+            path.removeAll()
+            switch destination {
+            case .result:
+                path.append(.resultDatong)
+            case .ask:
+                path.append(.askKorea)
+            }
         }
     }
 
@@ -99,6 +165,8 @@ struct RootView: View {
                 guard path.last != .askKorea else { continue }
                 let hasNewAnswer = await session.refreshCurrentHelpRequest()
                 if hasNewAnswer {
+                    selectedTab = .pipi
+                    path.removeAll()
                     path.append(.askKorea)
                 }
             }
@@ -131,7 +199,7 @@ private enum DocumentationDemoScreen: String {
         case .ask:
             [.askKorea]
         case .answer:
-            [.answer]
+            []
         }
     }
 }

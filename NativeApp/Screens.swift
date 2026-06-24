@@ -30,7 +30,7 @@ private enum ChatEntry: Identifiable {
 struct InputScreen: View {
     let session: AppSession
     let onDecision: (RecommendationDecision) -> Void
-    let onAnswerEntry: () -> Void
+    let onAnswerEntry: (() -> Void)?
     let onAccountEntry: () -> Void
     let onHistorySelect: (QuestionHistory) -> Void
 
@@ -1183,6 +1183,7 @@ struct AskScreen: View {
 
 struct AnswerScreen: View {
     let session: AppSession
+    var showsTopBar: Bool = true
 
     @State private var draft = ""
     @State private var isLoading = true
@@ -1192,7 +1193,7 @@ struct AnswerScreen: View {
     @State private var toastTask: Task<Void, Never>?
 
     var body: some View {
-        AppChrome(showsBack: true, backAction: nil) {
+        AppChrome(showsBack: true, backAction: nil, showsTopBar: showsTopBar) {
             ZStack {
                 VStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 5) {
@@ -1583,6 +1584,432 @@ struct EmptyAnswerQueueCard: View {
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 10)
+    }
+}
+
+
+struct ProfileScreen: View {
+    let session: AppSession
+    let authRevision: Int
+    let onManageAccount: () -> Void
+    let onHistorySelect: (QuestionHistory) -> Void
+    let onOpenAnswerDeck: () -> Void
+
+    @State private var snapshot = UserDashboardSnapshot.empty
+    @State private var isLoading = false
+
+    private var signedIn: Bool {
+        AuthTokenStore.email != nil
+    }
+
+    private var displayName: String {
+        if let name = AuthTokenStore.displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
+        return signedIn ? "已登录" : "登录后同步记录"
+    }
+
+    private var accountSubtitle: String {
+        AuthTokenStore.email ?? "邮箱验证码登录"
+    }
+
+    private var myHelpHistory: [QuestionHistory] {
+        session.history.filter { item in
+            item.helpRequestId != nil || item.status == "waiting_for_human" || item.status == "answer_received"
+        }
+    }
+
+    private var recentChoices: [QuestionHistory] {
+        session.history.filter { item in
+            item.status == "top1" || item.status == "completed"
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                accountCard
+                metricGrid
+                answerCallout
+
+                profileHistorySection(
+                    title: "我的求一个",
+                    items: Array(myHelpHistory.prefix(3)),
+                    emptyText: "还没有发过求一个"
+                )
+
+                profileHistorySection(
+                    title: "最近选择",
+                    items: Array(recentChoices.prefix(4)),
+                    emptyText: "你的选择会出现在这里"
+                )
+
+                messageSection
+                appInfoSection
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+            .padding(.bottom, 32)
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .navigationTitle("我的")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await loadSnapshot() }
+                } label: {
+                    if isLoading {
+                        ProgressView()
+                            .tint(AppTheme.text)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+                .disabled(isLoading)
+                .accessibilityLabel("刷新")
+            }
+        }
+        .refreshable {
+            await loadSnapshot()
+        }
+        .task(id: authRevision) {
+            await loadSnapshot()
+        }
+    }
+
+    private var accountCard: some View {
+        Button(action: onManageAccount) {
+            HStack(spacing: 15) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.bubble)
+                        .frame(width: 54, height: 54)
+
+                    Image(systemName: signedIn ? "person.crop.circle.fill" : "person.crop.circle")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(AppTheme.text)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(displayName)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+
+                    Text(accountSubtitle)
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(signedIn ? "管理账号" : "邮箱登录")
+    }
+
+    private var metricGrid: some View {
+        HStack(spacing: 10) {
+            ProfileMetricTile(
+                value: "\(snapshot.grantedReward)",
+                label: "已得积分",
+                secondary: snapshot.pendingReward > 0 ? "+\(snapshot.pendingReward) 待确认" : nil
+            )
+            ProfileMetricTile(
+                value: "\(snapshot.answeredCount)",
+                label: "来过一句",
+                secondary: qualityTierLabel
+            )
+            ProfileMetricTile(
+                value: "\(session.history.count)",
+                label: "历史选择",
+                secondary: nil
+            )
+        }
+    }
+
+    private var answerCallout: some View {
+        Button(action: onOpenAnswerDeck) {
+            HStack(spacing: 14) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(AppTheme.text)
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("来一句")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                    Text("刷一张求一个，顺手帮 TA 少纠结一次。")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            .padding(16)
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func profileHistorySection(title: String, items: [QuestionHistory], emptyText: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ProfileSectionHeader(title: title)
+
+            VStack(spacing: 0) {
+                if items.isEmpty {
+                    Text(emptyText)
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                } else {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        Button {
+                            onHistorySelect(item)
+                        } label: {
+                            ProfileHistoryRow(item: item)
+                        }
+                        .buttonStyle(.plain)
+
+                        if index < items.count - 1 {
+                            Divider()
+                                .padding(.leading, 16)
+                        }
+                    }
+                }
+            }
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+        }
+    }
+
+    private var messageSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ProfileSectionHeader(title: "消息")
+
+            VStack(spacing: 0) {
+                if snapshot.lightEvents.isEmpty {
+                    Text("暂时没有新消息")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                } else {
+                    ForEach(Array(snapshot.lightEvents.prefix(3).enumerated()), id: \.element.id) { index, event in
+                        ProfileMessageRow(event: event)
+                        if index < min(snapshot.lightEvents.count, 3) - 1 {
+                            Divider()
+                                .padding(.leading, 52)
+                        }
+                    }
+                }
+            }
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+        }
+    }
+
+    private var appInfoSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ProfileSectionHeader(title: "关于")
+
+            VStack(spacing: 0) {
+                Button(action: onManageAccount) {
+                    HStack {
+                        Label(signedIn ? "账号与登录" : "登录并同步", systemImage: "person.crop.circle")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AppTheme.text)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppTheme.textMuted)
+                    }
+                    .padding(16)
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .padding(.leading, 16)
+
+                HStack {
+                    Label("版本", systemImage: "info.circle")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppTheme.text)
+                    Spacer()
+                    Text(appVersion)
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                .padding(16)
+            }
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+        }
+    }
+
+    private var qualityTierLabel: String? {
+        switch snapshot.qualityTier {
+        case "reliable": "靠谱答主"
+        case "promising": "正在变靠谱"
+        case "at_risk": "需要更认真"
+        default: nil
+        }
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
+    @MainActor
+    private func loadSnapshot() async {
+        guard !isLoading else { return }
+        isLoading = true
+        snapshot = await ProfileAPIService().fetchSnapshot()
+        isLoading = false
+    }
+}
+
+private struct ProfileSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(AppTheme.textSecondary)
+            .padding(.horizontal, 2)
+    }
+}
+
+private struct ProfileMetricTile: View {
+    let value: String
+    let label: String
+    let secondary: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(value)
+                .font(.system(size: 23, weight: .semibold))
+                .foregroundStyle(AppTheme.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+
+            if let secondary {
+                Text(secondary)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppTheme.green)
+                    .lineLimit(1)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 98, alignment: .topLeading)
+        .background(AppTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AppTheme.border, lineWidth: 1)
+        )
+    }
+}
+
+private struct ProfileHistoryRow: View {
+    let item: QuestionHistory
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(item.query)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(1)
+
+                Text(item.statusLabel)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.textMuted)
+        }
+        .padding(16)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct ProfileMessageRow: View {
+    let event: UserLightEvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.green)
+                .frame(width: 34, height: 34)
+                .background(AppTheme.bubble)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                Text(event.body)
+                    .font(.system(size: 13))
+                    .lineSpacing(3)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(3)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(16)
     }
 }
 
