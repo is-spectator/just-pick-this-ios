@@ -77,7 +77,8 @@ struct RootView: View {
                         closeDrawer()
                         showsEmailLogin = true
                     },
-                    unreadLightCount: unreadLightCount
+                    unreadLightCount: unreadLightCount,
+                    onRefresh: refreshDrawer
                 )
                 .frame(width: drawerWidth)
                 .offset(x: showsDrawer ? 0 : -drawerWidth - 24)
@@ -267,6 +268,13 @@ struct RootView: View {
     }
 
     @MainActor
+    private func refreshDrawer() async {
+        _ = await session.refreshCurrentHelpRequest()
+        await session.loadAnswerQueue()
+        await loadMessageBadge()
+    }
+
+    @MainActor
     private func loadMessageBadge() async {
         let snapshot = await ProfileAPIService().fetchSnapshot()
         let ids = Set(snapshot.lightEvents.map(\.id))
@@ -311,6 +319,7 @@ private struct ChatDrawer: View {
     let onOpenProfile: () -> Void
     let onLogin: () -> Void
     let unreadLightCount: Int
+    let onRefresh: () async -> Void
 
     @State private var searchText = ""
     @State private var renamingItem: QuestionHistory?
@@ -389,6 +398,9 @@ private struct ChatDrawer: View {
                 .padding(.bottom, AppTheme.Spacing.xxl)
             }
             .scrollIndicators(.hidden)
+            .refreshable {
+                await onRefresh()
+            }
 
             accountEntry
         }

@@ -1418,45 +1418,55 @@ struct AnswerScreen: View {
 
     var body: some View {
         AppChrome(showsBack: true, backAction: nil, showsTopBar: showsTopBar) {
-            ZStack {
-                VStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("来一句")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(AppTheme.text)
+            GeometryReader { proxy in
+                ZStack {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("来一句")
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundStyle(AppTheme.text)
 
-                        Text("帮 TA 少纠结一次。")
-                            .font(.system(size: 14))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-                    .padding(.top, 8)
-                    .padding(.bottom, 14)
-
-                    HelpDeckStack(
-                        current: session.answerRequest,
-                        next: session.nextAnswerRequest,
-                        isLoading: isLoading,
-                        onAdvance: {
-                            session.advanceAnswerRequest()
-                        },
-                        onRefresh: {
-                            Task { @MainActor in
-                                await reloadAnswerQueue()
+                                Text("帮 TA 少纠结一次。")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(AppTheme.textSecondary)
                             }
-                        },
-                        onBackToChat: {
-                            dismiss()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .padding(.top, 8)
+                            .padding(.bottom, 14)
+
+                            HelpDeckStack(
+                                current: session.answerRequest,
+                                next: session.nextAnswerRequest,
+                                isLoading: isLoading,
+                                onAdvance: {
+                                    session.advanceAnswerRequest()
+                                },
+                                onRefresh: {
+                                    Task { @MainActor in
+                                        await reloadAnswerQueue()
+                                    }
+                                },
+                                onBackToChat: {
+                                    dismiss()
+                                }
+                            )
+                            .frame(height: max(proxy.size.height - 92, 460))
+
+                            Spacer(minLength: 18)
                         }
-                    )
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 14)
+                        .frame(minHeight: proxy.size.height)
+                    }
+                    .scrollIndicators(.hidden)
+                    .refreshable {
+                        await reloadAnswerQueue()
+                    }
 
-                    Spacer(minLength: 18)
+                    ToastView(message: toastMessage, isVisible: showsToast)
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
-
-                ToastView(message: toastMessage, isVisible: showsToast)
             }
         } footer: {
             BottomComposer(
