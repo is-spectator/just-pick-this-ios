@@ -81,6 +81,7 @@ from app.services.intent_answer_import import (
 )
 from app.services.intent_answer_metrics import intent_answer_memory_summary
 from app.services.help_feed import help_feed_conversion_summary
+from app.services.image_policy_metrics import image_policy_summary
 from app.services.personalization_metrics import personalization_summary
 from app.services.reward_loop_metrics import reward_loop_summary
 from app.services.runtime_latency import runtime_latency_summary
@@ -402,6 +403,29 @@ def admin_card_feedback_summary(
         actor=actor,
         action="view_card_feedback_summary",
         table_name="card_feedback_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/images/policy-summary")
+def admin_image_policy_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = image_policy_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_image_policy_summary",
+        table_name="image_policy_summary",
         target_record_id=None,
         request_json=_request_json(request, {"since_hours": since_hours}),
         before_json=None,

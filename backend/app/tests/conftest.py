@@ -43,6 +43,7 @@ NO_DB_TEST_FILES = {
     "test_health_readiness.py",
     "test_help_card_extractor_compressor.py",
     "test_help_feed_ranking.py",
+    "test_image_policy_metrics.py",
     "test_input_gate_reasoner_contract.py",
     "test_input_gate_slot_extraction.py",
     "test_intent_answer_memory_metrics.py",
