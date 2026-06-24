@@ -279,6 +279,12 @@ DEEPSEEK_API_KEY=...
 DEEPSEEK_MODEL=deepseek-reasoner
 ```
 
+## iOS 决策地点
+
+聊天页顶部会显示当前“决策地点”。用户可以手动输入城市、区域或地标，也可以主动点击“使用当前定位”。App 不会在每次发送消息时自动请求定位；只有用户选择当前定位时才触发系统授权。
+
+发送 `/v1/chat/turn` 时，iOS 会把可见地点写入 `client_context.decision_location`。如果用户只补了一句“我想吃川菜”这类缺地点表达，后端 InputGate 会优先使用这个显式地点继续推荐链路。
+
 可选 web search：
 
 ```sh

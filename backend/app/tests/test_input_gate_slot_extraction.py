@@ -50,3 +50,27 @@ def test_food_followup_inherits_previous_area_slots() -> None:
     assert gate.extracted_slots["cuisine"] == "川菜"
     assert gate.extracted_slots["task"] == "choose_restaurant"
     assert gate.should_enter_loop is True
+
+
+def test_food_request_uses_client_decision_location() -> None:
+    gate = run_input_gate(
+        "我想吃川菜啊",
+        client_context={
+            "source": "ios",
+            "decision_location": {
+                "label": "上海互联宝地",
+                "city": "上海",
+                "area": "互联宝地",
+                "source": "manual",
+            },
+        },
+    )
+
+    assert gate.decision_domain == "food"
+    assert gate.location_state == "in_area"
+    assert gate.route_priority == "area_food"
+    assert gate.extracted_slots["city"] == "上海"
+    assert gate.extracted_slots["area"] == "互联宝地"
+    assert gate.extracted_slots["cuisine"] == "川菜"
+    assert gate.extracted_slots["task"] == "choose_restaurant"
+    assert gate.should_enter_loop is True

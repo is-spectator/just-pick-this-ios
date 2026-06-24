@@ -145,8 +145,49 @@ enum SubmitState: Equatable {
     case loading
 }
 
+struct DecisionLocationContext: Equatable, Sendable {
+    let label: String
+    let city: String?
+    let area: String?
+    let latitude: Double?
+    let longitude: Double?
+    let source: String
+
+    var displayLabel: String {
+        label.isEmpty ? "选择地点" : label
+    }
+
+    var detailLabel: String {
+        switch source {
+        case "current":
+            "当前定位"
+        case "manual":
+            "手动地点"
+        default:
+            "决策地点"
+        }
+    }
+
+    static func manual(_ rawValue: String) -> DecisionLocationContext? {
+        let label = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty else { return nil }
+
+        let cityCandidates = ["北京", "上海", "广州", "深圳", "杭州", "成都", "重庆", "南京", "苏州", "武汉", "西安", "长沙", "厦门", "大同"]
+        let city = cityCandidates.first { label.localizedCaseInsensitiveContains($0) }
+        let area = city == label ? nil : label
+        return DecisionLocationContext(
+            label: label,
+            city: city,
+            area: area,
+            latitude: nil,
+            longitude: nil,
+            source: "manual"
+        )
+    }
+}
+
 protocol RecommendationService: Sendable {
-    func submit(query: String, sessionId: UUID?) async -> RecommendationResult
+    func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult
     func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest
     func refresh(_ request: HelpRequest) async -> HelpRequest
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
@@ -171,14 +212,14 @@ struct BackendRecommendationService: RecommendationService {
     private let baseURL = AppAPIEnvironment.baseURL
     private let deviceUid = DeviceIdentity.uid
 
-    func submit(query: String, sessionId: UUID?) async -> RecommendationResult {
+    func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult {
         do {
-            let payload = try await submitChatTurn(query: query, conversationId: sessionId)
+            let payload = try await submitChatTurn(query: query, conversationId: sessionId, locationContext: locationContext)
             return payload.result(for: query)
         } catch {
             if shouldRetryWithFreshConversation(after: error, sessionId: sessionId) {
                 do {
-                    let payload = try await submitChatTurn(query: query, conversationId: nil)
+                    let payload = try await submitChatTurn(query: query, conversationId: nil, locationContext: locationContext)
                     return payload.result(for: query)
                 } catch {
                     print("BackendRecommendationService.submit retry failed: \(error)")
@@ -196,8 +237,11 @@ struct BackendRecommendationService: RecommendationService {
         }
     }
 
-    private func submitChatTurn(query: String, conversationId: UUID?) async throws -> V1ChatTurnResponse {
-        let location = await DeviceLocationProvider.shared.currentLocationPayload()
+    private func submitChatTurn(
+        query: String,
+        conversationId: UUID?,
+        locationContext: DecisionLocationContext?
+    ) async throws -> V1ChatTurnResponse {
         return try await perform(makeRequest(
             path: "/v1/chat/turn",
             method: "POST",
@@ -207,7 +251,8 @@ struct BackendRecommendationService: RecommendationService {
                 deviceId: deviceUid,
                 clientContext: V1ClientContext(
                     source: "ios",
-                    location: location
+                    location: locationContext.flatMap(V1ClientLocation.init(context:)),
+                    decisionLocation: locationContext.map(V1DecisionLocationContext.init(context:))
                 ),
                 metadata: [:]
             )
@@ -223,7 +268,7 @@ struct BackendRecommendationService: RecommendationService {
                     message: "发出去",
                     conversationId: sessionId?.uuidString,
                     deviceId: deviceUid,
-                    clientContext: V1ClientContext(source: "ios", location: nil),
+                    clientContext: V1ClientContext(source: "ios", location: nil, decisionLocation: nil),
                     metadata: ["help_card_id": helpRequest.id.uuidString]
                 )
             ))
@@ -894,9 +939,16 @@ private struct V1ChatTurnRequest: Encodable {
 private struct V1ClientContext: Encodable {
     let source: String
     let location: V1ClientLocation?
+    let decisionLocation: V1DecisionLocationContext?
+
+    enum CodingKeys: String, CodingKey {
+        case source
+        case location
+        case decisionLocation = "decision_location"
+    }
 }
 
-private struct V1ClientLocation: Encodable {
+struct V1ClientLocation: Encodable {
     let latitude: Double
     let longitude: Double
     let horizontalAccuracy: Double
@@ -921,10 +973,41 @@ private struct V1ClientLocation: Encodable {
         self.provider = "ios_core_location"
         self.coordType = "ios_core_location"
     }
+
+    init?(context: DecisionLocationContext) {
+        guard let latitude = context.latitude, let longitude = context.longitude else {
+            return nil
+        }
+
+        self.latitude = latitude
+        self.longitude = longitude
+        self.horizontalAccuracy = 0
+        self.capturedAt = ISO8601DateFormatter().string(from: Date())
+        self.provider = context.source == "current" ? "ios_core_location" : context.source
+        self.coordType = context.source == "current" ? "ios_core_location" : "manual_hint"
+    }
+}
+
+private struct V1DecisionLocationContext: Encodable {
+    let label: String
+    let city: String?
+    let area: String?
+    let latitude: Double?
+    let longitude: Double?
+    let source: String
+
+    init(context: DecisionLocationContext) {
+        self.label = context.label
+        self.city = context.city
+        self.area = context.area
+        self.latitude = context.latitude
+        self.longitude = context.longitude
+        self.source = context.source
+    }
 }
 
 @MainActor
-private final class DeviceLocationProvider: NSObject, @preconcurrency CLLocationManagerDelegate {
+final class DeviceLocationProvider: NSObject, @preconcurrency CLLocationManagerDelegate {
     static let shared = DeviceLocationProvider()
 
     private let manager = CLLocationManager()
@@ -963,6 +1046,30 @@ private final class DeviceLocationProvider: NSObject, @preconcurrency CLLocation
                 finish(nil)
             }
         }
+    }
+
+    func currentDecisionLocation() async -> DecisionLocationContext? {
+        guard let payload = await currentLocationPayload() else { return nil }
+        let location = CLLocation(latitude: payload.latitude, longitude: payload.longitude)
+        let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location)
+        let placemark = placemarks?.first
+        let city = placemark?.locality ?? placemark?.administrativeArea
+        let area = placemark?.subLocality ?? placemark?.name
+        let labelParts = [city, area]
+            .compactMap { value in
+                value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .filter { !$0.isEmpty }
+        let label = labelParts.isEmpty ? "当前位置" : labelParts.joined(separator: " · ")
+
+        return DecisionLocationContext(
+            label: label,
+            city: city,
+            area: area,
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            source: "current"
+        )
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -1280,7 +1387,7 @@ private struct V1CardAcceptResponse: Decodable {
 }
 
 struct MockCloudRecommendationService: RecommendationService {
-    func submit(query: String, sessionId: UUID?) async -> RecommendationResult {
+    func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult {
         try? await Task.sleep(for: .milliseconds(650))
 
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1587,12 +1694,12 @@ final class AppSession {
         submitState = .idle
     }
 
-    func submit(query: String) async -> RecommendationDecision {
+    func submit(query: String, locationContext: DecisionLocationContext? = nil) async -> RecommendationDecision {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         currentQuery = trimmed
         submitState = .loading
 
-        let result = await service.submit(query: trimmed, sessionId: sessionId)
+        let result = await service.submit(query: trimmed, sessionId: sessionId, locationContext: locationContext)
         serviceNotice = result.serviceNotice
         sessionId = result.sessionId ?? sessionId
         currentQuestionId = result.questionId ?? currentQuestionId

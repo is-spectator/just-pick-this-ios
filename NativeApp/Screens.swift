@@ -41,6 +41,11 @@ struct InputScreen: View {
     @State private var isAcceptingPick = false
     @State private var isPublishingHelp = false
     @State private var showsNewConversationToast = false
+    @State private var decisionLocation: DecisionLocationContext?
+    @State private var showsLocationPicker = false
+    @State private var manualLocationText = ""
+    @State private var isLocating = false
+    @State private var locationMessage: String?
 
     var body: some View {
         AppChrome(
@@ -50,34 +55,45 @@ struct InputScreen: View {
             onNewConversation: startNewConversation,
             showsHistoryBadge: showsMessageBadge
         ) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        ForEach(entries) { entry in
-                            row(for: entry)
-                                .id(entry.id)
-                        }
+            VStack(spacing: 0) {
+                DecisionLocationBar(
+                    location: decisionLocation,
+                    isLocating: isLocating,
+                    action: {
+                        manualLocationText = decisionLocation?.label ?? ""
+                        showsLocationPicker = true
+                    }
+                )
 
-                        if session.isSubmitting {
-                            AssistantThinkingRow()
-                                .id("thinking")
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            ForEach(entries) { entry in
+                                row(for: entry)
+                                    .id(entry.id)
+                            }
+
+                            if session.isSubmitting {
+                                AssistantThinkingRow()
+                                    .id("thinking")
+                            }
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.top, 14)
+                        .padding(.bottom, 20)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            dismissKeyboard()
                         }
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 14)
-                    .padding(.bottom, 20)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        dismissKeyboard()
+                    .scrollIndicators(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                    .onChange(of: entries.count) { _, _ in
+                        scrollToBottom(with: proxy)
                     }
-                }
-                .scrollIndicators(.hidden)
-                .scrollDismissesKeyboard(.interactively)
-                .onChange(of: entries.count) { _, _ in
-                    scrollToBottom(with: proxy)
-                }
-                .onChange(of: session.isSubmitting) { _, _ in
-                    scrollToBottom(with: proxy)
+                    .onChange(of: session.isSubmitting) { _, _ in
+                        scrollToBottom(with: proxy)
+                    }
                 }
             }
         } footer: {
@@ -92,6 +108,19 @@ struct InputScreen: View {
         .onDisappear {
             submitTask?.cancel()
             toastTask?.cancel()
+        }
+        .sheet(isPresented: $showsLocationPicker) {
+            LocationPickerSheet(
+                manualText: $manualLocationText,
+                currentLocation: decisionLocation,
+                isLocating: isLocating,
+                message: locationMessage,
+                onUseCurrent: useCurrentLocation,
+                onSaveManual: saveManualLocation,
+                onClear: clearDecisionLocation
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .overlay(alignment: .top) {
             if showsNewConversationToast {
@@ -143,7 +172,7 @@ struct InputScreen: View {
         entries.append(.user(UUID(), query))
         submitTask?.cancel()
         submitTask = Task { @MainActor in
-            let decision = await session.submit(query: query)
+            let decision = await session.submit(query: query, locationContext: decisionLocation)
             guard !Task.isCancelled else { return }
             appendAssistantResponse(for: decision)
         }
@@ -240,8 +269,229 @@ struct InputScreen: View {
         onHistorySelect(item)
     }
 
+    private func useCurrentLocation() {
+        guard !isLocating else { return }
+        isLocating = true
+        locationMessage = nil
+
+        Task { @MainActor in
+            if let location = await DeviceLocationProvider.shared.currentDecisionLocation() {
+                decisionLocation = location
+                manualLocationText = location.label
+                locationMessage = "已使用当前位置。"
+                showsLocationPicker = false
+            } else {
+                locationMessage = "没拿到当前位置，可以手动输入地点。"
+            }
+            isLocating = false
+        }
+    }
+
+    private func saveManualLocation() {
+        guard let location = DecisionLocationContext.manual(manualLocationText) else {
+            locationMessage = "先输入城市、区域或地标。"
+            return
+        }
+        decisionLocation = location
+        locationMessage = "已使用\(location.label)。"
+        showsLocationPicker = false
+    }
+
+    private func clearDecisionLocation() {
+        decisionLocation = nil
+        manualLocationText = ""
+        locationMessage = nil
+        showsLocationPicker = false
+    }
+
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+private struct DecisionLocationBar: View {
+    let location: DecisionLocationContext?
+    let isLocating: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: location == nil ? "location" : "location.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .frame(width: 28, height: 28)
+                    .background(AppTheme.bubble)
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(location?.displayLabel ?? "未设置决策地点")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                        .lineLimit(1)
+
+                    Text(location?.detailLabel ?? "点这里使用当前定位或手动输入")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                if isLocating {
+                    ProgressView()
+                        .tint(AppTheme.text)
+                        .scaleEffect(0.76)
+                        .frame(width: 30, height: 30)
+                } else {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .frame(width: 30, height: 30)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 52)
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+            .padding(.horizontal, 18)
+            .padding(.bottom, 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(location == nil ? "选择决策地点" : "当前决策地点：\(location?.displayLabel ?? "")")
+    }
+}
+
+private struct LocationPickerSheet: View {
+    @Binding var manualText: String
+    let currentLocation: DecisionLocationContext?
+    let isLocating: Bool
+    let message: String?
+    let onUseCurrent: () -> Void
+    let onSaveManual: () -> Void
+    let onClear: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("决策地点")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+
+                    Text("皮皮会把这里当作附近推荐和步行距离的依据。")
+                        .font(.system(size: 14))
+                        .lineSpacing(4)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                if let currentLocation {
+                    HStack(spacing: 10) {
+                        Image(systemName: currentLocation.source == "current" ? "location.fill" : "mappin.and.ellipse")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.green)
+                            .frame(width: 34, height: 34)
+                            .background(AppTheme.bubble)
+                            .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(currentLocation.displayLabel)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppTheme.text)
+                                .lineLimit(1)
+                            Text(currentLocation.detailLabel)
+                                .font(AppTheme.Typography.caption)
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                    }
+                    .productPanel()
+                }
+
+                Button(action: onUseCurrent) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "location.circle.fill")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 42, height: 42)
+                            .background(AppTheme.text)
+                            .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("使用当前定位")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppTheme.text)
+                            Text("需要系统定位授权，只用于这次决策。")
+                                .font(AppTheme.Typography.caption)
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+
+                        Spacer()
+
+                        if isLocating {
+                            ProgressView()
+                                .tint(AppTheme.text)
+                        }
+                    }
+                    .frame(minHeight: 58)
+                }
+                .buttonStyle(.plain)
+                .disabled(isLocating)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("手动输入")
+                        .font(AppTheme.Typography.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+
+                    TextField("城市、区域或地标，例如 上海互联网宝地", text: $manualText)
+                        .font(AppTheme.Typography.body)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 14)
+                        .frame(height: 50)
+                        .background(AppTheme.bubble)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+
+                    Button(action: onSaveManual) {
+                        Text("保存地点")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(AppTheme.text)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if let message {
+                    Text(message)
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                Spacer()
+            }
+            .padding(22)
+            .background(AppTheme.background)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("清除", action: onClear)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("关闭") {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppTheme.text)
+                }
+            }
+        }
     }
 }
 

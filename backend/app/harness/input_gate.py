@@ -135,6 +135,13 @@ def run_input_gate(
     stripped = message.strip()
     rewrite = rewrite_result or rewrite_query(stripped)
     slots = dict(rewrite.extracted_slots)
+    client_rewrite = _rewrite_with_client_decision_location(
+        rewrite=rewrite,
+        client_context=client_context,
+    )
+    if client_rewrite is not rewrite:
+        rewrite = client_rewrite
+        slots = dict(rewrite.extracted_slots)
     inherited_rewrite = _rewrite_with_latest_context(
         message=stripped,
         rewrite=rewrite,
@@ -532,6 +539,60 @@ def _rewrite_with_latest_context(
             "Inherited location slots from latest_user_context.",
         ],
     )
+
+
+def _rewrite_with_client_decision_location(
+    *,
+    rewrite: QueryRewriteResult,
+    client_context: dict[str, Any] | None,
+) -> QueryRewriteResult:
+    context = dict(client_context or {})
+    decision_location = context.get("decision_location")
+    if not isinstance(decision_location, dict):
+        return rewrite
+
+    current_slots = dict(rewrite.extracted_slots)
+    if current_slots.get("area") or current_slots.get("venue"):
+        return rewrite
+    if not _has_food_preference_slots(current_slots):
+        return rewrite
+
+    city = _clean_client_location_value(decision_location.get("city"))
+    area = _clean_client_location_value(decision_location.get("area"))
+    label = _clean_client_location_value(decision_location.get("label"))
+    if not (city or area or label):
+        return rewrite
+
+    merged = dict(current_slots)
+    if city and not merged.get("city"):
+        merged["city"] = city
+    if area and not merged.get("area"):
+        merged["area"] = area
+    elif label and not merged.get("area"):
+        merged["area"] = label
+
+    if merged.get("area"):
+        merged["location_state"] = "in_area"
+    if not merged.get("task"):
+        merged["task"] = "choose_restaurant"
+
+    return QueryRewriteResult(
+        original_query=rewrite.original_query,
+        canonical_query=_canonical_query_from_slots(rewrite.canonical_query, merged),
+        extracted_slots=merged,
+        confidence=max(rewrite.confidence, 0.84),
+        notes=[
+            *rewrite.notes,
+            "Merged selected client decision_location into query slots.",
+        ],
+    )
+
+
+def _clean_client_location_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
 
 
 def _should_inherit_location_slots(
