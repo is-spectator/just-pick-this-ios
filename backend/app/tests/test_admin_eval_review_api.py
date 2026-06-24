@@ -190,6 +190,18 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert alignment.json()["target_met"] is True
     assert alignment.json()["items"][0]["predicted_cause"] == "seed_gap"
 
+    review_workflow = await client.get(
+        "/admin/api/eval-runs/run-1/review-workflow-summary",
+        headers=_headers(),
+    )
+    assert review_workflow.status_code == 200, review_workflow.text
+    workflow_body = review_workflow.json()
+    assert workflow_body["reviewed_case_count"] == 1
+    assert workflow_body["suggested_fix_count"] == 1
+    assert workflow_body["seed_patch_count"] == 1
+    assert workflow_body["accepted_seed_gap_count"] == 1
+    assert workflow_body["metadata"]["contract"].startswith("human review")
+
     reviewed_summary = await client.get(
         "/admin/api/eval-runs/run-1/seed-workflow-summary?top_limit=1",
         headers=_headers(),

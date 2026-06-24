@@ -70,6 +70,7 @@ from app.services.eval_review_service import (
     resolve_reports_root,
     review_payload as build_eval_review_payload,
     review_alignment_summary,
+    review_workflow_summary,
     routing_quality_summary,
 )
 from app.services.intent_answer_import import (
@@ -553,6 +554,16 @@ def get_eval_case_detail(request: Request, run_id: str, case_id: str) -> dict[st
 def get_eval_review_alignment(request: Request, run_id: str) -> dict[str, Any]:
     reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
     return review_alignment_summary(reports_root, run_id)
+
+
+@router.get("/api/eval-runs/{run_id}/review-workflow-summary")
+def get_eval_review_workflow_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return review_workflow_summary(reports_root, run_id, limit=limit)
 
 
 @router.get("/api/eval-runs/{run_id}/seed-workflow-summary")

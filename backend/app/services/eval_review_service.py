@@ -485,6 +485,74 @@ def review_alignment_summary(reports_root: Path, run_id: str) -> dict[str, Any]:
     }
 
 
+def review_workflow_summary(
+    reports_root: Path,
+    run_id: str,
+    *,
+    limit: int = 50,
+    low_quality_threshold: float = 0.75,
+) -> dict[str, Any]:
+    run_dir = _run_dir(reports_root, run_id)
+    attributions = _load_jsonl(run_dir / "quality_attribution.jsonl")
+    scores = {str(item.get("case_id")): item for item in _load_jsonl(run_dir / "case_quality_scores.jsonl")}
+    reviews = _load_jsonl(run_dir / "human_reviews.jsonl")
+    latest_reviews = _latest_reviews_by_case(reviews)
+
+    low_quality_ids: set[str] = set()
+    for attribution in attributions:
+        case_id = str(attribution.get("case_id") or "")
+        score = scores.get(case_id, {})
+        quality = _mapping(attribution.get("quality"))
+        if float(quality.get("overall") or score.get("quality_score") or 1.0) < low_quality_threshold:
+            low_quality_ids.add(case_id)
+
+    latest_review_items = [
+        {
+            "case_id": case_id,
+            "action": review.get("action"),
+            "reviewer": review.get("reviewer"),
+            "labels": review.get("labels") or [],
+            "has_suggested_fix": bool(review.get("suggested_fix")),
+            "has_seed_patch": bool(review.get("seed_patch")),
+            "notes": review.get("notes") or "",
+        }
+        for case_id, review in sorted(latest_reviews.items())
+    ]
+    reviewed_low_quality_count = len(low_quality_ids.intersection(latest_reviews))
+    return {
+        "run_id": run_id,
+        "low_quality_threshold": low_quality_threshold,
+        "review_file": str(run_dir / "human_reviews.jsonl"),
+        "total_review_events": len(reviews),
+        "reviewed_case_count": len(latest_reviews),
+        "low_quality_count": len(low_quality_ids),
+        "reviewed_low_quality_count": reviewed_low_quality_count,
+        "pending_low_quality_count": max(0, len(low_quality_ids) - reviewed_low_quality_count),
+        "low_quality_processing_rate": (
+            round(reviewed_low_quality_count / len(low_quality_ids), 4) if low_quality_ids else 0.0
+        ),
+        "suggested_fix_count": sum(1 for review in latest_reviews.values() if review.get("suggested_fix")),
+        "seed_patch_count": sum(1 for review in latest_reviews.values() if review.get("seed_patch")),
+        "accepted_seed_gap_count": sum(
+            1 for review in latest_reviews.values() if review.get("action") == "accept_seed_gap"
+        ),
+        "agent_bug_count": sum(1 for review in latest_reviews.values() if review.get("action") == "mark_agent_bug"),
+        "needs_more_data_count": sum(1 for review in latest_reviews.values() if review.get("action") == "needs_more_data"),
+        "by_review_action": _count_by(latest_review_items, "action"),
+        "by_label": _count_labels(latest_reviews.values()),
+        "recent_reviews": latest_review_items[: max(1, int(limit or 1))],
+        "metadata": {
+            "version": "review_workflow_summary_v1",
+            "source_files": [
+                "quality_attribution.jsonl",
+                "case_quality_scores.jsonl",
+                "human_reviews.jsonl",
+            ],
+            "contract": "human review with suggested_fix/seed_patch and low-quality processing visibility",
+        },
+    }
+
+
 def _case_summary_payload(attribution: Mapping[str, Any], *, score: Mapping[str, Any]) -> dict[str, Any]:
     quality = _mapping(attribution.get("quality"))
     trace_replay = _trace_replay_payload(result=None, attribution=attribution, score=score)
@@ -533,6 +601,19 @@ def _count_by(items: Sequence[Mapping[str, Any]], key: str) -> dict[str, int]:
     for item in items:
         value = str(item.get(key) or "unknown")
         counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _count_labels(reviews: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for review in reviews:
+        labels = review.get("labels") or []
+        if not isinstance(labels, Sequence) or isinstance(labels, str):
+            continue
+        for label in labels:
+            value = str(label or "").strip()
+            if value:
+                counts[value] = counts.get(value, 0) + 1
     return dict(sorted(counts.items()))
 
 

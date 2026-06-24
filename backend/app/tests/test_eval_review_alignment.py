@@ -10,6 +10,7 @@ from app.services.eval_review_service import (
     low_quality_queue_summary,
     review_alignment_summary,
     review_payload,
+    review_workflow_summary,
     routing_quality_summary,
 )
 
@@ -353,4 +354,82 @@ def test_routing_quality_summary_tracks_location_target_and_venue_priority_issue
     assert [item["case_id"] for item in summary["top_cases"]] == ["haidilao-overridden", "area-target-type"]
     assert summary["metadata"]["contract"] == (
         "venue+ordering before area, stable location_state and target_type"
+    )
+
+
+def test_review_workflow_summary_tracks_throughput_fix_and_seed_patch_counts(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run-7"
+    run_dir.mkdir()
+    _write_jsonl(
+        run_dir / "quality_attribution.jsonl",
+        [
+            {
+                "case_id": "seed-gap-case",
+                "primary_cause": "seed_gap",
+                "quality": {"overall": 0.42},
+            },
+            {
+                "case_id": "agent-bug-case",
+                "primary_cause": "agent_bug",
+                "quality": {"overall": 0.31},
+            },
+            {
+                "case_id": "passed-case",
+                "primary_cause": "not_issue",
+                "quality": {"overall": 0.96},
+            },
+        ],
+    )
+    _write_jsonl(
+        run_dir / "case_quality_scores.jsonl",
+        [
+            {"case_id": "seed-gap-case", "quality_score": 0.42, "status": "failed"},
+            {"case_id": "agent-bug-case", "quality_score": 0.31, "status": "failed"},
+            {"case_id": "passed-case", "quality_score": 0.96, "status": "passed"},
+        ],
+    )
+    append_case_review(
+        tmp_path,
+        "run-7",
+        review_payload(
+            run_id="run-7",
+            case_id="seed-gap-case",
+            action="accept_seed_gap",
+            reviewer="human",
+            labels=["seed", "area_food"],
+            suggested_fix={"summary": "补朝阳区热干面 seed"},
+            seed_patch={"intent_key": "area:北京:朝阳区:热干面"},
+        ),
+    )
+    append_case_review(
+        tmp_path,
+        "run-7",
+        review_payload(
+            run_id="run-7",
+            case_id="agent-bug-case",
+            action="mark_agent_bug",
+            reviewer="human",
+            labels=["router"],
+            suggested_fix="修 venue > area 优先级",
+        ),
+    )
+
+    summary = review_workflow_summary(tmp_path, "run-7")
+
+    assert summary["total_review_events"] == 2
+    assert summary["reviewed_case_count"] == 2
+    assert summary["low_quality_count"] == 2
+    assert summary["reviewed_low_quality_count"] == 2
+    assert summary["pending_low_quality_count"] == 0
+    assert summary["low_quality_processing_rate"] == 1.0
+    assert summary["suggested_fix_count"] == 2
+    assert summary["seed_patch_count"] == 1
+    assert summary["accepted_seed_gap_count"] == 1
+    assert summary["agent_bug_count"] == 1
+    assert summary["by_review_action"] == {"accept_seed_gap": 1, "mark_agent_bug": 1}
+    assert summary["by_label"] == {"area_food": 1, "router": 1, "seed": 1}
+    assert summary["metadata"]["contract"] == (
+        "human review with suggested_fix/seed_patch and low-quality processing visibility"
     )
