@@ -115,6 +115,13 @@ async def test_admin_eval_run_review_api_reads_reports_and_writes_audit(eval_adm
     assert queue_body["by_primary_cause"] == {"seed_gap": 1}
     assert queue_body["top_cases"][0]["trace_replay"]["admin_trace_api_path"] == "/admin/api/traces/agent-review"
 
+    card_contract = await client.get("/admin/api/eval-runs/run-1/card-contract-summary", headers=_headers())
+    assert card_contract.status_code == 200, card_contract.text
+    card_body = card_contract.json()
+    assert card_body["scored_case_count"] == 1
+    assert "average_card_contract_score" in card_body
+    assert card_body["metadata"]["contract"].startswith("single item")
+
     detail = await client.get("/admin/api/eval-runs/run-1/cases/seed-gap-case", headers=_headers())
     assert detail.status_code == 200
     assert detail.json()["quality"]["case_id"] == "seed-gap-case"

@@ -144,6 +144,83 @@ def low_quality_queue_summary(
     }
 
 
+def card_contract_summary(
+    reports_root: Path,
+    run_id: str,
+    *,
+    limit: int = 50,
+) -> dict[str, Any]:
+    run_dir = _run_dir(reports_root, run_id)
+    scores = _load_jsonl(run_dir / "case_quality_scores.jsonl")
+    issue_counts: dict[str, int] = {}
+    contract_cases: list[dict[str, Any]] = []
+    total_card_contract_score = 0.0
+    scored_count = 0
+    for score in scores:
+        dimensions = _mapping(score.get("dimensions"))
+        card_score = _safe_float(dimensions.get("card_contract"), default=1.0)
+        total_card_contract_score += card_score
+        scored_count += 1
+        issues = [_mapping(issue) for issue in (score.get("issues") or []) if isinstance(issue, Mapping)]
+        for issue in issues:
+            code = str(issue.get("code") or "unknown")
+            issue_counts[code] = issue_counts.get(code, 0) + 1
+        card_issue_codes = [str(issue.get("code") or "") for issue in issues if _is_card_contract_issue(issue)]
+        if card_score < 1.0 or card_issue_codes:
+            contract_cases.append(
+                {
+                    "case_id": score.get("case_id"),
+                    "quality_score": score.get("quality_score"),
+                    "card_contract_score": card_score,
+                    "status": score.get("status"),
+                    "actual_kind": score.get("actual_kind"),
+                    "expected_kind": score.get("expected_kind"),
+                    "issues": card_issue_codes,
+                }
+            )
+
+    too_many_decision_factor_count = sum(
+        count
+        for code, count in issue_counts.items()
+        if code
+        in {
+            "recommendation_card_must_use_singular_decision_factor",
+            "recommendation_card_decision_factor_must_be_single",
+            "too_many_decision_factors",
+        }
+    )
+    legacy_field_count = sum(
+        count
+        for code, count in issue_counts.items()
+        if code
+        in {
+            "recommendation_card_forbidden_reasons",
+            "recommendation_card_forbidden_bullets",
+            "recommendation_card_forbidden_followups",
+            "recommendation_card_forbidden_warning",
+        }
+    )
+    sorted_cases = sorted(
+        contract_cases,
+        key=lambda item: (float(item.get("card_contract_score") or 1.0), str(item.get("case_id") or "")),
+    )
+    return {
+        "run_id": run_id,
+        "scored_case_count": scored_count,
+        "average_card_contract_score": round(total_card_contract_score / scored_count, 4) if scored_count else 0.0,
+        "card_contract_issue_case_count": len(contract_cases),
+        "too_many_decision_factor_count": too_many_decision_factor_count,
+        "legacy_field_violation_count": legacy_field_count,
+        "issue_counts": dict(sorted(issue_counts.items())),
+        "top_cases": sorted_cases[: max(1, int(limit or 1))],
+        "metadata": {
+            "version": "card_contract_summary_v1",
+            "source_files": ["case_quality_scores.jsonl"],
+            "contract": "single item + single decision_factor + no reasons/bullets/followups/warning",
+        },
+    }
+
+
 def case_detail(reports_root: Path, run_id: str, case_id: str) -> dict[str, Any]:
     run_dir = _run_dir(reports_root, run_id)
     result = _find_jsonl(run_dir / "results.jsonl", case_id)
@@ -307,6 +384,22 @@ def _count_by(items: Sequence[Mapping[str, Any]], key: str) -> dict[str, int]:
         value = str(item.get(key) or "unknown")
         counts[value] = counts.get(value, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def _is_card_contract_issue(issue: Mapping[str, Any]) -> bool:
+    code = str(issue.get("code") or "")
+    return (
+        code.startswith("recommendation_card_")
+        or code in {"too_many_decision_factors", "decision_factor_missing", "decision_factor_too_weak"}
+        or "decision_factor" in code
+    )
+
+
+def _safe_float(value: Any, *, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _trace_replay_payload(

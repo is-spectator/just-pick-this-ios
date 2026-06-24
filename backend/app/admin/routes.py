@@ -61,6 +61,7 @@ from app.services.answerer_quality import answerer_quality_summary
 from app.services.cards import post_experience_review_summary
 from app.services.eval_review_service import (
     append_case_review,
+    card_contract_summary,
     case_detail as eval_case_detail,
     list_eval_runs as list_eval_report_runs,
     low_quality_cases as eval_low_quality_cases,
@@ -505,6 +506,16 @@ def get_eval_low_quality_summary(
 ) -> dict[str, Any]:
     reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
     return low_quality_queue_summary(reports_root, run_id, limit=limit)
+
+
+@router.get("/api/eval-runs/{run_id}/card-contract-summary")
+def get_eval_card_contract_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return card_contract_summary(reports_root, run_id, limit=limit)
 
 
 @router.get("/api/eval-runs/{run_id}/cases/{case_id}")

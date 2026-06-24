@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.services.eval_review_service import (
     append_case_review,
+    card_contract_summary,
     low_quality_queue_summary,
     review_alignment_summary,
     review_payload,
@@ -167,3 +168,61 @@ def test_low_quality_queue_summary_tracks_cause_review_and_trace_coverage(tmp_pa
     assert [item["case_id"] for item in summary["top_cases"]] == ["agent-bug-case", "seed-gap-case"]
     assert summary["top_cases"][1]["reviewed"] is True
     assert summary["top_cases"][1]["trace_replay"]["admin_trace_api_path"] == "/admin/api/traces/agent-1"
+
+
+def test_card_contract_summary_tracks_single_decision_factor_and_legacy_field_violations(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run-4"
+    run_dir.mkdir()
+    _write_jsonl(
+        run_dir / "case_quality_scores.jsonl",
+        [
+            {
+                "case_id": "too-many-factors",
+                "quality_score": 0.55,
+                "status": "failed",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"card_contract": 0.4},
+                "issues": [
+                    {"code": "recommendation_card_decision_factor_must_be_single"},
+                    {"code": "recommendation_card_must_use_singular_decision_factor"},
+                ],
+            },
+            {
+                "case_id": "legacy-fields",
+                "quality_score": 0.7,
+                "status": "degraded",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"card_contract": 0.65},
+                "issues": [
+                    {"code": "recommendation_card_forbidden_bullets"},
+                    {"code": "recommendation_card_forbidden_followups"},
+                ],
+            },
+            {
+                "case_id": "clean-card",
+                "quality_score": 1.0,
+                "status": "passed",
+                "expected_kind": "recommendation_card",
+                "actual_kind": "recommendation_card",
+                "dimensions": {"card_contract": 1.0},
+                "issues": [],
+            },
+        ],
+    )
+
+    summary = card_contract_summary(tmp_path, "run-4")
+
+    assert summary["scored_case_count"] == 3
+    assert summary["average_card_contract_score"] == 0.6833
+    assert summary["card_contract_issue_case_count"] == 2
+    assert summary["too_many_decision_factor_count"] == 2
+    assert summary["legacy_field_violation_count"] == 2
+    assert summary["issue_counts"]["recommendation_card_forbidden_bullets"] == 1
+    assert [item["case_id"] for item in summary["top_cases"]] == ["too-many-factors", "legacy-fields"]
+    assert summary["metadata"]["contract"] == (
+        "single item + single decision_factor + no reasons/bullets/followups/warning"
+    )
