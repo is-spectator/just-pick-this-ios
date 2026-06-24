@@ -2363,10 +2363,36 @@ struct FavoritesScreen: View {
 }
 
 struct RewardsScreen: View {
+    let session: AppSession
     let authRevision: Int
 
     @State private var snapshot = UserDashboardSnapshot.empty
     @State private var isLoading = false
+
+    private var localPendingRewardItems: [RewardLedgerItem] {
+        session.submittedAnswers
+            .filter { $0.status == .pending }
+            .map { answer in
+                RewardLedgerItem(
+                    id: answer.helpRequestId.uuidString,
+                    title: answer.questionTitle,
+                    subtitle: "等待对方采纳",
+                    valueLabel: answer.rewardLabel,
+                    status: .pending,
+                    createdAt: answer.timeLabel
+                )
+            }
+    }
+
+    private var rewardItems: [RewardLedgerItem] {
+        var seen = Set(snapshot.rewardItems.map(\.id))
+        var items = snapshot.rewardItems
+        for item in localPendingRewardItems where !seen.contains(item.id) {
+            items.insert(item, at: 0)
+            seen.insert(item.id)
+        }
+        return items
+    }
 
     var body: some View {
         ProductListScreen(
@@ -2380,8 +2406,28 @@ struct RewardsScreen: View {
             ProductSection(title: "积分") {
                 HStack(spacing: 10) {
                     ProfileMetricTile(value: "\(snapshot.grantedReward)", label: "已获得", secondary: nil)
-                    ProfileMetricTile(value: "\(snapshot.pendingReward)", label: "待确认", secondary: nil)
+                    ProfileMetricTile(
+                        value: "\(snapshot.pendingReward + pendingLocalRewardValue)",
+                        label: "待确认",
+                        secondary: pendingLocalRewardValue > 0 ? "含刚提交" : nil
+                    )
                     ProfileMetricTile(value: "\(snapshot.rejectedReward)", label: "未采用", secondary: nil)
+                }
+            }
+
+            ProductSection(title: "明细") {
+                if rewardItems.isEmpty {
+                    ProductEmptyInline(
+                        title: "还没有奖励明细",
+                        message: "去来一句写一句，被采纳或待确认的奖励会归档到这里。"
+                    )
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(rewardItems) { item in
+                            RewardLedgerRow(item: item)
+                        }
+                    }
+                    .productPanel()
                 }
             }
 
@@ -2416,6 +2462,13 @@ struct RewardsScreen: View {
         }
         .task(id: authRevision) {
             await loadSnapshot()
+        }
+    }
+
+    private var pendingLocalRewardValue: Int {
+        let snapshotIds = Set(snapshot.rewardItems.map(\.id))
+        return localPendingRewardItems.filter { !snapshotIds.contains($0.id) }.reduce(0) { total, item in
+            total + (Int(item.valueLabel.replacingOccurrences(of: "+", with: "")) ?? 0)
         }
     }
 
@@ -2732,6 +2785,86 @@ private struct SubmittedAnswerRow: View {
                         .lineLimit(3)
                 }
             }
+        }
+        .productPanel()
+    }
+}
+
+private struct RewardLedgerRow: View {
+    let item: RewardLedgerItem
+
+    private var statusColor: Color {
+        switch item.status {
+        case .pending:
+            AppTheme.orangeText
+        case .granted:
+            AppTheme.green
+        case .rejected:
+            AppTheme.textSecondary
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: item.status.icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(statusColor)
+                .frame(width: 34, height: 34)
+                .background(statusColor.opacity(0.12))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    Text(item.status.label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(statusColor)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(statusColor.opacity(0.12))
+                        .clipShape(Capsule())
+
+                    Text(item.valueLabel)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+
+                    Spacer(minLength: 0)
+
+                    if let createdAt = item.createdAt, !createdAt.isEmpty {
+                        Text(createdAt)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(AppTheme.textMuted)
+                            .lineLimit(1)
+                    }
+                }
+
+                Text(item.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(2)
+
+                Text(item.subtitle)
+                    .font(.system(size: 13))
+                    .lineSpacing(3)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+}
+
+private struct ProductEmptyInline: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppTheme.text)
+            Text(message)
+                .font(.system(size: 13))
+                .lineSpacing(3)
+                .foregroundStyle(AppTheme.textSecondary)
         }
         .productPanel()
     }

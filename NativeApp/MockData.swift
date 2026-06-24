@@ -605,6 +605,7 @@ struct UserDashboardSnapshot: Equatable, Sendable {
     let qualityTier: String
     let answerStatusCounts: [String: Int]
     let rewardStatusCounts: [String: Int]
+    let rewardItems: [RewardLedgerItem]
     let lightEvents: [UserLightEvent]
 
     static let empty = UserDashboardSnapshot(
@@ -615,8 +616,57 @@ struct UserDashboardSnapshot: Equatable, Sendable {
         qualityTier: "new",
         answerStatusCounts: [:],
         rewardStatusCounts: [:],
+        rewardItems: [],
         lightEvents: []
     )
+}
+
+enum RewardLedgerStatus: String, Codable, Hashable, Sendable {
+    case pending
+    case granted
+    case rejected
+
+    init(rawStatus: String) {
+        switch rawStatus {
+        case "granted", "accepted":
+            self = .granted
+        case "rejected":
+            self = .rejected
+        default:
+            self = .pending
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .pending:
+            "待确认"
+        case .granted:
+            "已获得"
+        case .rejected:
+            "未采用"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pending:
+            "clock"
+        case .granted:
+            "checkmark.seal"
+        case .rejected:
+            "minus.circle"
+        }
+    }
+}
+
+struct RewardLedgerItem: Identifiable, Hashable, Sendable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let valueLabel: String
+    let status: RewardLedgerStatus
+    let createdAt: String?
 }
 
 enum SubmittedAnswerStatus: String, Codable, Hashable, Sendable {
@@ -684,6 +734,7 @@ struct ProfileAPIService: Sendable {
             qualityTier: quality?.quality.tier ?? "new",
             answerStatusCounts: quality?.answers.statusCounts ?? [:],
             rewardStatusCounts: quality?.rewards?.statusCounts ?? [:],
+            rewardItems: (rewards?.items ?? []).map(\.ledgerItem),
             lightEvents: (lights?.items ?? []).map { item in
                 UserLightEvent(
                     id: item.id,
@@ -754,11 +805,56 @@ private struct V1ProfileRewardsResponse: Decodable {
     let pendingValue: Int
     let grantedValue: Int
     let rejectedValue: Int
+    let items: [V1ProfileRewardItem]
 
     enum CodingKeys: String, CodingKey {
         case pendingValue = "pending_value"
         case grantedValue = "granted_value"
         case rejectedValue = "rejected_value"
+        case items
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pendingValue = try container.decodeIfPresent(Int.self, forKey: .pendingValue) ?? 0
+        grantedValue = try container.decodeIfPresent(Int.self, forKey: .grantedValue) ?? 0
+        rejectedValue = try container.decodeIfPresent(Int.self, forKey: .rejectedValue) ?? 0
+        items = try container.decodeIfPresent([V1ProfileRewardItem].self, forKey: .items) ?? []
+    }
+}
+
+private struct V1ProfileRewardItem: Decodable {
+    let id: String
+    let type: String?
+    let label: String?
+    let value: Int
+    let status: String
+    let helpCardId: String?
+    let helpAnswerId: String?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case label
+        case value
+        case status
+        case helpCardId = "help_card_id"
+        case helpAnswerId = "help_answer_id"
+        case createdAt = "created_at"
+    }
+
+    var ledgerItem: RewardLedgerItem {
+        let normalizedStatus = RewardLedgerStatus(rawStatus: status)
+        let rewardLabel = label?.isEmpty == false ? label! : "+\(value)"
+        return RewardLedgerItem(
+            id: helpCardId ?? helpAnswerId ?? id,
+            title: "来一句奖励",
+            subtitle: normalizedStatus == .pending ? "等待对方采纳" : "来自一次来一句回答",
+            valueLabel: rewardLabel,
+            status: normalizedStatus,
+            createdAt: createdAt
+        )
     }
 }
 

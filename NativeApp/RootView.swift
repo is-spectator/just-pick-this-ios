@@ -153,7 +153,7 @@ struct RootView: View {
                 case .favorites:
                     FavoritesScreen(session: session, onSelectHistory: openHistoryItem)
                 case .rewards:
-                    RewardsScreen(authRevision: authRevision)
+                    RewardsScreen(session: session, authRevision: authRevision)
                 case .messages:
                     MessagesScreen(onMarkRead: markLightEventsRead)
                 case .profile:
