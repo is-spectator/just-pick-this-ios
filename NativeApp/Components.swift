@@ -5,6 +5,7 @@ struct AppChrome<Content: View, Footer: View>: View {
     let backAction: (() -> Void)?
     let onHistory: (() -> Void)?
     let onNewConversation: (() -> Void)?
+    let showsHistoryBadge: Bool
     let showsTopBar: Bool
     @ViewBuilder let content: Content
     @ViewBuilder let footer: Footer
@@ -16,6 +17,7 @@ struct AppChrome<Content: View, Footer: View>: View {
         backAction: (() -> Void)?,
         onHistory: (() -> Void)? = nil,
         onNewConversation: (() -> Void)? = nil,
+        showsHistoryBadge: Bool = false,
         showsTopBar: Bool = true,
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
@@ -24,6 +26,7 @@ struct AppChrome<Content: View, Footer: View>: View {
         self.backAction = backAction
         self.onHistory = onHistory
         self.onNewConversation = onNewConversation
+        self.showsHistoryBadge = showsHistoryBadge
         self.showsTopBar = showsTopBar
         self.content = content()
         self.footer = footer()
@@ -35,7 +38,8 @@ struct AppChrome<Content: View, Footer: View>: View {
                 TopBar(
                     showsBack: showsBack,
                     onHistory: onHistory,
-                    onNewConversation: onNewConversation
+                    onNewConversation: onNewConversation,
+                    showsHistoryBadge: showsHistoryBadge
                 ) {
                     if let backAction {
                         backAction()
@@ -59,7 +63,22 @@ struct TopBar: View {
     let showsBack: Bool
     let onHistory: (() -> Void)?
     let onNewConversation: (() -> Void)?
+    let showsHistoryBadge: Bool
     let onBack: () -> Void
+
+    init(
+        showsBack: Bool,
+        onHistory: (() -> Void)?,
+        onNewConversation: (() -> Void)?,
+        showsHistoryBadge: Bool = false,
+        onBack: @escaping () -> Void
+    ) {
+        self.showsBack = showsBack
+        self.onHistory = onHistory
+        self.onNewConversation = onNewConversation
+        self.showsHistoryBadge = showsHistoryBadge
+        self.onBack = onBack
+    }
 
     var body: some View {
         if showsBack {
@@ -89,10 +108,19 @@ struct TopBar: View {
             HStack(spacing: 0) {
                 if let onHistory {
                     Button(action: onHistory) {
-                        Image(systemName: "line.3.horizontal")
-                            .font(AppTheme.Icon.toolbar)
-                            .foregroundStyle(AppTheme.text)
-                            .frame(width: 44, height: 44)
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "line.3.horizontal")
+                                .font(AppTheme.Icon.toolbar)
+                                .foregroundStyle(AppTheme.text)
+                                .frame(width: 44, height: 44)
+
+                            if showsHistoryBadge {
+                                Circle()
+                                    .fill(AppTheme.red)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: -7, y: 9)
+                            }
+                        }
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("打开菜单")

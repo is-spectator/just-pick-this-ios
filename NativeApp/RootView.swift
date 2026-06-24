@@ -8,6 +8,7 @@ enum AppRoute: Hashable {
     case myAnswers
     case favorites
     case rewards
+    case messages
     case profile
 }
 
@@ -15,10 +16,13 @@ struct RootView: View {
     @State private var path: [AppRoute]
     @State private var session: AppSession
     @State private var answerPollTask: Task<Void, Never>?
+    @AppStorage("seen_light_event_ids") private var seenLightEventIDsRaw = ""
     @State private var showsDrawer = false
     @State private var showsEmailLogin = false
     @State private var authRevision = 0
     @State private var chatRevision = 0
+    @State private var unreadLightCount = 0
+    @State private var latestLightEventIDs: Set<String> = []
     @State private var pinnedHistoryIDs: Set<UUID> = []
     @State private var hiddenHistoryIDs: Set<UUID> = []
     @State private var renamedHistoryTitles: [UUID: String] = [:]
@@ -64,11 +68,13 @@ struct RootView: View {
                     onOpenMyAnswers: { openDrawerRoute(.myAnswers) },
                     onOpenFavorites: { openDrawerRoute(.favorites) },
                     onOpenRewards: { openDrawerRoute(.rewards) },
+                    onOpenMessages: { openDrawerRoute(.messages) },
                     onOpenProfile: { openDrawerRoute(.profile) },
                     onLogin: {
                         closeDrawer()
                         showsEmailLogin = true
-                    }
+                    },
+                    unreadLightCount: unreadLightCount
                 )
                 .frame(width: drawerWidth)
                 .offset(x: showsDrawer ? 0 : -drawerWidth - 24)
@@ -87,6 +93,7 @@ struct RootView: View {
         }
         .onAppear {
             startAnswerPolling()
+            refreshMessageBadge()
         }
         .onDisappear {
             answerPollTask?.cancel()
@@ -97,6 +104,7 @@ struct RootView: View {
         NavigationStack(path: $path) {
             InputScreen(
                 session: session,
+                showsMessageBadge: unreadLightCount > 0,
                 onDecision: { decision in
                     switch decision {
                     case .none:
@@ -146,6 +154,8 @@ struct RootView: View {
                     FavoritesScreen(session: session, onSelectHistory: openHistoryItem)
                 case .rewards:
                     RewardsScreen(authRevision: authRevision)
+                case .messages:
+                    MessagesScreen(onMarkRead: markLightEventsRead)
                 case .profile:
                     ProfileScreen(
                         session: session,
@@ -231,8 +241,40 @@ struct RootView: View {
                     path.removeAll()
                     path.append(.askKorea)
                 }
+                await loadMessageBadge()
             }
         }
+    }
+
+    private func refreshMessageBadge() {
+        Task { @MainActor in
+            await loadMessageBadge()
+        }
+    }
+
+    @MainActor
+    private func loadMessageBadge() async {
+        let snapshot = await ProfileAPIService().fetchSnapshot()
+        let ids = Set(snapshot.lightEvents.map(\.id))
+        latestLightEventIDs = ids
+        unreadLightCount = ids.subtracting(seenLightEventIDs()).count
+    }
+
+    private func markLightEventsRead(_ events: [UserLightEvent]) {
+        var seen = seenLightEventIDs()
+        seen.formUnion(latestLightEventIDs)
+        seen.formUnion(events.map(\.id))
+        seenLightEventIDsRaw = seen.sorted().joined(separator: ",")
+        unreadLightCount = 0
+    }
+
+    private func seenLightEventIDs() -> Set<String> {
+        Set(
+            seenLightEventIDsRaw
+                .split(separator: ",")
+                .map { String($0) }
+                .filter { !$0.isEmpty }
+        )
     }
 }
 
@@ -249,8 +291,10 @@ private struct ChatDrawer: View {
     let onOpenMyAnswers: () -> Void
     let onOpenFavorites: () -> Void
     let onOpenRewards: () -> Void
+    let onOpenMessages: () -> Void
     let onOpenProfile: () -> Void
     let onLogin: () -> Void
+    let unreadLightCount: Int
 
     @State private var searchText = ""
     @State private var renamingItem: QuestionHistory?
@@ -419,6 +463,13 @@ private struct ChatDrawer: View {
             DrawerActionRow(icon: "quote.bubble", title: "我的回答", subtitle: "待采纳、已采纳和未采用", action: onOpenMyAnswers)
             DrawerActionRow(icon: "bookmark", title: "收藏", subtitle: "保存过的选择", action: onOpenFavorites)
             DrawerActionRow(icon: "gift", title: "奖励", subtitle: "积分和采纳明细", action: onOpenRewards)
+            DrawerActionRow(
+                icon: "bell",
+                title: "消息中心",
+                subtitle: unreadLightCount > 0 ? "\(unreadLightCount) 条新进展" : "回答、结果和奖励提醒",
+                badgeCount: unreadLightCount,
+                action: onOpenMessages
+            )
         }
     }
 
@@ -502,6 +553,7 @@ private struct DrawerActionRow: View {
     let icon: String
     let title: String
     let subtitle: String
+    var badgeCount: Int = 0
     let action: () -> Void
 
     var body: some View {
@@ -523,6 +575,16 @@ private struct DrawerActionRow: View {
                 }
 
                 Spacer()
+
+                if badgeCount > 0 {
+                    Text(badgeCount > 99 ? "99+" : "\(badgeCount)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 22, minHeight: 20)
+                        .background(AppTheme.red)
+                        .clipShape(Capsule())
+                }
             }
             .padding(.horizontal, AppTheme.Spacing.sm)
             .frame(minHeight: 54)

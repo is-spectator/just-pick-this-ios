@@ -29,6 +29,7 @@ private enum ChatEntry: Identifiable {
 
 struct InputScreen: View {
     let session: AppSession
+    let showsMessageBadge: Bool
     let onDecision: (RecommendationDecision) -> Void
     let onMenu: () -> Void
     let onHistorySelect: (QuestionHistory) -> Void
@@ -46,7 +47,8 @@ struct InputScreen: View {
             showsBack: false,
             backAction: nil,
             onHistory: onMenu,
-            onNewConversation: startNewConversation
+            onNewConversation: startNewConversation,
+            showsHistoryBadge: showsMessageBadge
         ) {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -1992,6 +1994,72 @@ struct RewardsScreen: View {
     }
 }
 
+struct MessagesScreen: View {
+    let onMarkRead: ([UserLightEvent]) -> Void
+
+    @State private var snapshot = UserDashboardSnapshot.empty
+    @State private var isLoading = false
+
+    var body: some View {
+        ProductListScreen(
+            title: "消息中心",
+            subtitle: "有人回答、结果完成、奖励变动都会在这里提醒你。",
+            systemImage: "bell",
+            emptyTitle: "暂时没有新消息",
+            emptyMessage: "有新的来一句、最终结果或奖励变化时，皮皮会放在这里。",
+            isEmpty: snapshot.lightEvents.isEmpty
+        ) {
+            if !snapshot.lightEvents.isEmpty {
+                ProductSection(title: "最新") {
+                    VStack(spacing: 0) {
+                        ForEach(Array(snapshot.lightEvents.enumerated()), id: \.element.id) { index, event in
+                            ProfileMessageRow(event: event)
+
+                            if index < snapshot.lightEvents.count - 1 {
+                                Divider()
+                                    .padding(.leading, 52)
+                            }
+                        }
+                    }
+                    .productPanel()
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await loadSnapshot() }
+                } label: {
+                    if isLoading {
+                        ProgressView()
+                            .tint(AppTheme.text)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+                .disabled(isLoading)
+                .accessibilityLabel("刷新")
+            }
+        }
+        .refreshable {
+            await loadSnapshot()
+        }
+        .task {
+            await loadSnapshot()
+        }
+    }
+
+    @MainActor
+    private func loadSnapshot() async {
+        guard !isLoading else { return }
+        isLoading = true
+        snapshot = await ProfileAPIService().fetchSnapshot()
+        isLoading = false
+        onMarkRead(snapshot.lightEvents)
+    }
+}
+
 private struct ProductListScreen<Content: View>: View {
     let title: String
     let subtitle: String
@@ -2376,6 +2444,7 @@ private struct BottomComposerPreviewHost: View {
 #Preview("Input") {
     InputScreen(
         session: AppSession(service: MockCloudRecommendationService()),
+        showsMessageBadge: true,
         onDecision: { _ in },
         onMenu: {},
         onHistorySelect: { _ in }

@@ -554,7 +554,7 @@ struct ProfileAPIService: Sendable {
             rejectedReward: rewards?.rejectedValue ?? 0,
             answeredCount: quality?.answers.submittedCount ?? 0,
             qualityTier: quality?.quality.tier ?? "new",
-            lightEvents: (lights?.items ?? []).prefix(5).map { item in
+            lightEvents: (lights?.items ?? []).map { item in
                 UserLightEvent(
                     id: item.id,
                     title: item.title ?? "有新消息",
