@@ -15,12 +15,18 @@ def _review_task(
     target_record_id: str,
     status: str = "open",
     priority: int = 20,
+    issues: list[str] | None = None,
+    source: str | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         task_type=task_type,
         target_record_id=target_record_id,
         status=status,
         priority=priority,
+        payload_json={
+            "issues": issues or [],
+            "source": source,
+        },
     )
 
 
@@ -28,9 +34,28 @@ def test_abuse_safety_summary_tracks_flag_and_unsafe_publish_rates() -> None:
     summary = abuse_safety_summary_from_records(
         help_cards=[_help_card("help-1"), _help_card("help-2"), _help_card("help-3"), _help_card("help-4")],
         review_tasks=[
-            _review_task("help_card_rejected", target_record_id="help-1", priority=10),
-            _review_task("one_liner_rejected", target_record_id="help-2", priority=30),
-            _review_task("one_liner_rejected", target_record_id="help-3", status="closed", priority=10),
+            _review_task(
+                "help_card_rejected",
+                target_record_id="help-1",
+                priority=10,
+                issues=["contact_spam"],
+                source="help_card_publish",
+            ),
+            _review_task(
+                "one_liner_rejected",
+                target_record_id="help-2",
+                priority=30,
+                issues=["contact_spam"],
+                source="one_liner",
+            ),
+            _review_task(
+                "one_liner_rejected",
+                target_record_id="help-3",
+                status="closed",
+                priority=10,
+                issues=["privacy_harm"],
+                source="one_liner",
+            ),
         ],
         window_hours=24,
     )
@@ -42,6 +67,8 @@ def test_abuse_safety_summary_tracks_flag_and_unsafe_publish_rates() -> None:
     assert summary["open_abuse_review_task_count"] == 2
     assert summary["high_priority_abuse_task_count"] == 2
     assert summary["task_counts"] == {"help_card_rejected": 1, "one_liner_rejected": 2}
+    assert summary["issue_counts"] == {"contact_spam": 2, "privacy_harm": 1}
+    assert summary["source_counts"] == {"help_card_publish": 1, "one_liner": 2}
     assert summary["rates"] == {
         "unsafe_publish_rate": 0.25,
         "flag_rate": 0.5,

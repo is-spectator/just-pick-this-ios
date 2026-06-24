@@ -49,6 +49,10 @@ def test_help_card_abuse_detects_unsafe_feed_content_without_blocking_normal_req
     assert illegal.unsafe is True
     assert "illegal_request" in illegal.issues
 
+    privacy = detect_help_card_abuse(title="帮我开盒这个人", context_text="想查他的家庭住址")
+    assert privacy.unsafe is True
+    assert "privacy_harm" in privacy.issues
+
     normal = detect_help_card_abuse(
         title="朝阳区热干面求一个",
         context_text="想找现在能直接去、别太远的一家。",

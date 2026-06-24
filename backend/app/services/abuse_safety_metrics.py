@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -48,10 +49,18 @@ def abuse_safety_summary_from_records(
     unsafe_help_card_ids: set[str] = set()
     unsafe_open_count = 0
     high_priority_count = 0
+    issue_counts: Counter[str] = Counter()
+    source_counts: Counter[str] = Counter()
     for task in review_tasks:
         task_type = str(getattr(task, "task_type", "") or "")
         if task_type in task_counts:
             task_counts[task_type] += 1
+        payload = getattr(task, "payload_json", None)
+        if isinstance(payload, dict):
+            for issue in payload.get("issues") or []:
+                issue_counts[str(issue)] += 1
+            if payload.get("source"):
+                source_counts[str(payload["source"])] += 1
         if str(getattr(task, "status", "") or "") == "open":
             unsafe_open_count += 1
         try:
@@ -77,6 +86,8 @@ def abuse_safety_summary_from_records(
         "open_abuse_review_task_count": unsafe_open_count,
         "high_priority_abuse_task_count": high_priority_count,
         "task_counts": task_counts,
+        "issue_counts": dict(sorted(issue_counts.items())),
+        "source_counts": dict(sorted(source_counts.items())),
         "rates": {
             "unsafe_publish_rate": _rate(len(unsafe_help_card_ids), help_card_count),
             "flag_rate": _rate(total_review_tasks, help_card_count + rejected_one_liners),
@@ -87,6 +98,7 @@ def abuse_safety_summary_from_records(
             "unsafe_publish_rate": "help_card_rejected / created_help_cards",
             "flag_rate": "(help_card_rejected + one_liner_rejected) / (created_help_cards + one_liner_rejected)",
             "tracked_task_types": sorted(ABUSE_REVIEW_TASK_TYPES),
+            "issue_counts": "counts moderation issues from ContentReviewTask.payload_json.issues",
         },
     }
 
