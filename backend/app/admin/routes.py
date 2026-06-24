@@ -56,6 +56,7 @@ from app.models import (
     WebSearchRun,
 )
 from app.services.ability_config import list_ability_configs, serialize_ability_config, upsert_ability_config
+from app.services.answerer_quality import answerer_quality_summary
 from app.services.cards import post_experience_review_summary
 from app.services.eval_review_service import (
     append_case_review,
@@ -390,6 +391,29 @@ def admin_user_signals_summary(
         actor=actor,
         action="view_user_signal_summary",
         table_name="user_signal_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/answerers/quality-summary")
+def admin_answerer_quality_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = answerer_quality_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_answerer_quality_summary",
+        table_name="answerer_quality_summary",
         target_record_id=None,
         request_json=_request_json(request, {"since_hours": since_hours}),
         before_json=None,

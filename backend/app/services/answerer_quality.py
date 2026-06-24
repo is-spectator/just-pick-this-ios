@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.models import ContentReviewTask, HelpAnswer, RewardEvent, User, UserBehaviorEvent
-from app.services.runtime import ensure_user, session_scope
+from app.services.runtime import ensure_user, session_scope, utcnow
 
 
 def calculate_answerer_quality_score(
@@ -31,6 +33,26 @@ def calculate_answerer_quality_score(
     participation_bonus = min(submitted_count, 10) * 0.01
     score = 0.55 + granted_rate * 0.35 - negative_rate * 0.35 + participation_bonus
     return round(max(0.05, min(0.95, score)), 3)
+
+
+def calculate_answerer_quality_rates(
+    *,
+    submitted_count: int,
+    reward_granted_count: int,
+    reward_rejected_count: int,
+    review_rejection_count: int = 0,
+) -> dict[str, float | None]:
+    submitted_count = max(0, int(submitted_count or 0))
+    reward_granted_count = max(0, int(reward_granted_count or 0))
+    reward_rejected_count = max(0, int(reward_rejected_count or 0))
+    review_rejection_count = max(0, int(review_rejection_count or 0))
+    negative_count = reward_rejected_count + review_rejection_count
+    return {
+        "granted_rate": _rate(reward_granted_count, submitted_count),
+        "spam_answer_rate": _rate(negative_count, submitted_count),
+        "reward_rejected_rate": _rate(reward_rejected_count, submitted_count),
+        "review_rejection_rate": _rate(review_rejection_count, submitted_count),
+    }
 
 
 def reputation_tier(
@@ -64,6 +86,12 @@ def get_answerer_quality(*, user_id: str | None = None, device_uid: str | None =
         reward_granted_count = reward_status_counts.get("granted", 0)
         reward_rejected_count = reward_status_counts.get("rejected", 0)
         review_rejection_count = len(review_rejections)
+        rates = calculate_answerer_quality_rates(
+            submitted_count=submitted_count,
+            reward_granted_count=reward_granted_count,
+            reward_rejected_count=reward_rejected_count,
+            review_rejection_count=review_rejection_count,
+        )
         quality_score = calculate_answerer_quality_score(
             submitted_count=submitted_count,
             reward_granted_count=reward_granted_count,
@@ -107,6 +135,7 @@ def get_answerer_quality(*, user_id: str | None = None, device_uid: str | None =
                 "rejected_value": reward_value_by_status.get("rejected", 0),
                 "status_counts": dict(reward_status_counts),
             },
+            "rates": rates,
             "moderation": {
                 "one_liner_rejected_count": review_rejection_count,
                 "open_review_count": sum(1 for task in review_rejections if task.status == "open"),
@@ -132,6 +161,81 @@ def get_answerer_quality(*, user_id: str | None = None, device_uid: str | None =
                 ],
             },
         }
+
+
+def answerer_quality_summary(
+    session: Session,
+    *,
+    since_hours: int = 24 * 30,
+) -> dict[str, Any]:
+    start = utcnow() - timedelta(hours=max(1, int(since_hours or 1)))
+    submitted_count = int(
+        session.scalar(
+            select(func.count()).select_from(HelpAnswer).where(HelpAnswer.created_at >= start)
+        )
+        or 0
+    )
+    reward_rows = session.execute(
+        select(RewardEvent.status, func.count())
+        .where(RewardEvent.created_at >= start)
+        .group_by(RewardEvent.status)
+    )
+    reward_counts = Counter({str(status): int(count or 0) for status, count in reward_rows})
+    review_rejection_count = int(
+        session.scalar(
+            select(func.count())
+            .select_from(ContentReviewTask)
+            .where(
+                ContentReviewTask.created_at >= start,
+                ContentReviewTask.task_type == "one_liner_rejected",
+            )
+        )
+        or 0
+    )
+    return answerer_quality_summary_from_counts(
+        submitted_count=submitted_count,
+        reward_granted_count=reward_counts.get("granted", 0),
+        reward_rejected_count=reward_counts.get("rejected", 0),
+        review_rejection_count=review_rejection_count,
+        window_start=start,
+        window_hours=since_hours,
+        reward_status_counts=dict(reward_counts),
+    )
+
+
+def answerer_quality_summary_from_counts(
+    *,
+    submitted_count: int,
+    reward_granted_count: int,
+    reward_rejected_count: int,
+    review_rejection_count: int = 0,
+    window_start: Any | None = None,
+    window_hours: int | None = None,
+    reward_status_counts: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    rates = calculate_answerer_quality_rates(
+        submitted_count=submitted_count,
+        reward_granted_count=reward_granted_count,
+        reward_rejected_count=reward_rejected_count,
+        review_rejection_count=review_rejection_count,
+    )
+    return {
+        "window_start": window_start.isoformat() if hasattr(window_start, "isoformat") else window_start,
+        "window_hours": window_hours,
+        "submitted_count": max(0, int(submitted_count or 0)),
+        "reward_granted_count": max(0, int(reward_granted_count or 0)),
+        "reward_rejected_count": max(0, int(reward_rejected_count or 0)),
+        "review_rejection_count": max(0, int(review_rejection_count or 0)),
+        "negative_answer_count": max(0, int(reward_rejected_count or 0))
+        + max(0, int(review_rejection_count or 0)),
+        "rates": rates,
+        "reward_status_counts": reward_status_counts or {},
+        "metadata": {
+            "version": "answerer_quality_summary_v1",
+            "spam_answer_rate": "(reward_rejected + one_liner_rejected_review_tasks) / submitted_count",
+            "granted_rate": "reward_granted / submitted_count",
+        },
+    }
 
 
 def _count_help_answers_by_status(session: Any, user: User) -> Counter[str]:
@@ -210,3 +314,9 @@ def _quality_signals(
         if behavior_counts.get(event_type, 0):
             signals.append(event_type)
     return signals
+
+
+def _rate(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return round(numerator / denominator, 4)
