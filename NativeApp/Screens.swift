@@ -2092,12 +2092,37 @@ struct MyHelpScreen: View {
             item.helpRequestId != nil
             || item.status == "waiting_for_human"
             || item.status == "answer_received"
+            || item.status == "closed"
         }
     }
 
     private var currentDraft: HelpRequest? {
         guard session.currentHelpRequest?.status == .draft else { return nil }
         return session.currentHelpRequest
+    }
+
+    private var draftCount: Int {
+        currentDraft == nil ? 0 : 1
+    }
+
+    private var collectingCount: Int {
+        helpItems.filter { $0.status == "waiting_for_human" }.count
+    }
+
+    private var answeredCount: Int {
+        helpItems.filter { $0.status == "answer_received" }.count
+    }
+
+    private var completedCount: Int {
+        helpItems.filter { $0.status == "completed" || $0.status == "top1" }.count
+    }
+
+    private var closedCount: Int {
+        helpItems.filter { $0.status == "closed" }.count
+    }
+
+    private var statusColumns: [GridItem] {
+        [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
     }
 
     var body: some View {
@@ -2109,6 +2134,19 @@ struct MyHelpScreen: View {
             emptyMessage: "在聊天里点“求一个”，发出去后就会出现在这里。",
             isEmpty: currentDraft == nil && helpItems.isEmpty
         ) {
+            ProductSection(title: "状态") {
+                LazyVGrid(columns: statusColumns, spacing: 10) {
+                    ProfileMetricTile(value: "\(draftCount)", label: "草稿", secondary: draftCount > 0 ? "待发布" : nil)
+                    ProfileMetricTile(value: "\(collectingCount)", label: "收集中", secondary: collectingCount > 0 ? "等来一句" : nil)
+                    ProfileMetricTile(value: "\(answeredCount)", label: "已有结果", secondary: answeredCount > 0 ? "可查看" : nil)
+                    ProfileMetricTile(
+                        value: "\(completedCount)",
+                        label: "已完成",
+                        secondary: closedCount > 0 ? "\(closedCount) 已关闭" : nil
+                    )
+                }
+            }
+
             if let currentDraft {
                 ProductSection(title: "草稿") {
                     RequestCard(request: currentDraft)
@@ -2116,7 +2154,7 @@ struct MyHelpScreen: View {
             }
 
             if !helpItems.isEmpty {
-                ProductSection(title: "历史") {
+                ProductSection(title: "求助记录") {
                     VStack(spacing: 0) {
                         ForEach(Array(helpItems.enumerated()), id: \.element.id) { index, item in
                             Button {
