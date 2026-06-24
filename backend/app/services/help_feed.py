@@ -123,7 +123,9 @@ def help_feed_conversion_summary(
     events = session.scalars(
         select(UserBehaviorEvent)
         .where(
-            UserBehaviorEvent.event_type.in_(["help_feed_impression", "one_liner_submitted"]),
+            UserBehaviorEvent.event_type.in_(
+                ["help_feed_impression", "one_liner_submitted", "help_card_skipped"]
+            ),
             UserBehaviorEvent.created_at >= start,
         )
         .order_by(UserBehaviorEvent.created_at.asc())
@@ -164,14 +166,34 @@ def help_feed_conversion_summary_from_events(
         for key in [_user_help_event_key(event)]
         if key is not None
     }
+    skipped_keys = {
+        key
+        for event in events
+        if getattr(event, "event_type", None) == "help_card_skipped"
+        for key in [_user_help_event_key(event)]
+        if key is not None
+    }
 
     segments = {
-        "matched": _conversion_segment(impression_segments, submitted_keys, segment="matched"),
-        "baseline": _conversion_segment(impression_segments, submitted_keys, segment="baseline"),
+        "matched": _conversion_segment(
+            impression_segments,
+            submitted_keys,
+            skipped_keys,
+            segment="matched",
+        ),
+        "baseline": _conversion_segment(
+            impression_segments,
+            submitted_keys,
+            skipped_keys,
+            segment="baseline",
+        ),
     }
     matched_rate = float(segments["matched"]["submit_rate"])
     baseline_rate = float(segments["baseline"]["submit_rate"])
     uplift = (matched_rate / baseline_rate - 1.0) if baseline_rate > 0 else None
+    impression_keys = set(impression_segments)
+    submitted_after_impression = submitted_keys & impression_keys
+    skipped_after_impression = skipped_keys & impression_keys
     return {
         "window_start": window_start.isoformat() if window_start else None,
         "window_hours": window_hours,
@@ -179,10 +201,13 @@ def help_feed_conversion_summary_from_events(
         "segments": segments,
         "matched_submit_rate": matched_rate,
         "baseline_submit_rate": baseline_rate,
+        "one_liner_submit_rate": _rate(len(submitted_after_impression), len(impression_keys)),
+        "skip_rate": _rate(len(skipped_after_impression), len(impression_keys)),
         "one_liner_submit_rate_uplift": round(uplift, 4) if uplift is not None else None,
         "target_met": bool(uplift is not None and uplift >= target_uplift),
         "total_impression_pairs": len(impression_segments),
-        "total_submitted_after_impression": len(submitted_keys & set(impression_segments)),
+        "total_submitted_after_impression": len(submitted_after_impression),
+        "total_skipped_after_impression": len(skipped_after_impression),
     }
 
 
@@ -740,18 +765,29 @@ def _feed_preference_score(payload: Mapping[str, Any]) -> int:
 def _conversion_segment(
     impression_segments: Mapping[tuple[str, str], str],
     submitted_keys: set[tuple[str, str]],
+    skipped_keys: set[tuple[str, str]],
     *,
     segment: str,
 ) -> dict[str, Any]:
     impression_keys = {key for key, value in impression_segments.items() if value == segment}
     submitted = len(impression_keys & submitted_keys)
+    skipped = len(impression_keys & skipped_keys)
     impressions = len(impression_keys)
     submit_rate = submitted / impressions if impressions else 0.0
+    skip_rate = skipped / impressions if impressions else 0.0
     return {
         "impression_pairs": impressions,
         "submitted_pairs": submitted,
+        "skipped_pairs": skipped,
         "submit_rate": round(submit_rate, 4),
+        "skip_rate": round(skip_rate, 4),
     }
+
+
+def _rate(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return round(numerator / denominator, 4)
 
 
 def _answerer_preference_summary(user: Any | None) -> dict[str, Any]:

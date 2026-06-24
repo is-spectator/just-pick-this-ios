@@ -110,6 +110,8 @@ def test_help_feed_conversion_summary_measures_preference_match_uplift() -> None
             for index in range(5)
         ],
         _event("one_liner_submitted", user_id="baseline-user-0", help_card_id="baseline-card-0"),
+        _event("help_card_skipped", user_id="baseline-user-1", help_card_id="baseline-card-1"),
+        _event("help_card_skipped", user_id="baseline-user-2", help_card_id="baseline-card-2"),
         *[
             _event(
                 "help_feed_impression",
@@ -121,6 +123,7 @@ def test_help_feed_conversion_summary_measures_preference_match_uplift() -> None
         ],
         _event("one_liner_submitted", user_id="matched-user-0", help_card_id="matched-card-0"),
         _event("one_liner_submitted", user_id="matched-user-1", help_card_id="matched-card-1"),
+        _event("help_card_skipped", user_id="matched-user-2", help_card_id="matched-card-2"),
     ]
 
     summary = help_feed_conversion_summary_from_events(events, target_uplift=0.2)
@@ -128,15 +131,23 @@ def test_help_feed_conversion_summary_measures_preference_match_uplift() -> None
     assert summary["segments"]["baseline"] == {
         "impression_pairs": 5,
         "submitted_pairs": 1,
+        "skipped_pairs": 2,
         "submit_rate": 0.2,
+        "skip_rate": 0.4,
     }
     assert summary["segments"]["matched"] == {
         "impression_pairs": 5,
         "submitted_pairs": 2,
+        "skipped_pairs": 1,
         "submit_rate": 0.4,
+        "skip_rate": 0.2,
     }
+    assert summary["one_liner_submit_rate"] == 0.3
+    assert summary["skip_rate"] == 0.3
     assert summary["one_liner_submit_rate_uplift"] == 1.0
     assert summary["target_met"] is True
+    assert summary["total_submitted_after_impression"] == 3
+    assert summary["total_skipped_after_impression"] == 3
 
 
 def test_help_feed_conversion_summary_handles_missing_baseline() -> None:
@@ -150,5 +161,7 @@ def test_help_feed_conversion_summary_handles_missing_baseline() -> None:
     assert summary["segments"]["baseline"]["impression_pairs"] == 0
     assert summary["matched_submit_rate"] == 1.0
     assert summary["baseline_submit_rate"] == 0.0
+    assert summary["one_liner_submit_rate"] == 1.0
+    assert summary["skip_rate"] == 0.0
     assert summary["one_liner_submit_rate_uplift"] is None
     assert summary["target_met"] is False
