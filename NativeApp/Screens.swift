@@ -750,6 +750,9 @@ private struct ChatRecommendationCard: View {
     let onAskHuman: () -> Void
     let onAccept: () -> Void
 
+    @State private var hasAppeared = false
+    @State private var acceptFeedbackCount = 0
+
     private var imageURL: URL? {
         guard let url = pick.referenceImage?.url else { return nil }
         return URL(string: url)
@@ -785,17 +788,17 @@ private struct ChatRecommendationCard: View {
                 }
 
                 Text(pick.title)
-                    .font(.system(size: imageURL == nil ? 34 : 31, weight: .bold))
+                    .font(.system(size: imageURL == nil ? 30 : 28, weight: .bold))
                     .lineSpacing(3)
                     .foregroundStyle(AppTheme.text)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.82)
+                    .lineLimit(imageURL == nil ? 4 : 3)
+                    .minimumScaleFactor(0.76)
 
                 Text(decisionReason)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .lineSpacing(5)
                     .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -816,7 +819,10 @@ private struct ChatRecommendationCard: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("求一个")
 
-                Button(action: onAccept) {
+                Button {
+                    acceptFeedbackCount += 1
+                    onAccept()
+                } label: {
                     HStack(spacing: 8) {
                         if isAccepting {
                             ProgressView()
@@ -832,10 +838,12 @@ private struct ChatRecommendationCard: View {
                     .frame(height: 52)
                     .background(AppTheme.text)
                     .clipShape(Capsule())
+                    .animation(.spring(response: 0.22, dampingFraction: 0.88), value: isAccepting)
                 }
                 .buttonStyle(.plain)
                 .disabled(isAccepting)
                 .accessibilityLabel("就这个")
+                .sensoryFeedback(.selection, trigger: acceptFeedbackCount)
             }
         }
         .padding(imageURL == nil ? 22 : 16)
@@ -849,6 +857,13 @@ private struct ChatRecommendationCard: View {
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
+        .scaleEffect(hasAppeared ? 1 : 0.985)
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 8)
+        .animation(.spring(response: 0.34, dampingFraction: 0.88), value: hasAppeared)
+        .onAppear {
+            hasAppeared = true
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("推荐卡, \(pick.title), \(decisionReason)")
     }
@@ -1282,11 +1297,13 @@ struct HelpDeckStack: View {
     let onAdvance: () -> Void
 
     @State private var dragOffset: CGFloat = 0
+    @State private var committedSwipeCount = 0
 
     var body: some View {
         GeometryReader { proxy in
             let cardWidth = min(proxy.size.width - 30, 390)
             let cardHeight = min(max(proxy.size.height * 0.78, 420), 560)
+            let dragProgress = min(abs(dragOffset) / max(cardWidth * 0.42, 1), 1)
 
             ZStack {
                 if isLoading {
@@ -1296,15 +1313,16 @@ struct HelpDeckStack: View {
                     if let next {
                         HelpDeckCard(request: next)
                             .frame(width: cardWidth, height: cardHeight)
-                            .scaleEffect(0.95)
-                            .offset(x: dragOffset >= 0 ? -28 : 24)
-                            .opacity(0.52)
+                            .scaleEffect(0.95 + 0.03 * dragProgress)
+                            .offset(x: dragOffset >= 0 ? -28 + 10 * dragProgress : 24 - 10 * dragProgress)
+                            .opacity(0.52 + 0.18 * dragProgress)
                             .allowsHitTesting(false)
                     }
 
                     HelpDeckCard(request: current)
                         .frame(width: cardWidth, height: cardHeight)
                         .offset(x: dragOffset)
+                        .scaleEffect(1 - 0.035 * dragProgress)
                         .rotationEffect(.degrees(Double(dragOffset / 36)))
                         .gesture(
                             DragGesture()
@@ -1316,9 +1334,12 @@ struct HelpDeckStack: View {
                                         withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                                             dragOffset = value.translation.width > 0 ? cardWidth : -cardWidth
                                         }
+                                        committedSwipeCount += 1
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
                                             onAdvance()
-                                            dragOffset = 0
+                                            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+                                                dragOffset = 0
+                                            }
                                         }
                                     } else {
                                         withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
@@ -1333,6 +1354,7 @@ struct HelpDeckStack: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .sensoryFeedback(.selection, trigger: committedSwipeCount)
         }
     }
 }
