@@ -58,6 +58,8 @@ struct RootView: View {
 
                 ChatDrawer(
                     history: session.history,
+                    favoriteChoices: session.favoriteChoices,
+                    hiddenFavoriteChoiceIds: session.hiddenFavoriteChoiceIds,
                     pinnedHistoryIDs: $pinnedHistoryIDs,
                     hiddenHistoryIDs: $hiddenHistoryIDs,
                     renamedHistoryTitles: $renamedHistoryTitles,
@@ -292,6 +294,8 @@ struct RootView: View {
 
 private struct ChatDrawer: View {
     let history: [QuestionHistory]
+    let favoriteChoices: [QuestionHistory]
+    let hiddenFavoriteChoiceIds: Set<UUID>
     @Binding var pinnedHistoryIDs: Set<UUID>
     @Binding var hiddenHistoryIDs: Set<UUID>
     @Binding var renamedHistoryTitles: [UUID: String]
@@ -312,13 +316,22 @@ private struct ChatDrawer: View {
     @State private var renamingItem: QuestionHistory?
     @State private var renameText = ""
 
-    private var visibleHistory: [QuestionHistory] {
+    private var searchQuery: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isSearching: Bool {
+        !searchQuery.isEmpty
+    }
+
+    private var baseVisibleHistory: [QuestionHistory] {
         history.filter { item in
             !hiddenHistoryIDs.contains(item.id)
-            && (searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || effectiveTitle(for: item).localizedCaseInsensitiveContains(searchText)
-                || item.statusLabel.localizedCaseInsensitiveContains(searchText))
         }
+    }
+
+    private var visibleHistory: [QuestionHistory] {
+        baseVisibleHistory.filter(matchesSearch)
     }
 
     private var pinnedHistory: [QuestionHistory] {
@@ -329,6 +342,33 @@ private struct ChatDrawer: View {
         visibleHistory.filter { !pinnedHistoryIDs.contains($0.id) }
     }
 
+    private var matchingHistory: [QuestionHistory] {
+        baseVisibleHistory.filter { item in
+            !isHelpItem(item)
+            && !isFavoriteCandidate(item)
+            && matchesSearch(item)
+        }
+    }
+
+    private var matchingHelp: [QuestionHistory] {
+        baseVisibleHistory.filter { isHelpItem($0) && matchesSearch($0) }
+    }
+
+    private var searchableFavorites: [QuestionHistory] {
+        let historyChoices = baseVisibleHistory.filter { isFavoriteCandidate($0) && !hiddenFavoriteChoiceIds.contains($0.id) }
+        return favoriteChoices + historyChoices.filter { item in
+            !favoriteChoices.contains(where: { $0.id == item.id })
+        }
+    }
+
+    private var matchingFavorites: [QuestionHistory] {
+        searchableFavorites.filter(matchesSearch)
+    }
+
+    private var hasSearchResults: Bool {
+        !matchingHistory.isEmpty || !matchingHelp.isEmpty || !matchingFavorites.isEmpty
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             drawerHeader
@@ -336,31 +376,13 @@ private struct ChatDrawer: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
                     drawerSearch
-                    newConversationButton
-                    featureEntrances
 
-                    if !pinnedHistory.isEmpty {
-                        historySection(title: "置顶", items: pinnedHistory)
-                    }
-
-                    if !recentHistory.isEmpty {
-                        let today = Array(recentHistory.prefix(3))
-                        let week = Array(recentHistory.dropFirst(3).prefix(7))
-                        let earlier = Array(recentHistory.dropFirst(10))
-
-                        if !today.isEmpty {
-                            historySection(title: "今天", items: today)
-                        }
-                        if !week.isEmpty {
-                            historySection(title: "7 天内", items: week)
-                        }
-                        if !earlier.isEmpty {
-                            historySection(title: "更早", items: earlier)
-                        }
-                    } else if !searchText.isEmpty {
-                        DrawerEmptyState(text: "没有找到相关会话")
-                    } else if pinnedHistory.isEmpty {
-                        DrawerEmptyState(text: "还没有历史会话")
+                    if isSearching {
+                        searchResults
+                    } else {
+                        newConversationButton
+                        featureEntrances
+                        defaultHistorySections
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.lg)
@@ -396,6 +418,48 @@ private struct ChatDrawer: View {
             }
         } message: {
             Text("只会修改本机显示名称。")
+        }
+    }
+
+    @ViewBuilder
+    private var defaultHistorySections: some View {
+        if !pinnedHistory.isEmpty {
+            historySection(title: "置顶", items: pinnedHistory)
+        }
+
+        if !recentHistory.isEmpty {
+            let today = Array(recentHistory.prefix(3))
+            let week = Array(recentHistory.dropFirst(3).prefix(7))
+            let earlier = Array(recentHistory.dropFirst(10))
+
+            if !today.isEmpty {
+                historySection(title: "今天", items: today)
+            }
+            if !week.isEmpty {
+                historySection(title: "7 天内", items: week)
+            }
+            if !earlier.isEmpty {
+                historySection(title: "更早", items: earlier)
+            }
+        } else if pinnedHistory.isEmpty {
+            DrawerEmptyState(text: "还没有历史会话")
+        }
+    }
+
+    @ViewBuilder
+    private var searchResults: some View {
+        if hasSearchResults {
+            if !matchingHistory.isEmpty {
+                searchResultSection(title: "历史会话", items: matchingHistory, icon: "message")
+            }
+            if !matchingHelp.isEmpty {
+                searchResultSection(title: "求一个", items: matchingHelp, icon: "questionmark.bubble")
+            }
+            if !matchingFavorites.isEmpty {
+                searchResultSection(title: "收藏", items: matchingFavorites, icon: "bookmark")
+            }
+        } else {
+            DrawerEmptyState(text: "没有找到相关历史、求一个或收藏")
         }
     }
 
@@ -548,8 +612,66 @@ private struct ChatDrawer: View {
         }
     }
 
+    @ViewBuilder
+    private func searchResultSection(title: String, items: [QuestionHistory], icon: String) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+            Text(title)
+                .font(AppTheme.Typography.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.textMuted)
+                .padding(.horizontal, AppTheme.Spacing.xs)
+
+            VStack(spacing: 2) {
+                ForEach(items) { item in
+                    DrawerSearchResultRow(
+                        icon: icon,
+                        title: searchTitle(for: item),
+                        subtitle: searchSubtitle(for: item),
+                        action: { onSelectHistory(item) }
+                    )
+                }
+            }
+        }
+    }
+
     private func effectiveTitle(for item: QuestionHistory) -> String {
         renamedHistoryTitles[item.id] ?? item.query
+    }
+
+    private func searchTitle(for item: QuestionHistory) -> String {
+        item.topPick?.title ?? effectiveTitle(for: item)
+    }
+
+    private func searchSubtitle(for item: QuestionHistory) -> String {
+        if let reason = item.topPick?.reason, !reason.isEmpty {
+            return reason
+        }
+        return item.statusLabel
+    }
+
+    private func matchesSearch(_ item: QuestionHistory) -> Bool {
+        guard isSearching else { return true }
+        let haystack = [
+            effectiveTitle(for: item),
+            item.query,
+            item.statusLabel,
+            item.topPick?.title,
+            item.topPick?.subtitle,
+            item.topPick?.reason
+        ]
+        return haystack.compactMap { $0 }.contains { value in
+            value.localizedCaseInsensitiveContains(searchQuery)
+        }
+    }
+
+    private func isHelpItem(_ item: QuestionHistory) -> Bool {
+        item.helpRequestId != nil
+        || item.status == "waiting_for_human"
+        || item.status == "answer_received"
+        || item.status == "closed"
+    }
+
+    private func isFavoriteCandidate(_ item: QuestionHistory) -> Bool {
+        item.topPick != nil || item.status == "completed" || item.status == "top1" || item.status == "saved"
     }
 
     private func togglePinned(_ id: UUID) {
@@ -647,6 +769,46 @@ private struct DrawerHistoryRow: View {
             Button("重命名", systemImage: "pencil", action: onRename)
             Button("删除", systemImage: "trash", role: .destructive, action: onDelete)
         }
+    }
+}
+
+private struct DrawerSearchResultRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: AppTheme.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .frame(width: 28, height: 28)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppTheme.text)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(AppTheme.Typography.caption)
+                        .foregroundStyle(AppTheme.textMuted)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            .padding(.horizontal, AppTheme.Spacing.sm)
+            .frame(height: 56)
+            .background(AppTheme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 
