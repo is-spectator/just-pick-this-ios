@@ -19,6 +19,7 @@ _BOOTSTRAP_DEVICE_BY_CONVERSATION: dict[str, str] = {}
 
 NO_DB_TEST_FILES = {
     "test_ability_center.py",
+    "test_abuse_safety_metrics.py",
     "test_admin_debug_security.py",
     "test_answer_gate.py",
     "test_answerer_quality.py",
