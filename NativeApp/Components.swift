@@ -284,6 +284,9 @@ struct DecisionCard: View {
     let onFollowup: (String) -> Void
     let onAskHuman: () -> Void
     let onReject: () -> Void
+    let onFavorite: () -> Void
+    let onReportIssue: () -> Void
+    let onShare: () -> Void
     let onAccept: () -> Void
 
     @State private var imageLoadFailed = false
@@ -314,13 +317,23 @@ struct DecisionCard: View {
             if imageURL != nil {
                 heroImage
                     .overlay(alignment: .topTrailing) {
-                        RecommendationOverflowMenu()
+                        RecommendationOverflowMenu(
+                            onFavorite: onFavorite,
+                            onShare: onShare,
+                            onChange: onReject,
+                            onReportIssue: onReportIssue
+                        )
                             .padding(12)
                     }
             } else {
                 HStack {
                     Spacer()
-                    RecommendationOverflowMenu()
+                    RecommendationOverflowMenu(
+                        onFavorite: onFavorite,
+                        onShare: onShare,
+                        onChange: onReject,
+                        onReportIssue: onReportIssue
+                    )
                 }
             }
 
@@ -434,20 +447,38 @@ struct DecisionCard: View {
 }
 
 struct RecommendationOverflowMenu: View {
+    let onFavorite: () -> Void
+    let onShare: () -> Void
+    let onChange: () -> Void
+    let onReportIssue: () -> Void
+
+    init(
+        onFavorite: @escaping () -> Void = {},
+        onShare: @escaping () -> Void = {},
+        onChange: @escaping () -> Void = {},
+        onReportIssue: @escaping () -> Void = {}
+    ) {
+        self.onFavorite = onFavorite
+        self.onShare = onShare
+        self.onChange = onChange
+        self.onReportIssue = onReportIssue
+    }
+
     var body: some View {
         Menu {
-            Button {
-            } label: {
+            Button(action: onFavorite) {
                 Label("收藏", systemImage: "bookmark")
             }
 
-            Button {
-            } label: {
+            Button(action: onShare) {
                 Label("分享", systemImage: "square.and.arrow.up")
             }
 
-            Button(role: .destructive) {
-            } label: {
+            Button(action: onChange) {
+                Label("不合适，换一个", systemImage: "arrow.triangle.2.circlepath")
+            }
+
+            Button(role: .destructive, action: onReportIssue) {
                 Label("信息有误", systemImage: "exclamationmark.bubble")
             }
         } label: {

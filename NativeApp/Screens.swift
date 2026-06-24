@@ -152,7 +152,11 @@ struct InputScreen: View {
                 pick: pick,
                 isAccepting: isAcceptingPick,
                 onAskHuman: makeHelpRequestFromPick,
-                onAccept: acceptPick
+                onAccept: acceptPick,
+                onFavorite: favoritePick,
+                onChange: changePick,
+                onReportIssue: reportPickIssue,
+                onShare: sharePick
             )
         case .help(_, let request):
             AssistantHelpRow(
@@ -195,6 +199,35 @@ struct InputScreen: View {
         dismissKeyboard()
         session.makeHelpRequestFromCurrentTopPick()
         entries.append(.help(UUID(), session.helpRequest))
+    }
+
+    private func favoritePick() {
+        dismissKeyboard()
+        session.saveCurrentTopPickToFavorites()
+        entries.append(.notice(UUID(), ServiceNotice(title: "已收藏", detail: "这张推荐已经放进 Drawer 里的收藏。")))
+    }
+
+    private func changePick() {
+        dismissKeyboard()
+        Task { @MainActor in
+            _ = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
+            entries.append(.notice(UUID(), ServiceNotice(title: "收到", detail: "我记下了：这张不合适。你可以补一句想换的方向。")))
+        }
+    }
+
+    private func reportPickIssue() {
+        dismissKeyboard()
+        Task { @MainActor in
+            _ = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
+            entries.append(.notice(UUID(), ServiceNotice(title: "收到", detail: "这张卡已标记为信息有误，我会避开这类错误。")))
+        }
+    }
+
+    private func sharePick() {
+        dismissKeyboard()
+        let pick = session.topPick
+        UIPasteboard.general.string = "\(pick.title)\n\(pick.reason.isEmpty ? pick.subtitle : pick.reason)"
+        entries.append(.notice(UUID(), ServiceNotice(title: "已复制", detail: "推荐内容已经复制，可以直接分享出去。")))
     }
 
     private func acceptPick() {
@@ -824,6 +857,10 @@ private struct AssistantRecommendationRow: View {
     let isAccepting: Bool
     let onAskHuman: () -> Void
     let onAccept: () -> Void
+    let onFavorite: () -> Void
+    let onChange: () -> Void
+    let onReportIssue: () -> Void
+    let onShare: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -832,7 +869,11 @@ private struct AssistantRecommendationRow: View {
                 pick: pick,
                 isAccepting: isAccepting,
                 onAskHuman: onAskHuman,
-                onAccept: onAccept
+                onAccept: onAccept,
+                onFavorite: onFavorite,
+                onChange: onChange,
+                onReportIssue: onReportIssue,
+                onShare: onShare
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -858,6 +899,10 @@ private struct ChatRecommendationCard: View {
     let isAccepting: Bool
     let onAskHuman: () -> Void
     let onAccept: () -> Void
+    let onFavorite: () -> Void
+    let onChange: () -> Void
+    let onReportIssue: () -> Void
+    let onShare: () -> Void
 
     @State private var hasAppeared = false
     @State private var acceptFeedbackCount = 0
@@ -889,13 +934,23 @@ private struct ChatRecommendationCard: View {
             if imageURL != nil {
                 heroImage
                     .overlay(alignment: .topTrailing) {
-                        RecommendationOverflowMenu()
+                        RecommendationOverflowMenu(
+                            onFavorite: onFavorite,
+                            onShare: onShare,
+                            onChange: onChange,
+                            onReportIssue: onReportIssue
+                        )
                             .padding(12)
                     }
             } else {
                 HStack {
                     Spacer()
-                    RecommendationOverflowMenu()
+                    RecommendationOverflowMenu(
+                        onFavorite: onFavorite,
+                        onShare: onShare,
+                        onChange: onChange,
+                        onReportIssue: onReportIssue
+                    )
                 }
             }
 
@@ -1134,8 +1189,11 @@ struct ResultScreen: View {
                         isFollowingUp: isFollowingUp,
                         isAccepting: isAccepting,
                         onFollowup: followUp,
-                        onAskHuman: onAskHuman,
-                        onReject: onAskHuman,
+                        onAskHuman: askHuman,
+                        onReject: changePick,
+                        onFavorite: favoritePick,
+                        onReportIssue: reportPickIssue,
+                        onShare: sharePick,
                         onAccept: accept
                     )
                 }
@@ -1178,6 +1236,35 @@ struct ResultScreen: View {
             isAccepting = false
             onAccepted()
         }
+    }
+
+    private func askHuman() {
+        Task {
+            _ = await session.sendCurrentTopPickFeedback(action: .askHuman, reason: "想听真人意见")
+        }
+        onAskHuman()
+    }
+
+    private func favoritePick() {
+        session.saveCurrentTopPickToFavorites()
+    }
+
+    private func changePick() {
+        Task {
+            _ = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
+        }
+        followUp("不合适，换一个")
+    }
+
+    private func reportPickIssue() {
+        Task {
+            _ = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
+        }
+    }
+
+    private func sharePick() {
+        let pick = session.topPick
+        UIPasteboard.general.string = "\(pick.title)\n\(pick.reason.isEmpty ? pick.subtitle : pick.reason)"
     }
 }
 
@@ -2146,8 +2233,14 @@ struct FavoritesScreen: View {
     let onSelectHistory: (QuestionHistory) -> Void
 
     private var savedChoices: [QuestionHistory] {
-        session.history.filter { item in
+        let historyChoices = session.history.filter { item in
             item.topPick != nil || item.status == "completed" || item.status == "top1"
+        }
+        let visibleHistoryChoices = historyChoices.filter { item in
+            !session.hiddenFavoriteChoiceIds.contains(item.id)
+        }
+        return session.favoriteChoices + visibleHistoryChoices.filter { item in
+            !session.favoriteChoices.contains(where: { $0.id == item.id })
         }
     }
 
@@ -2164,12 +2257,11 @@ struct FavoritesScreen: View {
                 ProductSection(title: "最近保存") {
                     VStack(spacing: 12) {
                         ForEach(savedChoices) { item in
-                            Button {
-                                onSelectHistory(item)
-                            } label: {
-                                FavoriteChoiceRow(item: item)
-                            }
-                            .buttonStyle(.plain)
+                            FavoriteChoiceRow(
+                                item: item,
+                                onOpen: { onSelectHistory(item) },
+                                onRemove: { session.removeFavoriteChoice(id: item.id) }
+                            )
                         }
                     }
                 }
@@ -2454,31 +2546,48 @@ private struct ProductActionCard: View {
 
 private struct FavoriteChoiceRow: View {
     let item: QuestionHistory
+    let onOpen: () -> Void
+    let onRemove: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "bookmark.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.text)
-                    .frame(width: 34, height: 34)
-                    .background(AppTheme.bubble)
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(item.topPick?.title ?? item.query)
-                        .font(.system(size: 16, weight: .semibold))
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "bookmark.fill")
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppTheme.text)
-                        .lineLimit(2)
+                        .frame(width: 34, height: 34)
+                        .background(AppTheme.bubble)
+                        .clipShape(Circle())
 
-                    Text(item.topPick?.reason ?? item.statusLabel)
-                        .font(.system(size: 13))
-                        .lineSpacing(3)
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(item.topPick?.title ?? item.query)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppTheme.text)
+                            .lineLimit(2)
+
+                        Text(item.topPick?.reason ?? item.statusLabel)
+                            .font(.system(size: 13))
+                            .lineSpacing(3)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(2)
+                    }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onOpen)
 
                 Spacer(minLength: 0)
+
+                Button(action: onRemove) {
+                    Image(systemName: "bookmark.slash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .background(AppTheme.bubble)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("取消收藏")
             }
         }
         .productPanel()
@@ -2718,7 +2827,11 @@ private struct BottomComposerPreviewHost: View {
         pick: UIPolishPreviewFixtures.pickWithImage,
         isAccepting: false,
         onAskHuman: {},
-        onAccept: {}
+        onAccept: {},
+        onFavorite: {},
+        onChange: {},
+        onReportIssue: {},
+        onShare: {}
     )
     .padding()
     .appScreenBackground()
@@ -2729,7 +2842,11 @@ private struct BottomComposerPreviewHost: View {
         pick: UIPolishPreviewFixtures.pickWithoutImage,
         isAccepting: false,
         onAskHuman: {},
-        onAccept: {}
+        onAccept: {},
+        onFavorite: {},
+        onChange: {},
+        onReportIssue: {},
+        onShare: {}
     )
     .padding()
     .appScreenBackground()

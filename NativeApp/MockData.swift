@@ -186,6 +186,16 @@ struct DecisionLocationContext: Equatable, Sendable {
     }
 }
 
+enum CardFeedbackAction: String, Sendable {
+    case reject
+    case change
+    case askHuman = "ask-human"
+
+    var endpointPath: String {
+        rawValue
+    }
+}
+
 protocol RecommendationService: Sendable {
     func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult
     func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest
@@ -194,6 +204,7 @@ protocol RecommendationService: Sendable {
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
     func answer(_ text: String, for request: HelpRequest) async -> HelpRequest
     func acceptCard(id: UUID?) async -> Bool
+    func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool
     func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory]
 }
 
@@ -353,6 +364,26 @@ struct BackendRecommendationService: RecommendationService {
                 path: "/v1/cards/\(id.uuidString)/accept",
                 method: "POST",
                 body: V1CardAcceptRequest(metadata: ["source": "ios"])
+            ))
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool {
+        guard let id else { return false }
+
+        do {
+            let _: V1CardFeedbackResponse = try await perform(makeRequest(
+                path: "/v1/cards/\(id.uuidString)/\(action.endpointPath)",
+                method: "POST",
+                body: V1CardFeedbackRequest(
+                    deviceId: deviceUid,
+                    reason: reason,
+                    tags: [reason],
+                    metadata: ["source": "ios", "surface": "chat_card"]
+                )
             ))
             return true
         } catch {
@@ -1376,7 +1407,31 @@ private struct V1CardAcceptRequest: Encodable {
     let metadata: [String: String]
 }
 
+private struct V1CardFeedbackRequest: Encodable {
+    let deviceId: String
+    let reason: String
+    let tags: [String]
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case deviceId = "device_id"
+        case reason
+        case tags
+        case metadata
+    }
+}
+
 private struct V1CardAcceptResponse: Decodable {
+    let cardId: String
+    let accepted: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case accepted
+    }
+}
+
+private struct V1CardFeedbackResponse: Decodable {
     let cardId: String
     let accepted: Bool
 
@@ -1438,6 +1493,10 @@ struct MockCloudRecommendationService: RecommendationService {
 
     func acceptCard(id: UUID?) async -> Bool {
         true
+    }
+
+    func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool {
+        id != nil && !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory] {
@@ -1646,6 +1705,8 @@ final class AppSession {
     private(set) var currentTopPick: TopPick?
     private(set) var currentHelpRequest: HelpRequest?
     private(set) var history: [QuestionHistory] = []
+    private(set) var favoriteChoices: [QuestionHistory] = []
+    private(set) var hiddenFavoriteChoiceIds: Set<UUID> = []
     private(set) var answerQueue: [HelpRequest] = []
     private(set) var answerTarget: HelpRequest?
     private(set) var submitState: SubmitState = .idle
@@ -1741,6 +1802,9 @@ final class AppSession {
     func makeHelpRequestFromCurrentTopPick() {
         let query = currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery
         let pick = topPick
+        Task {
+            _ = await service.sendCardFeedback(id: pick.cardId, action: .askHuman, reason: "想听真人意见")
+        }
         currentHelpRequest = HelpRequest(
             title: query,
             context: "已经给过一个选择: \(pick.title) · 还想听懂的人来一句",
@@ -1826,6 +1890,30 @@ final class AppSession {
         markCurrentQuestionCompleted(remoteHistory: remoteHistory)
         currentTopPick = nil
         currentQuery = ""
+    }
+
+    func saveCurrentTopPickToFavorites() {
+        let query = currentQuery.isEmpty ? topPick.query : currentQuery
+        let item = QuestionHistory(
+            id: currentQuestionId ?? UUID(),
+            query: query.isEmpty ? MockData.queryPlaceholder : query,
+            status: "saved",
+            helpRequestId: nil,
+            topPick: currentTopPick ?? topPick
+        )
+        favoriteChoices.removeAll { $0.id == item.id }
+        hiddenFavoriteChoiceIds.remove(item.id)
+        favoriteChoices.insert(item, at: 0)
+    }
+
+    func removeFavoriteChoice(id: UUID) {
+        favoriteChoices.removeAll { $0.id == id }
+        hiddenFavoriteChoiceIds.insert(id)
+    }
+
+    @discardableResult
+    func sendCurrentTopPickFeedback(action: CardFeedbackAction, reason: String) async -> Bool {
+        await service.sendCardFeedback(id: currentTopPick?.cardId, action: action, reason: reason)
     }
 
     func acceptCurrentHelpAnswer() async {
