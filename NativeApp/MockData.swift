@@ -2316,6 +2316,19 @@ final class AppSession {
         persistFavoriteState()
     }
 
+    func deleteHistoryItem(id: UUID) {
+        history.removeAll { $0.id == id }
+        persistHistory()
+
+        guard currentQuestionId == id else { return }
+        currentQuestionId = nil
+        currentQuery = ""
+        currentTopPick = nil
+        currentHelpRequest = nil
+        serviceNotice = nil
+        submitState = .idle
+    }
+
     @discardableResult
     func sendCurrentTopPickFeedback(action: CardFeedbackAction, reason: String) async -> Bool {
         await service.sendCardFeedback(id: currentTopPick?.cardId, action: action, reason: reason)

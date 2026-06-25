@@ -72,6 +72,7 @@ struct RootView: View {
                     onClose: closeDrawer,
                     onNewConversation: startNewConversationFromDrawer,
                     onSelectHistory: openHistoryItem,
+                    onDeleteHistory: deleteHistoryItemFromDrawer,
                     onOpenAnswerDeck: { openDrawerRoute(.answerDeck) },
                     onOpenMyHelp: { openDrawerRoute(.myHelp) },
                     onOpenMyAnswers: { openDrawerRoute(.myAnswers) },
@@ -249,6 +250,12 @@ struct RootView: View {
                 path.append(.askKorea)
             }
         }
+    }
+
+    private func deleteHistoryItemFromDrawer(_ item: QuestionHistory) {
+        session.deleteHistoryItem(id: item.id)
+        pinnedHistoryIDs.remove(item.id)
+        renamedHistoryTitles[item.id] = nil
     }
 
     private func openHelpDetail(_ item: QuestionHistory) {
@@ -458,6 +465,7 @@ private struct ChatDrawer: View {
     let onClose: () -> Void
     let onNewConversation: () -> Void
     let onSelectHistory: (QuestionHistory) -> Void
+    let onDeleteHistory: (QuestionHistory) -> Void
     let onOpenAnswerDeck: () -> Void
     let onOpenMyHelp: () -> Void
     let onOpenMyAnswers: () -> Void
@@ -922,6 +930,9 @@ private struct ChatDrawer: View {
 
     private func hideHistory(_ item: QuestionHistory) {
         hiddenHistoryIDs.insert(item.id)
+        pinnedHistoryIDs.remove(item.id)
+        renamedHistoryTitles[item.id] = nil
+        onDeleteHistory(item)
         showDrawerNotice("已删除会话")
     }
 
