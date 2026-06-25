@@ -48,6 +48,27 @@ struct InputScreen: View {
     @State private var locationMessage: String?
     @State private var isComposerFocused = false
     @State private var lastFailedQuery: String?
+    @AppStorage("recent_decision_location_labels") private var recentDecisionLocationLabelsRaw = ""
+
+    private var recentDecisionLocationLabels: [String] {
+        recentDecisionLocationLabelsRaw
+            .split(separator: "\n")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var suggestedDecisionLocationLabels: [String] {
+        mergeLocationLabels(
+            recentDecisionLocationLabels + [
+                "北京三里屯",
+                "北京市朝阳区",
+                "望京 SOHO",
+                "南锣鼓巷",
+                "上海互联网宝地",
+                "大同古城"
+            ]
+        )
+    }
 
     var body: some View {
         AppChrome(
@@ -126,7 +147,9 @@ struct InputScreen: View {
                 currentLocation: decisionLocation,
                 isLocating: isLocating,
                 message: locationMessage,
+                suggestedLocations: suggestedDecisionLocationLabels,
                 onUseCurrent: useCurrentLocation,
+                onSelectSuggestion: selectSuggestedLocation,
                 onSaveManual: saveManualLocation,
                 onClear: clearDecisionLocation
             )
@@ -351,6 +374,7 @@ struct InputScreen: View {
             if let location = await DeviceLocationProvider.shared.currentDecisionLocation() {
                 decisionLocation = location
                 manualLocationText = location.label
+                rememberDecisionLocation(location.label)
                 locationMessage = "已使用当前位置。"
                 showsLocationPicker = false
             } else {
@@ -366,6 +390,16 @@ struct InputScreen: View {
             return
         }
         decisionLocation = location
+        rememberDecisionLocation(location.label)
+        locationMessage = "已使用\(location.label)。"
+        showsLocationPicker = false
+    }
+
+    private func selectSuggestedLocation(_ label: String) {
+        guard let location = DecisionLocationContext.manual(label) else { return }
+        decisionLocation = location
+        manualLocationText = location.label
+        rememberDecisionLocation(location.label)
         locationMessage = "已使用\(location.label)。"
         showsLocationPicker = false
     }
@@ -375,6 +409,27 @@ struct InputScreen: View {
         manualLocationText = ""
         locationMessage = nil
         showsLocationPicker = false
+    }
+
+    private func rememberDecisionLocation(_ label: String) {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let labels = mergeLocationLabels([trimmed] + recentDecisionLocationLabels)
+        recentDecisionLocationLabelsRaw = labels.prefix(6).joined(separator: "\n")
+    }
+
+    private func mergeLocationLabels(_ labels: [String]) -> [String] {
+        var seen = Set<String>()
+        var merged: [String] = []
+        for label in labels {
+            let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = trimmed.localizedLowercase
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            merged.append(trimmed)
+        }
+        return merged
     }
 
     private func dismissKeyboard() {
@@ -445,11 +500,26 @@ private struct LocationPickerSheet: View {
     let currentLocation: DecisionLocationContext?
     let isLocating: Bool
     let message: String?
+    let suggestedLocations: [String]
     let onUseCurrent: () -> Void
+    let onSelectSuggestion: (String) -> Void
     let onSaveManual: () -> Void
     let onClear: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+
+    private var filteredSuggestions: [String] {
+        let query = manualText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let candidates = suggestedLocations.filter { label in
+            currentLocation?.label != label
+        }
+        guard !query.isEmpty else { return Array(candidates.prefix(6)) }
+        return Array(
+            candidates
+                .filter { $0.localizedCaseInsensitiveContains(query) }
+                .prefix(6)
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -518,7 +588,7 @@ private struct LocationPickerSheet: View {
                 .disabled(isLocating)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("手动输入")
+                    Text("搜索或输入地点")
                         .font(AppTheme.Typography.caption.weight(.semibold))
                         .foregroundStyle(AppTheme.textSecondary)
 
@@ -530,6 +600,16 @@ private struct LocationPickerSheet: View {
                         .frame(height: 50)
                         .background(AppTheme.bubble)
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+
+                    if !filteredSuggestions.isEmpty {
+                        VStack(spacing: 2) {
+                            ForEach(filteredSuggestions, id: \.self) { label in
+                                LocationSuggestionRow(label: label) {
+                                    onSelectSuggestion(label)
+                                }
+                            }
+                        }
+                    }
 
                     Button(action: onSaveManual) {
                         Text("保存地点")
@@ -566,6 +646,39 @@ private struct LocationPickerSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct LocationSuggestionRow: View {
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .frame(width: 28, height: 28)
+
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Image(systemName: "arrow.up.left")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 42)
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("选择地点 \(label)")
     }
 }
 
