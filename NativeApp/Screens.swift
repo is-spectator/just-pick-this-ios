@@ -1436,6 +1436,7 @@ struct AnswerScreen: View {
     @State private var showsToast = false
     @State private var toastMessage = "收到了，+10 等她采纳。"
     @State private var toastTask: Task<Void, Never>?
+    @State private var isComposerFocused = false
 
     var body: some View {
         AppChrome(showsBack: true, backAction: nil, showsTopBar: showsTopBar) {
@@ -1480,8 +1481,17 @@ struct AnswerScreen: View {
                         .padding(.horizontal, 14)
                         .padding(.bottom, 14)
                         .frame(minHeight: proxy.size.height)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            dismissKeyboard()
+                        }
                     }
                     .scrollIndicators(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 8)
+                            .onChanged { _ in dismissKeyboard() }
+                    )
                     .refreshable {
                         await reloadAnswerQueue()
                     }
@@ -1493,6 +1503,7 @@ struct AnswerScreen: View {
             BottomComposer(
                 text: $draft,
                 placeholder: answerPlaceholder,
+                focused: $isComposerFocused,
                 isSending: isSending || session.answerRequest == nil
             ) {
                 sendAnswer()
@@ -1514,6 +1525,7 @@ struct AnswerScreen: View {
             return
         }
         draft = ""
+        dismissKeyboard()
         toastTask?.cancel()
         isSending = true
         toastMessage = "收到了，\(request.rewardLabel) 等她采纳。"
@@ -1555,6 +1567,11 @@ struct AnswerScreen: View {
             return "番茄锅更稳，别上红油。"
         }
         return "来一句，帮 TA 少纠结"
+    }
+
+    private func dismissKeyboard() {
+        isComposerFocused = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 
