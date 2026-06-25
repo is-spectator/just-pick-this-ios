@@ -765,7 +765,7 @@ enum SubmittedAnswerStatus: String, Codable, Hashable, Sendable {
     }
 }
 
-struct SubmittedAnswerRecord: Identifiable, Hashable, Sendable {
+struct SubmittedAnswerRecord: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let helpRequestId: UUID
     let questionTitle: String
@@ -2073,13 +2073,15 @@ final class AppSession {
 
     @ObservationIgnored private let service: any RecommendationService
     @ObservationIgnored private let documentationDemo: String?
+    @ObservationIgnored private static let historyKey = "question_history_v1"
     @ObservationIgnored private static let favoriteChoicesKey = "favorite_choices_v1"
     @ObservationIgnored private static let hiddenFavoriteChoiceIDsKey = "hidden_favorite_choice_ids_v1"
+    @ObservationIgnored private static let submittedAnswersKey = "submitted_answers_v1"
 
     init(service: any RecommendationService, documentationDemo: String? = nil) {
         self.service = service
         self.documentationDemo = documentationDemo
-        restoreFavoriteState()
+        restoreLocalCollections()
 
         #if DEBUG
         applyDocumentationDemo(documentationDemo)
@@ -2128,6 +2130,7 @@ final class AppSession {
         currentQuestionId = result.questionId ?? currentQuestionId
         if !result.history.isEmpty {
             history = result.history
+            persistHistory()
         } else if !result.decision.isEmpty {
             upsertLocalHistory(
                 query: trimmed,
@@ -2251,6 +2254,7 @@ final class AppSession {
         )
         submittedAnswers.removeAll { $0.helpRequestId == request.id }
         submittedAnswers.insert(record, at: 0)
+        persistSubmittedAnswers()
 
         if currentHelpRequest?.id == updated.id {
             currentHelpRequest = updated
@@ -2348,8 +2352,12 @@ final class AppSession {
         currentHelpRequest = MockData.helpRequest(for: currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery)
     }
 
-    private func restoreFavoriteState() {
+    private func restoreLocalCollections() {
         let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: Self.historyKey),
+           let decoded = try? JSONDecoder().decode([QuestionHistory].self, from: data) {
+            history = decoded
+        }
         if let data = defaults.data(forKey: Self.favoriteChoicesKey),
            let decoded = try? JSONDecoder().decode([QuestionHistory].self, from: data) {
             favoriteChoices = decoded
@@ -2357,6 +2365,20 @@ final class AppSession {
         if let data = defaults.data(forKey: Self.hiddenFavoriteChoiceIDsKey),
            let decoded = try? JSONDecoder().decode([UUID].self, from: data) {
             hiddenFavoriteChoiceIds = Set(decoded)
+        }
+        if let data = defaults.data(forKey: Self.submittedAnswersKey),
+           let decoded = try? JSONDecoder().decode([SubmittedAnswerRecord].self, from: data) {
+            submittedAnswers = decoded
+        }
+    }
+
+    private func persistHistory() {
+        let historyItems = Array(history.prefix(120))
+        if history.count != historyItems.count {
+            history = historyItems
+        }
+        if let data = try? JSONEncoder().encode(historyItems) {
+            UserDefaults.standard.set(data, forKey: Self.historyKey)
         }
     }
 
@@ -2368,6 +2390,16 @@ final class AppSession {
         }
         if let data = try? JSONEncoder().encode(Array(hiddenFavoriteChoiceIds)) {
             defaults.set(data, forKey: Self.hiddenFavoriteChoiceIDsKey)
+        }
+    }
+
+    private func persistSubmittedAnswers() {
+        let answers = Array(submittedAnswers.prefix(80))
+        if submittedAnswers.count != answers.count {
+            submittedAnswers = answers
+        }
+        if let data = try? JSONEncoder().encode(answers) {
+            UserDefaults.standard.set(data, forKey: Self.submittedAnswersKey)
         }
     }
 
@@ -2383,6 +2415,7 @@ final class AppSession {
                 topPick: topPick ?? existing.topPick,
                 createdAt: existing.createdAt
             )
+            persistHistory()
             return
         }
 
@@ -2399,6 +2432,7 @@ final class AppSession {
             ),
             at: 0
         )
+        persistHistory()
     }
 
     private func status(for decision: RecommendationDecision) -> String {
@@ -2490,6 +2524,7 @@ final class AppSession {
     private func markCurrentQuestionCompleted(remoteHistory: [QuestionHistory]) {
         if !remoteHistory.isEmpty {
             history = remoteHistory
+            persistHistory()
             return
         }
 
