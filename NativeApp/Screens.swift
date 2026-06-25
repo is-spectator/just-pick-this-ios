@@ -2842,6 +2842,7 @@ struct HelpResultDetailScreen: View {
 struct MyAnswersScreen: View {
     let session: AppSession
     let onOpenAnswerDeck: () -> Void
+    let onSelectHelpDetail: (QuestionHistory) -> Void
 
     @State private var snapshot = UserDashboardSnapshot.empty
     @State private var isLoading = false
@@ -2923,7 +2924,14 @@ struct MyAnswersScreen: View {
                 ProductSection(title: "最近提交") {
                     VStack(spacing: 12) {
                         ForEach(session.submittedAnswers) { answer in
-                            SubmittedAnswerRow(answer: answer)
+                            Button {
+                                AppHaptics.selection()
+                                onSelectHelpDetail(historyItem(for: answer))
+                            } label: {
+                                SubmittedAnswerRow(answer: answer)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("打开原问题详情")
                         }
                     }
                 }
@@ -2970,6 +2978,28 @@ struct MyAnswersScreen: View {
         isLoading = true
         snapshot = await ProfileAPIService().fetchSnapshot()
         isLoading = false
+    }
+
+    private func historyItem(for answer: SubmittedAnswerRecord) -> QuestionHistory {
+        QuestionHistory(
+            id: answer.helpRequestId,
+            query: answer.questionTitle,
+            status: historyStatus(for: answer.status),
+            helpRequestId: answer.helpRequestId,
+            topPick: nil,
+            createdAt: answer.timeLabel
+        )
+    }
+
+    private func historyStatus(for status: SubmittedAnswerStatus) -> String {
+        switch status {
+        case .pending:
+            "answer_received"
+        case .accepted:
+            "completed"
+        case .rejected:
+            "closed"
+        }
     }
 }
 
