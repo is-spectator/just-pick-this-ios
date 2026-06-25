@@ -42,6 +42,23 @@ private struct ActivityShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
+private enum AppHaptics {
+    @MainActor
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    @MainActor
+    static func success() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    @MainActor
+    static func warning() {
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+    }
+}
+
 struct InputScreen: View {
     let session: AppSession
     let showsMessageBadge: Bool
@@ -279,18 +296,21 @@ struct InputScreen: View {
 
     private func makeHelpRequestFromPick() {
         dismissKeyboard()
+        AppHaptics.selection()
         session.makeHelpRequestFromCurrentTopPick()
         entries.append(.help(UUID(), session.helpRequest))
     }
 
     private func favoritePick() {
         dismissKeyboard()
+        AppHaptics.success()
         session.saveCurrentTopPickToFavorites()
         entries.append(.notice(UUID(), ServiceNotice(title: "已收藏", detail: "这张推荐已经放进 Drawer 里的收藏。")))
     }
 
     private func changePick() {
         dismissKeyboard()
+        AppHaptics.selection()
         Task { @MainActor in
             _ = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
             entries.append(.notice(UUID(), ServiceNotice(title: "收到", detail: "我记下了：这张不合适。你可以补一句想换的方向。")))
@@ -299,6 +319,7 @@ struct InputScreen: View {
 
     private func reportPickIssue() {
         dismissKeyboard()
+        AppHaptics.warning()
         Task { @MainActor in
             _ = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
             entries.append(.notice(UUID(), ServiceNotice(title: "收到", detail: "这张卡已标记为信息有误，我会避开这类错误。")))
@@ -307,6 +328,7 @@ struct InputScreen: View {
 
     private func sharePick() {
         dismissKeyboard()
+        AppHaptics.selection()
         sharePayload = CardSharePayload(text: shareText(for: session.topPick))
     }
 
@@ -324,6 +346,7 @@ struct InputScreen: View {
         isAcceptingPick = true
         Task { @MainActor in
             await session.acceptCurrentTopPick()
+            AppHaptics.success()
             isAcceptingPick = false
             entries.append(.notice(UUID(), ServiceNotice(title: "皮皮", detail: "就这个。")))
         }
@@ -338,6 +361,7 @@ struct InputScreen: View {
             if let updated = session.currentHelpRequest {
                 updateHelpEntry(updated)
             }
+            AppHaptics.success()
             isPublishingHelp = false
             entries.append(.notice(UUID(), ServiceNotice(title: "皮皮", detail: "发出去了，等懂的人来一句。")))
         }
@@ -1454,12 +1478,14 @@ struct ResultScreen: View {
         isAccepting = true
         Task { @MainActor in
             await session.acceptCurrentTopPick()
+            AppHaptics.success()
             isAccepting = false
             onAccepted()
         }
     }
 
     private func askHuman() {
+        AppHaptics.selection()
         Task {
             _ = await session.sendCurrentTopPickFeedback(action: .askHuman, reason: "想听真人意见")
         }
@@ -1467,10 +1493,12 @@ struct ResultScreen: View {
     }
 
     private func favoritePick() {
+        AppHaptics.success()
         session.saveCurrentTopPickToFavorites()
     }
 
     private func changePick() {
+        AppHaptics.selection()
         Task {
             _ = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
         }
@@ -1478,12 +1506,14 @@ struct ResultScreen: View {
     }
 
     private func reportPickIssue() {
+        AppHaptics.warning()
         Task {
             _ = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
         }
     }
 
     private func sharePick() {
+        AppHaptics.selection()
         sharePayload = CardSharePayload(text: shareText(for: session.topPick))
     }
 
@@ -1580,6 +1610,7 @@ struct AskScreen: View {
         publishTask?.cancel()
         publishTask = Task { @MainActor in
             await session.publishCurrentRequest()
+            AppHaptics.success()
             isPublishing = false
             toastMessage = "发出去了，等别人来一句。"
             showsToast = true
@@ -1619,6 +1650,7 @@ struct AskScreen: View {
     private func acceptAnswer() {
         Task { @MainActor in
             await session.acceptCurrentHelpAnswer()
+            AppHaptics.success()
             onHome()
         }
     }
@@ -1728,6 +1760,7 @@ struct AnswerScreen: View {
     private func sendAnswer() {
         let answer = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard answer.count >= 2, let request = session.answerRequest else {
+            AppHaptics.warning()
             toastMessage = "至少写两个字。"
             flashToast()
             return
@@ -1739,6 +1772,7 @@ struct AnswerScreen: View {
         toastMessage = "收到了，\(request.rewardLabel) 等她采纳。"
         toastTask = Task { @MainActor in
             await session.addAnswer(answer)
+            AppHaptics.success()
             isSending = false
             showsToast = true
             try? await Task.sleep(for: .milliseconds(1_600))
