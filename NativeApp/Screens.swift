@@ -1414,6 +1414,7 @@ struct ResultScreen: View {
     @State private var isFollowingUp = false
     @State private var isAccepting = false
     @State private var sharePayload: CardSharePayload?
+    @State private var localNotice: ServiceNotice?
 
     var body: some View {
         AppChrome(showsBack: true, backAction: onBackHome) {
@@ -1421,7 +1422,7 @@ struct ResultScreen: View {
                 VStack(spacing: 0) {
                     QueryBubble(text: session.currentQuery.isEmpty ? MockData.queryPlaceholder : session.currentQuery)
 
-                    if let notice = session.serviceNotice {
+                    if let notice = localNotice ?? session.serviceNotice {
                         ServiceNoticePill(notice: notice)
                             .padding(.bottom, 12)
                     }
@@ -1495,10 +1496,12 @@ struct ResultScreen: View {
     private func favoritePick() {
         AppHaptics.success()
         session.saveCurrentTopPickToFavorites()
+        localNotice = ServiceNotice(title: "已收藏", detail: "这张推荐已经放进 Drawer 里的收藏。")
     }
 
     private func changePick() {
         AppHaptics.selection()
+        localNotice = nil
         Task {
             _ = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
         }
@@ -1507,6 +1510,7 @@ struct ResultScreen: View {
 
     private func reportPickIssue() {
         AppHaptics.warning()
+        localNotice = ServiceNotice(title: "收到", detail: "这张卡已标记为信息有误，我会避开这类错误。")
         Task {
             _ = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
         }
