@@ -379,6 +379,7 @@ struct DecisionCard: View {
     let onAccept: () -> Void
 
     @State private var imageLoadFailed = false
+    @State private var hasAppeared = false
 
     private var imageURL: URL? {
         guard !imageLoadFailed else { return nil }
@@ -499,6 +500,13 @@ struct DecisionCard: View {
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
+        .scaleEffect(hasAppeared ? 1 : 0.985)
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 8)
+        .animation(.spring(response: 0.34, dampingFraction: 0.88), value: hasAppeared)
+        .onAppear {
+            hasAppeared = true
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("推荐卡, \(pick.title), \(decisionReason)")
     }
