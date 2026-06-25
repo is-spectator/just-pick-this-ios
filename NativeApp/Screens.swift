@@ -974,11 +974,11 @@ private struct ChatRecommendationCard: View {
                 }
 
                 Text(pick.title)
-                    .font(.system(size: imageURL == nil ? 30 : 28, weight: .bold))
+                    .font(.system(size: CardTextFitting.recommendationTitleSize(pick.title, hasImage: imageURL != nil, compact: true), weight: .bold))
                     .lineSpacing(3)
                     .foregroundStyle(AppTheme.text)
-                    .lineLimit(imageURL == nil ? 4 : 3)
-                    .minimumScaleFactor(0.76)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.72)
 
                 Text(decisionReason)
                     .font(.system(size: 18, weight: .medium))
@@ -1109,16 +1109,20 @@ private struct ChatHelpCard: View {
 
             VStack(alignment: .leading, spacing: 9) {
                 Text(request.title)
-                    .font(.system(size: 23, weight: .semibold))
+                    .font(.system(size: CardTextFitting.requestTitleSize(request.title, compact: true), weight: .semibold))
                     .lineSpacing(3)
                     .foregroundStyle(AppTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.82)
 
-                Text(request.context)
-                    .font(.system(size: 14))
-                    .lineSpacing(4)
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                CollapsibleText(
+                    text: request.context,
+                    font: .system(size: 14),
+                    color: AppTheme.textSecondary,
+                    collapsedLineLimit: 3,
+                    lineSpacing: 4,
+                    expandThreshold: 84
+                )
             }
 
             HelpStructuredSummary(request: request, compact: true)
@@ -1629,11 +1633,11 @@ struct HelpDeckCard: View {
             Spacer(minLength: 24)
 
             Text(request.title)
-                .font(.system(size: 32, weight: .semibold))
+                .font(.system(size: CardTextFitting.requestTitleSize(request.title) + 8, weight: .semibold))
                 .lineSpacing(4)
                 .foregroundStyle(AppTheme.text)
                 .lineLimit(3)
-                .minimumScaleFactor(0.78)
+                .minimumScaleFactor(0.76)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .multilineTextAlignment(.leading)
 
@@ -3099,16 +3103,20 @@ private struct HelpDetailSummaryPanel: View {
             }
 
             Text(request.title)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: CardTextFitting.requestTitleSize(request.title, compact: true), weight: .semibold))
                 .lineSpacing(3)
                 .foregroundStyle(AppTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(3)
+                .minimumScaleFactor(0.82)
 
-            Text(request.context)
-                .font(.system(size: 14))
-                .lineSpacing(4)
-                .foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            CollapsibleText(
+                text: request.context,
+                font: .system(size: 14),
+                color: AppTheme.textSecondary,
+                collapsedLineLimit: 3,
+                lineSpacing: 4,
+                expandThreshold: 92
+            )
 
             HelpStructuredSummary(request: request, compact: true)
         }
@@ -3129,11 +3137,14 @@ private struct HelpAnswerDetailRow: View {
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(answer.text)
-                    .font(.system(size: 15, weight: .medium))
-                    .lineSpacing(4)
-                    .foregroundStyle(AppTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
+                CollapsibleText(
+                    text: answer.text,
+                    font: .system(size: 15, weight: .medium),
+                    color: AppTheme.text,
+                    collapsedLineLimit: 4,
+                    lineSpacing: 4,
+                    expandThreshold: 96
+                )
 
                 Text("\(answer.nickname) · \(answer.timeLabel)")
                     .font(.system(size: 12))
@@ -3161,17 +3172,21 @@ private struct HelpFinalRecommendationPanel: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppTheme.textMuted)
                     Text(pick.title)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: CardTextFitting.requestTitleSize(pick.title, compact: true), weight: .semibold))
                         .foregroundStyle(AppTheme.text)
                         .lineLimit(2)
+                        .minimumScaleFactor(0.82)
                 }
             }
 
-            Text(pick.reason.isEmpty ? pick.subtitle : pick.reason)
-                .font(.system(size: 14))
-                .lineSpacing(4)
-                .foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            CollapsibleText(
+                text: pick.reason.isEmpty ? pick.subtitle : pick.reason,
+                font: .system(size: 14),
+                color: AppTheme.textSecondary,
+                collapsedLineLimit: 3,
+                lineSpacing: 4,
+                expandThreshold: 92
+            )
         }
         .productPanel()
     }
@@ -3186,11 +3201,14 @@ private struct HelpFinalTextPanel: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppTheme.textMuted)
 
-            Text(answer.text)
-                .font(.system(size: 15, weight: .medium))
-                .lineSpacing(4)
-                .foregroundStyle(AppTheme.text)
-                .fixedSize(horizontal: false, vertical: true)
+            CollapsibleText(
+                text: answer.text,
+                font: .system(size: 15, weight: .medium),
+                color: AppTheme.text,
+                collapsedLineLimit: 4,
+                lineSpacing: 4,
+                expandThreshold: 96
+            )
         }
         .productPanel()
     }

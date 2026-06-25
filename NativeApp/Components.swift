@@ -291,6 +291,78 @@ struct QueryBubble: View {
     }
 }
 
+enum CardTextFitting {
+    static func recommendationTitleSize(_ title: String, hasImage: Bool, compact: Bool = false) -> CGFloat {
+        let count = title.count
+        if compact {
+            if count > 26 { return 24 }
+            if count > 18 { return 26 }
+            return hasImage ? 28 : 30
+        }
+
+        if count > 28 { return hasImage ? 24 : 26 }
+        if count > 20 { return hasImage ? 27 : 29 }
+        return hasImage ? 31 : 34
+    }
+
+    static func requestTitleSize(_ title: String, compact: Bool = false) -> CGFloat {
+        let count = title.count
+        if compact {
+            if count > 28 { return 19 }
+            if count > 18 { return 21 }
+            return 23
+        }
+
+        if count > 30 { return 20 }
+        if count > 20 { return 22 }
+        return 24
+    }
+}
+
+struct CollapsibleText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    var collapsedLineLimit: Int = 3
+    var lineSpacing: CGFloat = 4
+    var expandThreshold: Int = 78
+
+    @State private var isExpanded = false
+
+    private var trimmedText: String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var shouldOfferExpansion: Bool {
+        trimmedText.count > expandThreshold || trimmedText.contains("\n")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(trimmedText)
+                .font(font)
+                .lineSpacing(lineSpacing)
+                .foregroundStyle(color)
+                .lineLimit(isExpanded ? nil : collapsedLineLimit)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if shouldOfferExpansion {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Text(isExpanded ? "收起" : "展开")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "收起全文" : "展开全文")
+            }
+        }
+    }
+}
+
 struct DecisionCard: View {
     let pick: TopPick
     let isFollowingUp: Bool
@@ -360,11 +432,11 @@ struct DecisionCard: View {
                 }
 
                 Text(pick.title)
-                    .font(.system(size: imageURL == nil ? 34 : 31, weight: .bold))
+                    .font(.system(size: CardTextFitting.recommendationTitleSize(pick.title, hasImage: imageURL != nil), weight: .bold))
                     .lineSpacing(3)
                     .foregroundStyle(AppTheme.text)
                     .lineLimit(3)
-                    .minimumScaleFactor(0.82)
+                    .minimumScaleFactor(0.74)
 
                 Text(decisionReason)
                     .font(.system(size: 20, weight: .medium))
@@ -830,15 +902,21 @@ struct RequestCard: View {
             }
 
             Text(request.title)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: CardTextFitting.requestTitleSize(request.title), weight: .semibold))
                 .lineSpacing(2)
                 .foregroundStyle(AppTheme.text)
+                .lineLimit(3)
+                .minimumScaleFactor(0.82)
                 .padding(.top, 14)
 
-            Text(request.context)
-                .font(.system(size: 13))
-                .lineSpacing(4)
-                .foregroundStyle(AppTheme.textSecondary)
+            CollapsibleText(
+                text: request.context,
+                font: .system(size: 13),
+                color: AppTheme.textSecondary,
+                collapsedLineLimit: 3,
+                lineSpacing: 4,
+                expandThreshold: 88
+            )
                 .padding(.top, 12)
 
             HelpStructuredSummary(request: request)
@@ -1004,7 +1082,7 @@ struct AnswerRequestSquareCard: View {
             Spacer(minLength: 18)
 
             Text(request.title)
-                .font(.system(size: 28, weight: .semibold))
+                .font(.system(size: CardTextFitting.requestTitleSize(request.title, compact: true), weight: .semibold))
                 .lineSpacing(4)
                 .foregroundStyle(AppTheme.text)
                 .lineLimit(3)
@@ -1014,7 +1092,7 @@ struct AnswerRequestSquareCard: View {
                 .font(.system(size: 15))
                 .lineSpacing(6)
                 .foregroundStyle(AppTheme.textSecondary)
-                .lineLimit(4)
+                .lineLimit(3)
                 .padding(.top, 18)
 
             Spacer(minLength: 18)
