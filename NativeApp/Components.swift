@@ -380,6 +380,7 @@ struct DecisionCard: View {
 
     @State private var imageLoadFailed = false
     @State private var hasAppeared = false
+    @State private var acceptFeedbackCount = 0
 
     private var imageURL: URL? {
         guard !imageLoadFailed else { return nil }
@@ -467,7 +468,10 @@ struct DecisionCard: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("求一个")
 
-                Button(action: onAccept) {
+                Button {
+                    acceptFeedbackCount += 1
+                    onAccept()
+                } label: {
                     HStack(spacing: 8) {
                         if isAccepting {
                             ProgressView()
@@ -487,6 +491,7 @@ struct DecisionCard: View {
                 .buttonStyle(.plain)
                 .disabled(isAccepting)
                 .accessibilityLabel("就这个")
+                .sensoryFeedback(.selection, trigger: acceptFeedbackCount)
             }
         }
         .padding(imageURL == nil ? 22 : 16)
