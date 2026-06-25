@@ -27,6 +27,9 @@ struct RootView: View {
     @State private var pinnedHistoryIDs: Set<UUID> = []
     @State private var hiddenHistoryIDs: Set<UUID> = []
     @State private var renamedHistoryTitles: [UUID: String] = [:]
+    @GestureState private var drawerDragTranslation: CGFloat = 0
+
+    private let drawerAnimation = Animation.spring(response: 0.34, dampingFraction: 0.88)
 
     init() {
         let demoScreen = DocumentationDemoScreen.current
@@ -39,22 +42,21 @@ struct RootView: View {
     var body: some View {
         GeometryReader { geometry in
             let drawerWidth = min(340, geometry.size.width * 0.86)
+            let drawerProgress = drawerProgress(for: drawerWidth)
 
             ZStack(alignment: .leading) {
                 chatStack
-                    .scaleEffect(showsDrawer ? 0.985 : 1)
-                    .offset(x: showsDrawer ? drawerWidth * 0.12 : 0)
+                    .scaleEffect(1 - 0.015 * drawerProgress)
+                    .offset(x: drawerWidth * 0.12 * drawerProgress)
                     .allowsHitTesting(!showsDrawer)
-                    .animation(.spring(response: 0.34, dampingFraction: 0.9), value: showsDrawer)
+                    .animation(drawerAnimation, value: showsDrawer)
 
-                if showsDrawer {
-                    Color.black.opacity(0.18)
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                        .onTapGesture {
-                            closeDrawer()
-                        }
-                }
+                Color.black.opacity(0.18 * drawerProgress)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(showsDrawer)
+                    .onTapGesture {
+                        closeDrawer()
+                    }
 
                 ChatDrawer(
                     history: session.history,
@@ -81,8 +83,8 @@ struct RootView: View {
                     onRefresh: refreshDrawer
                 )
                 .frame(width: drawerWidth)
-                .offset(x: showsDrawer ? 0 : -drawerWidth - 24)
-                .animation(.spring(response: 0.34, dampingFraction: 0.9), value: showsDrawer)
+                .offset(x: drawerOffset(for: drawerWidth, progress: drawerProgress))
+                .animation(drawerAnimation, value: showsDrawer)
             }
             .contentShape(Rectangle())
             .simultaneousGesture(drawerGesture(edgeWidth: 28))
@@ -185,13 +187,13 @@ struct RootView: View {
     }
 
     private func openDrawer() {
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
+        withAnimation(drawerAnimation) {
             showsDrawer = true
         }
     }
 
     private func closeDrawer() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.92)) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
             showsDrawer = false
         }
     }
@@ -228,17 +230,51 @@ struct RootView: View {
         path.append(.helpDetail(item))
     }
 
+    private func drawerProgress(for drawerWidth: CGFloat) -> CGFloat {
+        let baseProgress: CGFloat = showsDrawer ? 1 : 0
+        let dragProgress = drawerDragTranslation / max(drawerWidth, 1)
+        return min(max(baseProgress + dragProgress, 0), 1)
+    }
+
+    private func drawerOffset(for drawerWidth: CGFloat, progress: CGFloat) -> CGFloat {
+        let hiddenOffset = -drawerWidth - 24
+        return hiddenOffset * (1 - progress)
+    }
+
     private func drawerGesture(edgeWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 18)
+        DragGesture(minimumDistance: 12, coordinateSpace: .global)
+            .updating($drawerDragTranslation) { value, state, _ in
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+                guard abs(horizontal) > abs(vertical) else { return }
+
+                if showsDrawer {
+                    state = min(0, horizontal)
+                    return
+                }
+
+                if value.startLocation.x <= edgeWidth {
+                    state = max(0, horizontal)
+                }
+            }
             .onEnded { value in
-                if showsDrawer, value.translation.width < -70 {
-                    closeDrawer()
+                let horizontal = value.translation.width
+                let predictedHorizontal = value.predictedEndTranslation.width
+                let vertical = value.translation.height
+                guard abs(horizontal) > abs(vertical) else { return }
+
+                if showsDrawer {
+                    if min(horizontal, predictedHorizontal) < -96 {
+                        closeDrawer()
+                    } else {
+                        openDrawer()
+                    }
                     return
                 }
 
                 if !showsDrawer,
                    value.startLocation.x <= edgeWidth,
-                   value.translation.width > 70 {
+                   max(horizontal, predictedHorizontal) > 76 {
                     openDrawer()
                 }
             }
