@@ -208,6 +208,7 @@ protocol RecommendationService: Sendable {
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
     func answer(_ text: String, for request: HelpRequest) async -> HelpRequest
+    func skip(_ request: HelpRequest, reason: String) async -> Bool
     func acceptCard(id: UUID?) async -> Bool
     func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool
     func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory]
@@ -363,6 +364,23 @@ struct BackendRecommendationService: RecommendationService {
             fallback.answerCount += 1
             fallback.status = .answered
             return fallback
+        }
+    }
+
+    func skip(_ helpRequest: HelpRequest, reason: String) async -> Bool {
+        do {
+            let _: V1HelpCardSkipResponse = try await perform(makeRequest(
+                path: "/v1/help-cards/\(helpRequest.id.uuidString)/skip",
+                method: "POST",
+                body: V1HelpCardSkipRequest(
+                    deviceId: deviceUid,
+                    reason: reason,
+                    metadata: ["source": "ios", "surface": "answer_deck"]
+                )
+            ))
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -1670,6 +1688,28 @@ private struct V1OneLinerMetadata: Decodable {
     }
 }
 
+private struct V1HelpCardSkipRequest: Encodable {
+    let deviceId: String
+    let reason: String
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case deviceId = "device_id"
+        case reason
+        case metadata
+    }
+}
+
+private struct V1HelpCardSkipResponse: Decodable {
+    let ok: Bool
+    let helpCardId: String
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case helpCardId = "help_card_id"
+    }
+}
+
 private struct V1HelpCardFinalAcceptRequest: Encodable {
     let deviceId: String
     let reason: String
@@ -1792,6 +1832,10 @@ struct MockCloudRecommendationService: RecommendationService {
         updated.answerCount += 1
         updated.status = .answered
         return updated
+    }
+
+    func skip(_ request: HelpRequest, reason: String) async -> Bool {
+        true
     }
 
     func acceptCard(id: UUID?) async -> Bool {
@@ -2218,8 +2262,9 @@ final class AppSession {
         answerTarget = answerQueue.first
     }
 
-    func reportAnswerRequest() {
+    func skipAnswerRequest(reason: String) async {
         guard let request = answerRequest else { return }
+        _ = await service.skip(request, reason: reason)
         answerQueue.removeAll { $0.id == request.id }
         answerTarget = answerQueue.first
     }

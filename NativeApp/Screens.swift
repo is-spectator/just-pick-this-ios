@@ -1728,17 +1728,23 @@ struct AnswerScreen: View {
                                     session.advanceAnswerRequest()
                                 },
                                 onHideCurrent: {
-                                    session.advanceAnswerRequest()
-                                    toastMessage = "已跳过这张。"
-                                    flashToast()
+                                    Task { @MainActor in
+                                        await session.skipAnswerRequest(reason: "hidden")
+                                        toastMessage = session.answerRequest == nil
+                                            ? "已屏蔽这张。暂时没有下一张。"
+                                            : "已屏蔽这张，已切到下一张。"
+                                        flashToast()
+                                    }
                                 },
                                 onReportCurrent: {
-                                    session.reportAnswerRequest()
-                                    AppHaptics.warning()
-                                    toastMessage = session.answerRequest == nil
-                                        ? "收到，已标记这张求一个。暂时没有下一张。"
-                                        : "收到，已标记这张求一个，已切到下一张。"
-                                    flashToast()
+                                    Task { @MainActor in
+                                        await session.skipAnswerRequest(reason: "reported")
+                                        AppHaptics.warning()
+                                        toastMessage = session.answerRequest == nil
+                                            ? "收到，已标记这张求一个。暂时没有下一张。"
+                                            : "收到，已标记这张求一个，已切到下一张。"
+                                        flashToast()
+                                    }
                                 },
                                 onRefresh: {
                                     Task { @MainActor in
