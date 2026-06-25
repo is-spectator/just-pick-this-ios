@@ -24,6 +24,7 @@ struct RootView: View {
     @State private var chatRevision = 0
     @State private var unreadLightCount = 0
     @State private var latestLightEventIDs: Set<String> = []
+    @State private var isDrawerRefreshing = false
     @State private var pinnedHistoryIDs: Set<UUID> = []
     @State private var hiddenHistoryIDs: Set<UUID> = []
     @State private var renamedHistoryTitles: [UUID: String] = [:]
@@ -83,6 +84,7 @@ struct RootView: View {
                         showsEmailLogin = true
                     },
                     unreadLightCount: unreadLightCount,
+                    isRefreshing: isDrawerRefreshing,
                     onRefresh: refreshDrawer
                 )
                 .frame(width: drawerWidth)
@@ -318,6 +320,10 @@ struct RootView: View {
 
     @MainActor
     private func refreshDrawer() async {
+        guard !isDrawerRefreshing else { return }
+        isDrawerRefreshing = true
+        defer { isDrawerRefreshing = false }
+
         _ = await session.refreshCurrentHelpRequest()
         await session.loadAnswerQueue()
         await loadMessageBadge()
@@ -415,6 +421,7 @@ private struct ChatDrawer: View {
     let onOpenProfile: () -> Void
     let onLogin: () -> Void
     let unreadLightCount: Int
+    let isRefreshing: Bool
     let onRefresh: () async -> Void
 
     @State private var searchText = ""
@@ -531,26 +538,35 @@ private struct ChatDrawer: View {
 
     @ViewBuilder
     private var defaultHistorySections: some View {
-        if !pinnedHistory.isEmpty {
+        if isRefreshing && pinnedHistory.isEmpty && recentHistory.isEmpty {
+            DrawerHistorySkeletonSection()
+        } else if !pinnedHistory.isEmpty {
             historySection(title: "置顶", items: pinnedHistory)
-        }
 
-        if !recentHistory.isEmpty {
-            let today = Array(recentHistory.prefix(3))
-            let week = Array(recentHistory.dropFirst(3).prefix(7))
-            let earlier = Array(recentHistory.dropFirst(10))
-
-            if !today.isEmpty {
-                historySection(title: "今天", items: today)
+            if !recentHistory.isEmpty {
+                recentHistorySections
             }
-            if !week.isEmpty {
-                historySection(title: "7 天内", items: week)
-            }
-            if !earlier.isEmpty {
-                historySection(title: "更早", items: earlier)
-            }
-        } else if pinnedHistory.isEmpty {
+        } else if !recentHistory.isEmpty {
+            recentHistorySections
+        } else {
             DrawerEmptyState(text: "还没有历史会话")
+        }
+    }
+
+    @ViewBuilder
+    private var recentHistorySections: some View {
+        let today = Array(recentHistory.prefix(3))
+        let week = Array(recentHistory.dropFirst(3).prefix(7))
+        let earlier = Array(recentHistory.dropFirst(10))
+
+        if !today.isEmpty {
+            historySection(title: "今天", items: today)
+        }
+        if !week.isEmpty {
+            historySection(title: "7 天内", items: week)
+        }
+        if !earlier.isEmpty {
+            historySection(title: "更早", items: earlier)
         }
     }
 
@@ -939,6 +955,60 @@ private struct DrawerSearchResultRow: View {
             Button("重命名", systemImage: "pencil", action: onRename)
             Button("删除", systemImage: "trash", role: .destructive, action: onDelete)
         }
+    }
+}
+
+private struct DrawerHistorySkeletonSection: View {
+    @State private var isBreathing = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+            Capsule()
+                .fill(AppTheme.textMuted.opacity(isBreathing ? 0.2 : 0.1))
+                .frame(width: 52, height: 10)
+                .padding(.horizontal, AppTheme.Spacing.xs)
+
+            VStack(spacing: 2) {
+                DrawerHistorySkeletonRow(width: 156, isBreathing: isBreathing)
+                DrawerHistorySkeletonRow(width: 206, isBreathing: isBreathing)
+                DrawerHistorySkeletonRow(width: 132, isBreathing: isBreathing)
+            }
+        }
+        .accessibilityHidden(true)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
+    }
+}
+
+private struct DrawerHistorySkeletonRow: View {
+    let width: CGFloat
+    let isBreathing: Bool
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.sm) {
+            Circle()
+                .fill(AppTheme.textMuted.opacity(isBreathing ? 0.18 : 0.08))
+                .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 7) {
+                Capsule()
+                    .fill(AppTheme.textMuted.opacity(isBreathing ? 0.2 : 0.1))
+                    .frame(width: width, height: 12)
+
+                Capsule()
+                    .fill(AppTheme.textMuted.opacity(isBreathing ? 0.15 : 0.07))
+                    .frame(width: max(width * 0.62, 86), height: 9)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, AppTheme.Spacing.sm)
+        .frame(height: 56)
+        .background(AppTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
     }
 }
 
