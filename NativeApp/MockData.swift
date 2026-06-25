@@ -2119,6 +2119,28 @@ final class AppSession {
         submitState = .idle
     }
 
+    func clearLocalUserData() {
+        sessionId = nil
+        currentQuestionId = nil
+        currentQuery = ""
+        currentTopPick = nil
+        currentHelpRequest = nil
+        history = []
+        favoriteChoices = []
+        hiddenFavoriteChoiceIds = []
+        submittedAnswers = []
+        answerQueue = []
+        answerTarget = nil
+        serviceNotice = nil
+        submitState = .idle
+
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.historyKey)
+        defaults.removeObject(forKey: Self.favoriteChoicesKey)
+        defaults.removeObject(forKey: Self.hiddenFavoriteChoiceIDsKey)
+        defaults.removeObject(forKey: Self.submittedAnswersKey)
+    }
+
     func submit(query: String, locationContext: DecisionLocationContext? = nil) async -> RecommendationDecision {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         currentQuery = trimmed

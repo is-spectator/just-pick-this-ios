@@ -2619,9 +2619,10 @@ struct ProfileScreen: View {
             do {
                 try await AuthAPIService().deleteAccount()
                 await MainActor.run {
+                    session.clearLocalUserData()
                     snapshot = .empty
                     isAccountActionRunning = false
-                    accountActionMessage = "账号已删除，本机登录已清除。"
+                    accountActionMessage = "账号已删除，本机记录也已清除。"
                     onAuthChanged()
                 }
             } catch {
