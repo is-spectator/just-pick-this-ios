@@ -492,6 +492,7 @@ private struct DecisionLocationBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(location == nil ? "选择决策地点" : "当前决策地点：\(location?.displayLabel ?? "")")
+        .accessibilityHint("打开地点选择，可使用当前定位、搜索或手动输入地点")
     }
 }
 
@@ -586,6 +587,8 @@ private struct LocationPickerSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isLocating)
+                .accessibilityLabel(isLocating ? "正在获取当前定位" : "使用当前定位")
+                .accessibilityHint("授权后把当前位置设为本次决策地点")
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("搜索或输入地点")
@@ -679,6 +682,7 @@ private struct LocationSuggestionRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("选择地点 \(label)")
+        .accessibilityHint("设为当前决策地点")
     }
 }
 

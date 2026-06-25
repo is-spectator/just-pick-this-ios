@@ -126,8 +126,8 @@ struct TopBar: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("打开菜单")
-                        .accessibilityHint("打开历史、来一句、收藏和账号入口")
+                        .accessibilityLabel(showsHistoryBadge ? "打开菜单，有新消息" : "打开菜单")
+                        .accessibilityHint(showsHistoryBadge ? "打开历史、来一句、收藏、消息中心和账号入口" : "打开历史、来一句、收藏和账号入口")
                     } else {
                         Color.clear
                             .frame(width: 44, height: 44)

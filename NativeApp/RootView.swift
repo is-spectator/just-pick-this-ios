@@ -654,6 +654,8 @@ private struct ChatDrawer: View {
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("新对话")
+        .accessibilityHint("清空当前聊天并开始新的选择")
     }
 
     private var featureEntrances: some View {
@@ -856,8 +858,14 @@ private struct DrawerActionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(subtitle)
+    }
+
+    private var accessibilityLabel: String {
+        guard badgeCount > 0 else { return title }
+        let countText = badgeCount > 99 ? "99 条以上" : "\(badgeCount) 条"
+        return "\(title)，\(countText)新消息"
     }
 }
 
