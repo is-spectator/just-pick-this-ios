@@ -616,9 +616,25 @@ struct AuthAPIService: Sendable {
 
 struct UserLightEvent: Identifiable, Equatable, Sendable {
     let id: String
+    let kind: String?
     let title: String
     let body: String
+    let cardId: UUID?
+    let helpCardId: UUID?
     let createdAt: String?
+
+    var destinationHint: String {
+        if helpCardId != nil {
+            return "打开求助详情"
+        }
+        if cardId != nil {
+            return "打开相关推荐"
+        }
+        if kind?.contains("reward") == true {
+            return "查看奖励明细"
+        }
+        return "查看相关内容"
+    }
 }
 
 struct UserDashboardSnapshot: Equatable, Sendable {
@@ -762,8 +778,11 @@ struct ProfileAPIService: Sendable {
             lightEvents: (lights?.items ?? []).map { item in
                 UserLightEvent(
                     id: item.id,
+                    kind: item.kind ?? item.type,
                     title: item.title ?? "有新消息",
                     body: item.body ?? item.message ?? "皮皮有新进展。",
+                    cardId: UUID(uuidString: item.cardId ?? ""),
+                    helpCardId: UUID(uuidString: item.helpCardId ?? ""),
                     createdAt: item.createdAt
                 )
             }
@@ -940,16 +959,24 @@ private struct V1ProfileLightEventsResponse: Decodable {
 
 private struct V1ProfileLightEvent: Decodable {
     let id: String
+    let kind: String?
+    let type: String?
     let title: String?
     let body: String?
     let message: String?
+    let cardId: String?
+    let helpCardId: String?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
+        case kind
+        case type
         case title
         case body
         case message
+        case cardId = "card_id"
+        case helpCardId = "help_card_id"
         case createdAt = "created_at"
     }
 }

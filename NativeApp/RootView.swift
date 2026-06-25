@@ -176,7 +176,10 @@ struct RootView: View {
                 case .rewards:
                     RewardsScreen(session: session, authRevision: authRevision)
                 case .messages:
-                    MessagesScreen(onMarkRead: markLightEventsRead)
+                    MessagesScreen(
+                        onMarkRead: markLightEventsRead,
+                        onOpenEvent: openLightEvent
+                    )
                 case .profile:
                     ProfileScreen(
                         session: session,
@@ -243,6 +246,41 @@ struct RootView: View {
     private func openHelpDetail(_ item: QuestionHistory) {
         closeDrawer()
         path.append(.helpDetail(item))
+    }
+
+    private func openLightEvent(_ event: UserLightEvent) {
+        if let helpCardId = event.helpCardId {
+            let item = session.history.first { $0.helpRequestId == helpCardId } ?? QuestionHistory(
+                id: helpCardId,
+                query: event.title,
+                status: "answer_received",
+                helpRequestId: helpCardId,
+                topPick: nil,
+                createdAt: event.createdAt
+            )
+            path.append(.helpDetail(item))
+            return
+        }
+
+        if let cardId = event.cardId,
+           let item = session.history.first(where: { $0.topPick?.cardId == cardId }) {
+            Task { @MainActor in
+                let destination = await session.restoreHistoryItem(item)
+                switch destination {
+                case .result:
+                    path.append(.resultDatong)
+                case .ask:
+                    path.append(.askKorea)
+                }
+            }
+            return
+        }
+
+        if event.kind?.contains("reward") == true {
+            path.append(.rewards)
+        } else {
+            path.append(.myHelp)
+        }
     }
 
     private func drawerProgress(for drawerWidth: CGFloat) -> CGFloat {
