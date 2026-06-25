@@ -1514,9 +1514,6 @@ struct ResultScreen: View {
 
     private func askHuman() {
         AppHaptics.selection()
-        Task {
-            _ = await session.sendCurrentTopPickFeedback(action: .askHuman, reason: "想听真人意见")
-        }
         onAskHuman()
     }
 
