@@ -39,6 +39,7 @@ struct QuestionHistory: Identifiable, Hashable, Sendable {
     let status: String
     let helpRequestId: UUID?
     let topPick: TopPick?
+    let createdAt: String?
 
     var statusLabel: String {
         switch status {
@@ -1841,6 +1842,16 @@ private struct QuestionHistoryResponse: Decodable {
     let status: String?
     let helpRequestId: UUID?
     let topPick: TopPickResponse?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case query
+        case status
+        case helpRequestId = "help_request_id"
+        case topPick = "top_pick"
+        case createdAt = "created_at"
+    }
 
     var model: QuestionHistory? {
         guard let id, let query, let status else { return nil }
@@ -1849,7 +1860,8 @@ private struct QuestionHistoryResponse: Decodable {
             query: query,
             status: status,
             helpRequestId: helpRequestId,
-            topPick: topPick?.model(query: query)
+            topPick: topPick?.model(query: query),
+            createdAt: createdAt
         )
     }
 }
@@ -2152,7 +2164,8 @@ final class AppSession {
             query: query.isEmpty ? MockData.queryPlaceholder : query,
             status: "saved",
             helpRequestId: nil,
-            topPick: currentTopPick ?? topPick
+            topPick: currentTopPick ?? topPick,
+            createdAt: ISO8601DateFormatter().string(from: Date())
         )
         favoriteChoices.removeAll { $0.id == item.id }
         hiddenFavoriteChoiceIds.remove(item.id)
@@ -2209,7 +2222,8 @@ final class AppSession {
                 query: query,
                 status: status,
                 helpRequestId: helpRequestId,
-                topPick: topPick ?? existing.topPick
+                topPick: topPick ?? existing.topPick,
+                createdAt: existing.createdAt
             )
             return
         }
@@ -2222,7 +2236,8 @@ final class AppSession {
                 query: query,
                 status: status,
                 helpRequestId: helpRequestId,
-                topPick: topPick
+                topPick: topPick,
+                createdAt: ISO8601DateFormatter().string(from: Date())
             ),
             at: 0
         )

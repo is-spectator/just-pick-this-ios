@@ -555,9 +555,9 @@ private struct ChatDrawer: View {
 
     @ViewBuilder
     private var recentHistorySections: some View {
-        let today = Array(recentHistory.prefix(3))
-        let week = Array(recentHistory.dropFirst(3).prefix(7))
-        let earlier = Array(recentHistory.dropFirst(10))
+        let today = recentHistory.filter { historyGroup(for: $0) == .today }
+        let week = recentHistory.filter { historyGroup(for: $0) == .week }
+        let earlier = recentHistory.filter { historyGroup(for: $0) == .earlier }
 
         if !today.isEmpty {
             historySection(title: "今天", items: today)
@@ -814,6 +814,31 @@ private struct ChatDrawer: View {
         item.topPick != nil || item.status == "completed" || item.status == "top1" || item.status == "saved"
     }
 
+    private func historyGroup(for item: QuestionHistory) -> DrawerHistoryDateGroup {
+        guard let date = historyDate(for: item) else { return .today }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return .today
+        }
+
+        let startOfToday = calendar.startOfDay(for: Date())
+        let startOfDate = calendar.startOfDay(for: date)
+        guard let days = calendar.dateComponents([.day], from: startOfDate, to: startOfToday).day else {
+            return .earlier
+        }
+        return (1...7).contains(days) ? .week : .earlier
+    }
+
+    private func historyDate(for item: QuestionHistory) -> Date? {
+        guard let createdAt = item.createdAt, !createdAt.isEmpty else { return nil }
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return fractionalFormatter.date(from: createdAt) ?? formatter.date(from: createdAt)
+    }
+
     private func togglePinned(_ id: UUID) {
         if pinnedHistoryIDs.contains(id) {
             pinnedHistoryIDs.remove(id)
@@ -821,6 +846,12 @@ private struct ChatDrawer: View {
             pinnedHistoryIDs.insert(id)
         }
     }
+}
+
+private enum DrawerHistoryDateGroup {
+    case today
+    case week
+    case earlier
 }
 
 private struct DrawerActionRow: View {
