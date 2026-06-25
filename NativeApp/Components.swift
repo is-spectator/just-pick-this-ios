@@ -87,8 +87,10 @@ struct TopBar: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 22, weight: .medium))
                         .foregroundStyle(AppTheme.text)
-                        .frame(width: 36, height: 36, alignment: .leading)
+                        .frame(width: 44, height: 44, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("返回")
 
                 Spacer()
@@ -100,7 +102,7 @@ struct TopBar: View {
                 Spacer()
 
                 Color.clear
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
             }
             .padding(.horizontal, 16)
             .frame(height: 50)
