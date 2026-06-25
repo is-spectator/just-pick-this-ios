@@ -1073,11 +1073,7 @@ private struct ChatRecommendationCard: View {
                             }
                         }
                 case .empty:
-                    ZStack {
-                        AppTheme.bubble
-                        ProgressView()
-                            .tint(AppTheme.textMuted)
-                    }
+                    RecommendationImageSkeleton()
                 @unknown default:
                     Color.clear
                         .task {

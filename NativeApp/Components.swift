@@ -298,6 +298,33 @@ struct QueryBubble: View {
     }
 }
 
+struct RecommendationImageSkeleton: View {
+    @State private var isBreathing = false
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            AppTheme.bubble
+                .opacity(isBreathing ? 0.72 : 0.46)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Capsule()
+                    .fill(AppTheme.textMuted.opacity(0.16))
+                    .frame(width: 96, height: 10)
+                Capsule()
+                    .fill(AppTheme.textMuted.opacity(0.12))
+                    .frame(width: 148, height: 10)
+            }
+            .padding(18)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 enum CardTextFitting {
     static func recommendationTitleSize(_ title: String, hasImage: Bool, compact: Bool = false) -> CGFloat {
         let count = title.count
@@ -539,11 +566,7 @@ struct DecisionCard: View {
                             }
                         }
                 case .empty:
-                    ZStack {
-                        AppTheme.bubble
-                        ProgressView()
-                            .tint(AppTheme.textMuted)
-                    }
+                    RecommendationImageSkeleton()
                 @unknown default:
                     Color.clear
                         .task {
