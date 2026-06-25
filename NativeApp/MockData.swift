@@ -402,7 +402,28 @@ struct BackendRecommendationService: RecommendationService {
     }
 
     func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory] {
-        []
+        guard let helpRequestId else { return [] }
+
+        do {
+            let _: V1HelpCardFinalAcceptResponse = try await perform(makeRequest(
+                path: "/v1/help-cards/\(helpRequestId.uuidString)/accept-final",
+                method: "POST",
+                body: V1HelpCardFinalAcceptRequest(
+                    deviceId: deviceUid,
+                    reason: source == "human_answer" ? "采纳来一句最终结果" : "采纳皮皮结果",
+                    metadata: [
+                        "source": source,
+                        "surface": "ios",
+                        "conversation_id": sessionId?.uuidString ?? "",
+                        "question_id": questionId?.uuidString ?? ""
+                    ].compactMapValues { $0.isEmpty ? nil : $0 }
+                )
+            ))
+        } catch {
+            // Keep the existing local completion fallback; the user should not lose the chosen result.
+        }
+
+        return []
     }
 
     private func makeRequest<Body: Encodable>(path: String, method: String, body: Body) throws -> URLRequest {
@@ -1646,6 +1667,30 @@ private struct V1OneLinerMetadata: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case finalizationReady = "finalization_ready"
+    }
+}
+
+private struct V1HelpCardFinalAcceptRequest: Encodable {
+    let deviceId: String
+    let reason: String
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case deviceId = "device_id"
+        case reason
+        case metadata
+    }
+}
+
+private struct V1HelpCardFinalAcceptResponse: Decodable {
+    let helpCardId: String
+    let cardId: String?
+    let accepted: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case helpCardId = "help_card_id"
+        case cardId = "card_id"
+        case accepted
     }
 }
 
