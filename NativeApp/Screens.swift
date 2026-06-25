@@ -2115,14 +2115,10 @@ struct ProfileScreen: View {
         VStack(alignment: .leading, spacing: 10) {
             ProfileSectionHeader(title: title)
 
-            VStack(spacing: 0) {
-                if items.isEmpty {
-                    Text(emptyText)
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppTheme.textMuted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                } else {
+            if items.isEmpty {
+                ProductEmptyInline(title: emptyText, message: "有内容后会自动归档在这里。")
+            } else {
+                VStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         Button {
                             onHistorySelect(item)
@@ -2137,13 +2133,13 @@ struct ProfileScreen: View {
                         }
                     }
                 }
+                .background(AppTheme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(AppTheme.border, lineWidth: 1)
+                )
             }
-            .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(AppTheme.border, lineWidth: 1)
-            )
         }
     }
 
@@ -2151,14 +2147,10 @@ struct ProfileScreen: View {
         VStack(alignment: .leading, spacing: 10) {
             ProfileSectionHeader(title: "消息")
 
-            VStack(spacing: 0) {
-                if snapshot.lightEvents.isEmpty {
-                    Text("暂时没有新消息")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppTheme.textMuted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
-                } else {
+            if snapshot.lightEvents.isEmpty {
+                ProductEmptyInline(title: "暂时没有新消息", message: "有人回答、结果完成或奖励变化时会出现在这里。")
+            } else {
+                VStack(spacing: 0) {
                     ForEach(Array(snapshot.lightEvents.prefix(3).enumerated()), id: \.element.id) { index, event in
                         ProfileMessageRow(event: event)
                         if index < min(snapshot.lightEvents.count, 3) - 1 {
@@ -2167,13 +2159,13 @@ struct ProfileScreen: View {
                         }
                     }
                 }
+                .background(AppTheme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(AppTheme.border, lineWidth: 1)
+                )
             }
-            .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(AppTheme.border, lineWidth: 1)
-            )
         }
     }
 
