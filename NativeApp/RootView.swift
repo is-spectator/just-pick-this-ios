@@ -27,6 +27,9 @@ struct RootView: View {
     @State private var pinnedHistoryIDs: Set<UUID> = []
     @State private var hiddenHistoryIDs: Set<UUID> = []
     @State private var renamedHistoryTitles: [UUID: String] = [:]
+    @AppStorage("pinned_history_ids") private var pinnedHistoryIDsRaw = ""
+    @AppStorage("hidden_history_ids") private var hiddenHistoryIDsRaw = ""
+    @AppStorage("renamed_history_titles") private var renamedHistoryTitlesRaw = ""
     @GestureState private var drawerDragTranslation: CGFloat = 0
 
     private let drawerAnimation = Animation.spring(response: 0.34, dampingFraction: 0.88)
@@ -98,11 +101,21 @@ struct RootView: View {
             .presentationDragIndicator(.visible)
         }
         .onAppear {
+            restoreDrawerHistoryPreferences()
             startAnswerPolling()
             refreshMessageBadge()
         }
         .onDisappear {
             answerPollTask?.cancel()
+        }
+        .onChange(of: pinnedHistoryIDs) { _, value in
+            pinnedHistoryIDsRaw = encodeUUIDSet(value)
+        }
+        .onChange(of: hiddenHistoryIDs) { _, value in
+            hiddenHistoryIDsRaw = encodeUUIDSet(value)
+        }
+        .onChange(of: renamedHistoryTitles) { _, value in
+            renamedHistoryTitlesRaw = encodeRenamedHistoryTitles(value)
         }
     }
 
@@ -333,6 +346,53 @@ struct RootView: View {
                 .map { String($0) }
                 .filter { !$0.isEmpty }
         )
+    }
+
+    private func restoreDrawerHistoryPreferences() {
+        pinnedHistoryIDs = decodeUUIDSet(pinnedHistoryIDsRaw)
+        hiddenHistoryIDs = decodeUUIDSet(hiddenHistoryIDsRaw)
+        renamedHistoryTitles = decodeRenamedHistoryTitles(renamedHistoryTitlesRaw)
+    }
+}
+
+private func encodeUUIDSet(_ value: Set<UUID>) -> String {
+    value
+        .map(\.uuidString)
+        .sorted()
+        .joined(separator: ",")
+}
+
+private func decodeUUIDSet(_ value: String) -> Set<UUID> {
+    Set(
+        value
+            .split(separator: ",")
+            .compactMap { UUID(uuidString: String($0)) }
+    )
+}
+
+private func encodeRenamedHistoryTitles(_ value: [UUID: String]) -> String {
+    let payload = value.reduce(into: [String: String]()) { partial, item in
+        let trimmed = item.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        partial[item.key.uuidString] = trimmed
+    }
+    guard let data = try? JSONEncoder().encode(payload),
+          let encoded = String(data: data, encoding: .utf8) else {
+        return "{}"
+    }
+    return encoded
+}
+
+private func decodeRenamedHistoryTitles(_ value: String) -> [UUID: String] {
+    guard let data = value.data(using: .utf8),
+          let payload = try? JSONDecoder().decode([String: String].self, from: data) else {
+        return [:]
+    }
+    return payload.reduce(into: [UUID: String]()) { partial, item in
+        guard let id = UUID(uuidString: item.key) else { return }
+        let trimmed = item.value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        partial[id] = trimmed
     }
 }
 
@@ -674,7 +734,14 @@ private struct ChatDrawer: View {
                         icon: icon,
                         title: searchTitle(for: item),
                         subtitle: searchSubtitle(for: item),
-                        action: { onSelectHistory(item) }
+                        isPinned: pinnedHistoryIDs.contains(item.id),
+                        onOpen: { onSelectHistory(item) },
+                        onRename: {
+                            renamingItem = item
+                            renameText = effectiveTitle(for: item)
+                        },
+                        onPinToggle: { togglePinned(item.id) },
+                        onDelete: { hiddenHistoryIDs.insert(item.id) }
                     )
                 }
             }
@@ -828,10 +895,14 @@ private struct DrawerSearchResultRow: View {
     let icon: String
     let title: String
     let subtitle: String
-    let action: () -> Void
+    let isPinned: Bool
+    let onOpen: () -> Void
+    let onRename: () -> Void
+    let onPinToggle: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(action: onOpen) {
             HStack(spacing: AppTheme.Spacing.sm) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
@@ -861,6 +932,13 @@ private struct DrawerSearchResultRow: View {
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(isPinned ? "打开搜索结果，长按可以取消置顶、重命名或删除" : "打开搜索结果，长按可以置顶、重命名或删除")
+        .contextMenu {
+            Button(isPinned ? "取消置顶" : "置顶", systemImage: isPinned ? "pin.slash" : "pin", action: onPinToggle)
+            Button("重命名", systemImage: "pencil", action: onRename)
+            Button("删除", systemImage: "trash", role: .destructive, action: onDelete)
+        }
     }
 }
 
