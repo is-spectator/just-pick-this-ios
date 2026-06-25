@@ -27,6 +27,21 @@ private enum ChatEntry: Identifiable {
     }
 }
 
+private struct CardSharePayload: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
+private struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
 struct InputScreen: View {
     let session: AppSession
     let showsMessageBadge: Bool
@@ -48,6 +63,7 @@ struct InputScreen: View {
     @State private var locationMessage: String?
     @State private var isComposerFocused = false
     @State private var lastFailedQuery: String?
+    @State private var sharePayload: CardSharePayload?
     @AppStorage("recent_decision_location_labels") private var recentDecisionLocationLabelsRaw = ""
 
     private var recentDecisionLocationLabels: [String] {
@@ -155,6 +171,9 @@ struct InputScreen: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $sharePayload) { payload in
+            ActivityShareSheet(items: [payload.text])
         }
         .overlay(alignment: .top) {
             if showsNewConversationToast {
@@ -288,9 +307,15 @@ struct InputScreen: View {
 
     private func sharePick() {
         dismissKeyboard()
-        let pick = session.topPick
-        UIPasteboard.general.string = "\(pick.title)\n\(pick.reason.isEmpty ? pick.subtitle : pick.reason)"
-        entries.append(.notice(UUID(), ServiceNotice(title: "已复制", detail: "推荐内容已经复制，可以直接分享出去。")))
+        sharePayload = CardSharePayload(text: shareText(for: session.topPick))
+    }
+
+    private func shareText(for pick: TopPick) -> String {
+        let reason = pick.reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let subtitle = pick.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = reason.isEmpty ? subtitle : reason
+        guard !detail.isEmpty else { return "\(pick.title)\n来自皮皮" }
+        return "\(pick.title)\n\(detail)\n来自皮皮"
     }
 
     private func acceptPick() {
@@ -1364,6 +1389,7 @@ struct ResultScreen: View {
     @State private var draft = ""
     @State private var isFollowingUp = false
     @State private var isAccepting = false
+    @State private var sharePayload: CardSharePayload?
 
     var body: some View {
         AppChrome(showsBack: true, backAction: onBackHome) {
@@ -1397,6 +1423,9 @@ struct ResultScreen: View {
             BottomComposer(text: $draft, placeholder: "继续问一句", isSending: isFollowingUp) {
                 submitDraftFollowup()
             }
+        }
+        .sheet(item: $sharePayload) { payload in
+            ActivityShareSheet(items: [payload.text])
         }
     }
 
@@ -1455,8 +1484,15 @@ struct ResultScreen: View {
     }
 
     private func sharePick() {
-        let pick = session.topPick
-        UIPasteboard.general.string = "\(pick.title)\n\(pick.reason.isEmpty ? pick.subtitle : pick.reason)"
+        sharePayload = CardSharePayload(text: shareText(for: session.topPick))
+    }
+
+    private func shareText(for pick: TopPick) -> String {
+        let reason = pick.reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let subtitle = pick.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = reason.isEmpty ? subtitle : reason
+        guard !detail.isEmpty else { return "\(pick.title)\n来自皮皮" }
+        return "\(pick.title)\n\(detail)\n来自皮皮"
     }
 }
 
