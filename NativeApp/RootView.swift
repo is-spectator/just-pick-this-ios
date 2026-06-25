@@ -676,7 +676,7 @@ private struct ChatDrawer: View {
     }
 
     private var accountEntry: some View {
-        Button(action: onLogin) {
+        Button(action: isSignedIn ? onOpenProfile : onLogin) {
             HStack(spacing: AppTheme.Spacing.sm) {
                 Image(systemName: AuthTokenStore.email == nil ? "person.crop.circle" : "person.crop.circle.fill")
                     .font(.system(size: 28, weight: .medium))
@@ -704,11 +704,18 @@ private struct ChatDrawer: View {
             .background(AppTheme.surface)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(isSignedIn ? "账号与设置" : "登录")
+        .accessibilityValue(AuthTokenStore.email ?? "未登录")
+        .accessibilityHint(isSignedIn ? "打开我的页面，管理账号、隐私和数据" : "登录后同步历史、奖励和账号")
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(AppTheme.border)
                 .frame(height: 1)
         }
+    }
+
+    private var isSignedIn: Bool {
+        AuthTokenStore.email != nil
     }
 
     @ViewBuilder
