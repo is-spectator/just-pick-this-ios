@@ -170,6 +170,10 @@ struct RootView: View {
                     MyAnswersScreen(session: session, onOpenAnswerDeck: {
                         path.removeAll()
                         path.append(.answerDeck)
+                    }, onOpenAnswerRequest: { request in
+                        session.selectAnswerRequest(request)
+                        path.removeAll()
+                        path.append(.answerDeck)
                     }, onSelectHelpDetail: openHelpDetail)
                 case .favorites:
                     FavoritesScreen(session: session, onSelectHistory: openHistoryItem)

@@ -2842,6 +2842,7 @@ struct HelpResultDetailScreen: View {
 struct MyAnswersScreen: View {
     let session: AppSession
     let onOpenAnswerDeck: () -> Void
+    let onOpenAnswerRequest: (HelpRequest) -> Void
     let onSelectHelpDetail: (QuestionHistory) -> Void
 
     @State private var snapshot = UserDashboardSnapshot.empty
@@ -2941,7 +2942,14 @@ struct MyAnswersScreen: View {
                 ProductSection(title: "可回答") {
                     VStack(spacing: 12) {
                         ForEach(session.answerQueue.prefix(3)) { request in
-                            AnswerRequestSquareCard(request: request, reward: request.rewardLabel)
+                            Button {
+                                AppHaptics.selection()
+                                onOpenAnswerRequest(request)
+                            } label: {
+                                AnswerRequestSquareCard(request: request, reward: request.rewardLabel)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("打开这张求助卡并来一句")
                         }
                     }
                 }

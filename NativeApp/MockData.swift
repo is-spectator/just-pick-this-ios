@@ -2137,6 +2137,13 @@ final class AppSession {
         answerTarget = requests.first
     }
 
+    func selectAnswerRequest(_ request: HelpRequest) {
+        if !answerQueue.contains(where: { $0.id == request.id }) {
+            answerQueue.insert(request, at: 0)
+        }
+        answerTarget = request
+    }
+
     func addAnswer(_ text: String) async {
         let answer = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !answer.isEmpty else { return }
