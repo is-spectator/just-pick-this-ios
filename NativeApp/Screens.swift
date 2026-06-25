@@ -1066,7 +1066,9 @@ private struct ChatRecommendationCard: View {
                 case .failure:
                     Color.clear
                         .task {
-                            imageLoadFailed = true
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                imageLoadFailed = true
+                            }
                         }
                 case .empty:
                     ZStack {
@@ -1076,6 +1078,11 @@ private struct ChatRecommendationCard: View {
                     }
                 @unknown default:
                     Color.clear
+                        .task {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                imageLoadFailed = true
+                            }
+                        }
                 }
             }
             .frame(maxWidth: .infinity)

@@ -512,7 +512,9 @@ struct DecisionCard: View {
                 case .failure:
                     Color.clear
                         .task {
-                            imageLoadFailed = true
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                imageLoadFailed = true
+                            }
                         }
                 case .empty:
                     ZStack {
@@ -522,12 +524,18 @@ struct DecisionCard: View {
                     }
                 @unknown default:
                     Color.clear
+                        .task {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                imageLoadFailed = true
+                            }
+                        }
                 }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 228)
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .clipped()
+            .accessibilityHidden(true)
         }
     }
 }
