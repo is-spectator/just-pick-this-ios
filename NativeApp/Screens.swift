@@ -2150,6 +2150,8 @@ struct EmptyAnswerQueueCard: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("刷新求一个")
+                .accessibilityHint("重新获取可以回答的求助卡")
 
                 Button(action: onBackToChat) {
                     Text("回聊天")
@@ -2161,6 +2163,8 @@ struct EmptyAnswerQueueCard: View {
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("回到聊天")
+                .accessibilityHint("关闭来一句 Deck 并返回皮皮聊天")
             }
             .padding(.top, 6)
         }
@@ -2173,6 +2177,7 @@ struct EmptyAnswerQueueCard: View {
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 10)
+        .accessibilityElement(children: .contain)
     }
 }
 
