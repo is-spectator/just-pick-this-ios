@@ -1778,6 +1778,11 @@ struct AnswerScreen: View {
             await session.addAnswer(answer)
             AppHaptics.success()
             isSending = false
+            if session.answerRequest == nil {
+                toastMessage = "收到了，\(request.rewardLabel) 等她采纳。暂时没有下一张。"
+            } else {
+                toastMessage = "收到了，\(request.rewardLabel) 等她采纳，已切到下一张。"
+            }
             showsToast = true
             try? await Task.sleep(for: .milliseconds(1_600))
             guard !Task.isCancelled else { return }
