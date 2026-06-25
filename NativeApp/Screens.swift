@@ -47,6 +47,7 @@ struct InputScreen: View {
     @State private var isLocating = false
     @State private var locationMessage: String?
     @State private var isComposerFocused = false
+    @State private var lastFailedQuery: String?
 
     var body: some View {
         AppChrome(
@@ -156,7 +157,15 @@ struct InputScreen: View {
         case .user(_, let text):
             UserChatBubble(text: text)
         case .notice(_, let notice):
-            AssistantNoticeRow(notice: notice)
+            if notice.isRetryable {
+                AssistantNoticeRow(
+                    notice: notice,
+                    actionTitle: "重试",
+                    action: retryLastFailedQuery
+                )
+            } else {
+                AssistantNoticeRow(notice: notice)
+            }
         case .recommendation(_, let pick):
             AssistantRecommendationRow(
                 pick: pick,
@@ -182,27 +191,48 @@ struct InputScreen: View {
         guard !query.isEmpty, !session.isSubmitting else { return }
 
         dismissKeyboard()
+        submit(query)
+    }
+
+    private func submit(_ query: String) {
         draft = ""
+        lastFailedQuery = nil
         entries.append(.user(UUID(), query))
         submitTask?.cancel()
         submitTask = Task { @MainActor in
             let decision = await session.submit(query: query, locationContext: decisionLocation)
             guard !Task.isCancelled else { return }
-            appendAssistantResponse(for: decision)
+            appendAssistantResponse(for: decision, originalQuery: query)
         }
     }
 
-    private func appendAssistantResponse(for decision: RecommendationDecision) {
+    private func appendAssistantResponse(for decision: RecommendationDecision, originalQuery: String) {
         switch decision {
         case .none:
             if let notice = session.serviceNotice {
+                if notice.isRetryable {
+                    lastFailedQuery = originalQuery
+                    draft = originalQuery
+                }
                 entries.append(.notice(UUID(), notice))
             }
         case .top1(let pick):
+            lastFailedQuery = nil
             entries.append(.recommendation(UUID(), pick))
         case .ask(let request):
+            lastFailedQuery = nil
             entries.append(.help(UUID(), request))
         }
+    }
+
+    private func retryLastFailedQuery() {
+        let retryQuery = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? lastFailedQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
+            : draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let retryQuery, !retryQuery.isEmpty, !session.isSubmitting else { return }
+
+        dismissKeyboard()
+        submit(retryQuery)
     }
 
     private func makeHelpRequestFromPick() {
@@ -812,27 +842,43 @@ private struct UserChatBubble: View {
 
 private struct AssistantNoticeRow: View {
     let notice: ServiceNotice
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             AssistantHeader(name: notice.title)
 
-            Text(notice.detail)
-                .font(.system(size: 15))
-                .lineSpacing(4)
-                .foregroundStyle(AppTheme.text)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 12)
-                .background(AppTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(AppTheme.border, lineWidth: 1)
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                Text(notice.detail)
+                    .font(.system(size: 15))
+                    .lineSpacing(4)
+                    .foregroundStyle(AppTheme.text)
+
+                if let actionTitle, let action {
+                    Button(action: action) {
+                        Text(actionTitle)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.text)
+                            .frame(minWidth: 74)
+                            .frame(height: 36)
+                            .background(AppTheme.bubble)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(actionTitle)
+                }
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 12)
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(notice.title), \(notice.detail)")
     }
 }
 

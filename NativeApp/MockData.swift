@@ -27,6 +27,10 @@ struct RecommendationResult: Sendable {
 struct ServiceNotice: Equatable, Sendable {
     let title: String
     let detail: String
+
+    var isRetryable: Bool {
+        title == "皮皮" && detail.contains("重试")
+    }
 }
 
 struct QuestionHistory: Identifiable, Hashable, Sendable {
@@ -2357,8 +2361,8 @@ enum MockData {
     static let demoQuery = "我现在在大同喜晋道,不知道吃什么"
     static func backendUnavailableNotice(error _: Error) -> ServiceNotice {
         ServiceNotice(
-            title: "后端未连接",
-            detail: "服务恢复后再继续。"
+            title: "皮皮",
+            detail: "这轮没连上服务，原话我先留着。你可以重试，或者改一句再发。"
         )
     }
 
