@@ -427,6 +427,8 @@ private struct ChatDrawer: View {
     @State private var searchText = ""
     @State private var renamingItem: QuestionHistory?
     @State private var renameText = ""
+    @State private var drawerNotice: String?
+    @State private var drawerNoticeTask: Task<Void, Never>?
 
     private var searchQuery: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -489,6 +491,10 @@ private struct ChatDrawer: View {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
                     drawerSearch
 
+                    if let drawerNotice {
+                        DrawerNoticePill(text: drawerNotice)
+                    }
+
                     if isSearching {
                         searchResults
                     } else {
@@ -524,8 +530,10 @@ private struct ChatDrawer: View {
                     let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
                     if trimmed.isEmpty {
                         renamedHistoryTitles[item.id] = nil
+                        showDrawerNotice("已恢复原会话名")
                     } else {
                         renamedHistoryTitles[item.id] = trimmed
+                        showDrawerNotice("已重命名会话")
                     }
                 }
                 renamingItem = nil
@@ -533,6 +541,9 @@ private struct ChatDrawer: View {
             }
         } message: {
             Text("只会修改本机显示名称。")
+        }
+        .onDisappear {
+            drawerNoticeTask?.cancel()
         }
     }
 
@@ -751,8 +762,8 @@ private struct ChatDrawer: View {
                             renamingItem = item
                             renameText = effectiveTitle(for: item)
                         },
-                        onPinToggle: { togglePinned(item.id) },
-                        onDelete: { hiddenHistoryIDs.insert(item.id) }
+                        onPinToggle: { togglePinned(item) },
+                        onDelete: { hideHistory(item) }
                     )
                 }
             }
@@ -779,8 +790,8 @@ private struct ChatDrawer: View {
                             renamingItem = item
                             renameText = effectiveTitle(for: item)
                         },
-                        onPinToggle: { togglePinned(item.id) },
-                        onDelete: { hiddenHistoryIDs.insert(item.id) }
+                        onPinToggle: { togglePinned(item) },
+                        onDelete: { hideHistory(item) }
                     )
                 }
             }
@@ -853,11 +864,28 @@ private struct ChatDrawer: View {
         return fractionalFormatter.date(from: createdAt) ?? formatter.date(from: createdAt)
     }
 
-    private func togglePinned(_ id: UUID) {
-        if pinnedHistoryIDs.contains(id) {
-            pinnedHistoryIDs.remove(id)
+    private func togglePinned(_ item: QuestionHistory) {
+        if pinnedHistoryIDs.contains(item.id) {
+            pinnedHistoryIDs.remove(item.id)
+            showDrawerNotice("已取消置顶")
         } else {
-            pinnedHistoryIDs.insert(id)
+            pinnedHistoryIDs.insert(item.id)
+            showDrawerNotice("已置顶会话")
+        }
+    }
+
+    private func hideHistory(_ item: QuestionHistory) {
+        hiddenHistoryIDs.insert(item.id)
+        showDrawerNotice("已删除会话")
+    }
+
+    private func showDrawerNotice(_ text: String) {
+        drawerNoticeTask?.cancel()
+        drawerNotice = text
+        drawerNoticeTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1_500))
+            guard !Task.isCancelled else { return }
+            drawerNotice = nil
         }
     }
 }
@@ -866,6 +894,30 @@ private enum DrawerHistoryDateGroup {
     case today
     case week
     case earlier
+}
+
+private struct DrawerNoticePill: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.xs) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppTheme.green)
+
+            Text(text)
+                .font(AppTheme.Typography.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .frame(minHeight: 40)
+        .background(AppTheme.green.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
+    }
 }
 
 private struct DrawerActionRow: View {
