@@ -1,21 +1,36 @@
 import SwiftUI
+import UIKit
 
 enum AppTheme {
-    static let background = Color(red: 250 / 255, green: 250 / 255, blue: 250 / 255)
-    static let card = Color.white
-    static let surface = Color.white
-    static let surfaceElevated = Color(red: 255 / 255, green: 255 / 255, blue: 255 / 255)
-    static let text = Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255)
-    static let textSecondary = Color(red: 95 / 255, green: 95 / 255, blue: 95 / 255)
-    static let textMuted = Color(red: 154 / 255, green: 154 / 255, blue: 154 / 255)
-    static let border = Color(red: 236 / 255, green: 236 / 255, blue: 236 / 255)
-    static let borderSoft = Color(red: 241 / 255, green: 241 / 255, blue: 241 / 255)
-    static let bubble = Color(red: 240 / 255, green: 240 / 255, blue: 238 / 255)
-    static let disabled = Color(red: 229 / 255, green: 229 / 255, blue: 229 / 255)
-    static let green = Color(red: 31 / 255, green: 138 / 255, blue: 76 / 255)
-    static let red = Color(red: 226 / 255, green: 48 / 255, blue: 58 / 255)
-    static let orangeBackground = Color(red: 250 / 255, green: 241 / 255, blue: 232 / 255)
-    static let orangeText = Color(red: 107 / 255, green: 74 / 255, blue: 46 / 255)
+    static let background = Color(uiColor: .systemGroupedBackground)
+    static let card = Color(uiColor: .secondarySystemGroupedBackground)
+    static let surface = Color(uiColor: .systemBackground)
+    static let surfaceElevated = Color(uiColor: .secondarySystemBackground)
+    static let text = Color(uiColor: .label)
+    static let textSecondary = Color(uiColor: .secondaryLabel)
+    static let textMuted = Color(uiColor: .tertiaryLabel)
+    static let border = Color(uiColor: .separator).opacity(0.42)
+    static let borderSoft = Color(uiColor: .separator).opacity(0.2)
+    static let bubble = Color(uiColor: .tertiarySystemFill)
+    static let disabled = Color(uiColor: .systemGray5)
+    static let primaryAction = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .white : .black
+    })
+    static let onPrimaryAction = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .black : .white
+    })
+    static let green = Color(uiColor: .systemGreen)
+    static let red = Color(uiColor: .systemRed)
+    static let orangeBackground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 72 / 255, green: 49 / 255, blue: 27 / 255, alpha: 1)
+            : UIColor(red: 250 / 255, green: 241 / 255, blue: 232 / 255, alpha: 1)
+    })
+    static let orangeText = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 255 / 255, green: 189 / 255, blue: 122 / 255, alpha: 1)
+            : UIColor(red: 107 / 255, green: 74 / 255, blue: 46 / 255, alpha: 1)
+    })
 
     enum Spacing {
         static let xxs: CGFloat = 4

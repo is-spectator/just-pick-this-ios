@@ -136,10 +136,10 @@ struct InputScreen: View {
             if showsNewConversationToast {
                 Text("已开启新对话")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.onPrimaryAction)
                     .padding(.horizontal, 14)
                     .frame(height: 36)
-                    .background(AppTheme.text)
+                    .background(AppTheme.primaryAction)
                     .clipShape(Capsule())
                     .padding(.top, 8)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -461,9 +461,9 @@ private struct LocationPickerSheet: View {
                     HStack(spacing: 12) {
                         Image(systemName: "location.circle.fill")
                             .font(.system(size: 21, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppTheme.onPrimaryAction)
                             .frame(width: 42, height: 42)
-                            .background(AppTheme.text)
+                            .background(AppTheme.primaryAction)
                             .clipShape(Circle())
 
                         VStack(alignment: .leading, spacing: 3) {
@@ -504,10 +504,10 @@ private struct LocationPickerSheet: View {
                     Button(action: onSaveManual) {
                         Text("保存地点")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppTheme.onPrimaryAction)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(AppTheme.text)
+                            .background(AppTheme.primaryAction)
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
@@ -611,8 +611,8 @@ struct EmailLoginView: View {
                             .font(.system(size: 17, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .foregroundStyle(.white)
-                            .background(AppTheme.text)
+                            .foregroundStyle(AppTheme.onPrimaryAction)
+                            .background(AppTheme.primaryAction)
                             .clipShape(Capsule())
                     }
                     .disabled(isSubmitting || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (codeSent && code.count < 6))
@@ -638,8 +638,8 @@ struct EmailLoginView: View {
                             .font(.system(size: 17, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .foregroundStyle(.white)
-                            .background(AppTheme.text)
+                            .foregroundStyle(AppTheme.onPrimaryAction)
+                            .background(AppTheme.primaryAction)
                             .clipShape(Capsule())
                     }
                     .disabled(isSubmitting || nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -1012,17 +1012,17 @@ private struct ChatRecommendationCard: View {
                     HStack(spacing: 8) {
                         if isAccepting {
                             ProgressView()
-                                .tint(Color.white)
+                                .tint(AppTheme.onPrimaryAction)
                                 .scaleEffect(0.76)
                         }
 
                         Text(isAccepting ? "确认中" : "就这个")
                             .font(.system(size: 16, weight: .semibold))
                     }
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(AppTheme.onPrimaryAction)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(AppTheme.text)
+                    .background(AppTheme.primaryAction)
                     .clipShape(Capsule())
                     .animation(.spring(response: 0.22, dampingFraction: 0.88), value: isAccepting)
                 }
@@ -1132,17 +1132,17 @@ private struct ChatHelpCard: View {
                     HStack(spacing: 8) {
                         if isPublishing {
                             ProgressView()
-                                .tint(Color.white)
+                                .tint(AppTheme.onPrimaryAction)
                                 .scaleEffect(0.76)
                         }
 
                         Text(isPublishing ? "发出去中" : "发出去")
                             .font(.system(size: 15, weight: .medium))
                     }
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(AppTheme.onPrimaryAction)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(AppTheme.text)
+                    .background(AppTheme.primaryAction)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -1762,10 +1762,10 @@ struct EmptyAnswerQueueCard: View {
                 Button(action: onBackToChat) {
                     Text("回聊天")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(AppTheme.onPrimaryAction)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
-                        .background(AppTheme.text)
+                        .background(AppTheme.primaryAction)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -1956,9 +1956,9 @@ struct ProfileScreen: View {
             HStack(spacing: 14) {
                 Image(systemName: "bubble.left.and.bubble.right.fill")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.onPrimaryAction)
                     .frame(width: 44, height: 44)
-                    .background(AppTheme.text)
+                    .background(AppTheme.primaryAction)
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -2938,9 +2938,9 @@ private struct ProductActionCard: View {
         HStack(spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.onPrimaryAction)
                 .frame(width: 44, height: 44)
-                .background(AppTheme.text)
+                .background(AppTheme.primaryAction)
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 4) {

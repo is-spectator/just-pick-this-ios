@@ -210,16 +210,16 @@ struct BottomComposer: View {
                 ZStack {
                     if isSending {
                         ProgressView()
-                            .tint(Color.white)
+                            .tint(AppTheme.onPrimaryAction)
                             .scaleEffect(0.74)
                     } else {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(canSend ? Color.white : Color(red: 181 / 255, green: 181 / 255, blue: 181 / 255))
+                            .foregroundStyle(canSend ? AppTheme.onPrimaryAction : AppTheme.textMuted)
                     }
                 }
                 .frame(width: 32, height: 32)
-                .background(canSend || isSending ? AppTheme.text : AppTheme.disabled)
+                .background(canSend || isSending ? AppTheme.primaryAction : AppTheme.disabled)
                 .clipShape(Circle())
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
@@ -235,7 +235,7 @@ struct BottomComposer: View {
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(isFocused ? AppTheme.text.opacity(0.9) : AppTheme.border, lineWidth: 1)
+                .stroke(isFocused ? AppTheme.primaryAction.opacity(0.9) : AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
         .padding(.horizontal, 16)
@@ -467,17 +467,17 @@ struct DecisionCard: View {
                     HStack(spacing: 8) {
                         if isAccepting {
                             ProgressView()
-                                .tint(Color.white)
+                                .tint(AppTheme.onPrimaryAction)
                                 .scaleEffect(0.76)
                         }
 
                         Text(isAccepting ? "确认中" : "就这个")
                             .font(.system(size: 16, weight: .semibold))
                     }
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(AppTheme.onPrimaryAction)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(AppTheme.text)
+                    .background(AppTheme.primaryAction)
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -1160,10 +1160,10 @@ struct PrimaryButton: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(AppTheme.onPrimaryAction)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(AppTheme.text)
+                .background(AppTheme.primaryAction)
                 .clipShape(Capsule())
                 .shadow(color: .black.opacity(0.1), radius: 14, x: 0, y: 8)
         }
@@ -1181,10 +1181,10 @@ struct ToastView: View {
             Spacer()
             Text(message)
                 .font(.system(size: 13))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(AppTheme.onPrimaryAction)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(AppTheme.text)
+                .background(AppTheme.primaryAction)
                 .clipShape(Capsule())
                 .opacity(isVisible ? 1 : 0)
                 .offset(y: isVisible ? 0 : 8)
