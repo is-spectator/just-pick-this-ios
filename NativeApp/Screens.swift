@@ -297,9 +297,6 @@ struct InputScreen: View {
     private func makeHelpRequestFromPick() {
         dismissKeyboard()
         AppHaptics.selection()
-        Task {
-            _ = await session.sendCurrentTopPickFeedback(action: .askHuman, reason: "想听真人意见")
-        }
         session.makeHelpRequestFromCurrentTopPick()
         entries.append(.help(UUID(), session.helpRequest))
     }
