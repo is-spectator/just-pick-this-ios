@@ -124,6 +124,7 @@ struct TopBar: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("打开菜单")
+                    .accessibilityHint("打开历史、来一句、收藏和账号入口")
                 } else {
                     Color.clear
                         .frame(width: 44, height: 44)
@@ -147,6 +148,7 @@ struct TopBar: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("新对话")
+                    .accessibilityHint("清空当前聊天并开始新的选择")
                 } else {
                     Color.clear
                         .frame(width: 44, height: 44)
@@ -467,6 +469,7 @@ struct DecisionCard: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("求一个")
+                .accessibilityHint("把这个问题发给别人来一句")
 
                 Button {
                     acceptFeedbackCount += 1
@@ -491,6 +494,7 @@ struct DecisionCard: View {
                 .buttonStyle(.plain)
                 .disabled(isAccepting)
                 .accessibilityLabel("就这个")
+                .accessibilityHint("采纳皮皮给出的这个选择")
                 .sensoryFeedback(.selection, trigger: acceptFeedbackCount)
             }
         }

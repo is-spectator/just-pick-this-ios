@@ -773,6 +773,8 @@ private struct DrawerActionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(subtitle)
     }
 }
 
@@ -812,6 +814,8 @@ private struct DrawerHistoryRow: View {
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(isPinned ? "打开置顶会话，长按可以取消置顶、重命名或删除" : "打开历史会话，长按可以置顶、重命名或删除")
         .contextMenu {
             Button(isPinned ? "取消置顶" : "置顶", systemImage: isPinned ? "pin.slash" : "pin", action: onPinToggle)
             Button("重命名", systemImage: "pencil", action: onRename)

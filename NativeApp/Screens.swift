@@ -1004,6 +1004,7 @@ private struct ChatRecommendationCard: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("求一个")
+                .accessibilityHint("把这个问题发给别人来一句")
 
                 Button {
                     acceptFeedbackCount += 1
@@ -1029,6 +1030,7 @@ private struct ChatRecommendationCard: View {
                 .buttonStyle(.plain)
                 .disabled(isAccepting)
                 .accessibilityLabel("就这个")
+                .accessibilityHint("采纳皮皮给出的这个选择")
                 .sensoryFeedback(.selection, trigger: acceptFeedbackCount)
             }
         }
@@ -1692,6 +1694,7 @@ struct HelpDeckCard: View {
         .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("求一个, \(request.title), \(request.rewardLabel)")
+        .accessibilityHint("左右滑动切换求助，底部输入框可以来一句")
     }
 }
 
