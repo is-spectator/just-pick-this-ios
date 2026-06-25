@@ -1695,15 +1695,46 @@ struct HelpDeckCard: View {
 }
 
 struct HelpDeckLoadingCard: View {
-    var body: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .tint(AppTheme.green)
+    @State private var isBreathing = false
 
-            Text("正在取求一个")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(AppTheme.textSecondary)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Capsule()
+                    .fill(skeletonFill)
+                    .frame(width: 58, height: 13)
+
+                Spacer()
+
+                Capsule()
+                    .fill(skeletonFill)
+                    .frame(width: 42, height: 13)
+            }
+
+            Spacer(minLength: 28)
+
+            VStack(alignment: .leading, spacing: 14) {
+                skeletonBlock(height: 34, trailing: 26)
+                skeletonBlock(height: 34, trailing: 68)
+                skeletonBlock(height: 16, trailing: 34)
+                    .padding(.top, 8)
+                skeletonBlock(height: 16, trailing: 82)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                skeletonBlock(height: 28, trailing: 112)
+                skeletonBlock(height: 28, trailing: 66)
+                skeletonBlock(height: 28, trailing: 138)
+            }
+            .padding(.top, 28)
+
+            Spacer(minLength: 28)
+
+            Capsule()
+                .fill(skeletonFill)
+                .frame(width: 152, height: 14)
         }
+        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
@@ -1711,6 +1742,25 @@ struct HelpDeckLoadingCard: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("正在取求一个")
+    }
+
+    private var skeletonFill: Color {
+        AppTheme.textMuted.opacity(isBreathing ? 0.16 : 0.08)
+    }
+
+    private func skeletonBlock(height: CGFloat, trailing: CGFloat) -> some View {
+        Capsule()
+            .fill(skeletonFill)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .padding(.trailing, trailing)
     }
 }
 
