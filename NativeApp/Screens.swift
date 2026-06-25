@@ -2704,7 +2704,7 @@ struct MyHelpScreen: View {
                             Button {
                                 onSelectHelpDetail(item)
                             } label: {
-                                ProfileHistoryRow(item: item)
+                                HelpHistoryRow(item: item)
                             }
                             .buttonStyle(.plain)
 
@@ -3863,6 +3863,108 @@ private struct ProfileHistoryRow: View {
         }
         .padding(16)
         .contentShape(Rectangle())
+    }
+}
+
+private struct HelpHistoryRow: View {
+    let item: QuestionHistory
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: iconName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppTheme.text)
+                .frame(width: 34, height: 34)
+                .background(AppTheme.bubble)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.query)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(2)
+
+                Text(statusDescription)
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(statusTitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(statusColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(statusColor.opacity(0.12))
+                    .clipShape(Capsule())
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+        }
+        .padding(16)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.query), \(statusTitle), \(statusDescription)")
+        .accessibilityHint("打开求助详情")
+    }
+
+    private var iconName: String {
+        switch item.status {
+        case "answer_received":
+            "checkmark.bubble"
+        case "completed", "top1":
+            "checkmark.seal"
+        case "closed":
+            "xmark.circle"
+        default:
+            "questionmark.bubble"
+        }
+    }
+
+    private var statusTitle: String {
+        switch item.status {
+        case "answer_received":
+            "已有结果"
+        case "completed", "top1":
+            "已完成"
+        case "closed":
+            "已关闭"
+        case "waiting_for_human":
+            "收集中"
+        default:
+            "草稿"
+        }
+    }
+
+    private var statusDescription: String {
+        switch item.status {
+        case "answer_received":
+            "有人来了一句，可以进去看回答和皮皮最终推荐。"
+        case "completed", "top1":
+            "这题已经收口，可以回看最终选择。"
+        case "closed":
+            "这张求助已关闭，不再继续收集回答。"
+        case "waiting_for_human":
+            "正在等懂的人来一句。"
+        default:
+            item.statusLabel
+        }
+    }
+
+    private var statusColor: Color {
+        switch item.status {
+        case "answer_received", "completed", "top1":
+            AppTheme.green
+        case "closed":
+            AppTheme.textMuted
+        default:
+            AppTheme.orangeText
+        }
     }
 }
 
