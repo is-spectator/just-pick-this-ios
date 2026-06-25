@@ -571,6 +571,14 @@ private struct LocationPickerSheet: View {
         )
     }
 
+    private var manualQuery: String {
+        manualText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canSaveManualLocation: Bool {
+        !manualQuery.isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
@@ -644,14 +652,30 @@ private struct LocationPickerSheet: View {
                         .font(AppTheme.Typography.caption.weight(.semibold))
                         .foregroundStyle(AppTheme.textSecondary)
 
-                    TextField("城市、区域或地标，例如 上海互联网宝地", text: $manualText)
-                        .font(AppTheme.Typography.body)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 14)
-                        .frame(height: 50)
-                        .background(AppTheme.bubble)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+                    HStack(spacing: 6) {
+                        TextField("城市、区域或地标，例如 上海互联网宝地", text: $manualText)
+                            .font(AppTheme.Typography.body)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+
+                        if !manualText.isEmpty {
+                            Button {
+                                manualText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textMuted)
+                                    .frame(width: 32, height: 32)
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("清空地点输入")
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 50)
+                    .background(AppTheme.bubble)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
 
                     if !filteredSuggestions.isEmpty {
                         VStack(spacing: 2) {
@@ -673,6 +697,9 @@ private struct LocationPickerSheet: View {
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .disabled(!canSaveManualLocation)
+                    .opacity(canSaveManualLocation ? 1 : 0.42)
+                    .accessibilityHint(canSaveManualLocation ? "设为当前决策地点" : "先输入城市、区域或地标")
                 }
 
                 if let message {
