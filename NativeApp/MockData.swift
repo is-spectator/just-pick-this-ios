@@ -2173,6 +2173,12 @@ final class AppSession {
         answerTarget = answerQueue.first
     }
 
+    func reportAnswerRequest() {
+        guard let request = answerRequest else { return }
+        answerQueue.removeAll { $0.id == request.id }
+        answerTarget = answerQueue.first
+    }
+
     func acceptCurrentTopPick() async {
         let accepted = await service.acceptCard(id: currentTopPick?.cardId)
         let remoteHistory: [QuestionHistory]

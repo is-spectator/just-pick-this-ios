@@ -1733,7 +1733,11 @@ struct AnswerScreen: View {
                                     flashToast()
                                 },
                                 onReportCurrent: {
-                                    toastMessage = "收到，已标记这张求一个。"
+                                    session.reportAnswerRequest()
+                                    AppHaptics.warning()
+                                    toastMessage = session.answerRequest == nil
+                                        ? "收到，已标记这张求一个。暂时没有下一张。"
+                                        : "收到，已标记这张求一个，已切到下一张。"
                                     flashToast()
                                 },
                                 onRefresh: {
