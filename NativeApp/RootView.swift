@@ -631,6 +631,20 @@ private struct ChatDrawer: View {
                 .font(AppTheme.Typography.body)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清空搜索")
+            }
         }
         .padding(.horizontal, AppTheme.Spacing.md)
         .frame(height: 48)
