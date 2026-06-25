@@ -166,6 +166,7 @@ struct BottomComposer: View {
     let onSend: () -> Void
 
     @FocusState private var isFocused: Bool
+    @State private var sendFeedbackCount = 0
 
     private var canSend: Bool {
         !isSending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -173,6 +174,7 @@ struct BottomComposer: View {
 
     private func send() {
         guard canSend else { return }
+        sendFeedbackCount += 1
         isFocused = false
         externalFocus = false
         onSend()
@@ -267,6 +269,7 @@ struct BottomComposer: View {
                 externalFocus = false
             }
         }
+        .sensoryFeedback(.selection, trigger: sendFeedbackCount)
     }
 }
 
