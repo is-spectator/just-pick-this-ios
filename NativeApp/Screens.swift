@@ -1465,6 +1465,15 @@ struct AnswerScreen: View {
                                 onAdvance: {
                                     session.advanceAnswerRequest()
                                 },
+                                onHideCurrent: {
+                                    session.advanceAnswerRequest()
+                                    toastMessage = "已跳过这张。"
+                                    flashToast()
+                                },
+                                onReportCurrent: {
+                                    toastMessage = "收到，已标记这张求一个。"
+                                    flashToast()
+                                },
                                 onRefresh: {
                                     Task { @MainActor in
                                         await reloadAnswerQueue()
@@ -1580,6 +1589,8 @@ struct HelpDeckStack: View {
     let next: HelpRequest?
     let isLoading: Bool
     let onAdvance: () -> Void
+    let onHideCurrent: () -> Void
+    let onReportCurrent: () -> Void
     let onRefresh: () -> Void
     let onBackToChat: () -> Void
 
@@ -1606,7 +1617,12 @@ struct HelpDeckStack: View {
                             .allowsHitTesting(false)
                     }
 
-                    HelpDeckCard(request: current)
+                    HelpDeckCard(
+                        request: current,
+                        showsMenu: true,
+                        onHide: onHideCurrent,
+                        onReport: onReportCurrent
+                    )
                         .frame(width: cardWidth, height: cardHeight)
                         .offset(x: dragOffset)
                         .scaleEffect(1 - 0.035 * dragProgress)
@@ -1648,6 +1664,9 @@ struct HelpDeckStack: View {
 
 struct HelpDeckCard: View {
     let request: HelpRequest
+    var showsMenu = false
+    var onHide: () -> Void = {}
+    var onReport: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1662,6 +1681,25 @@ struct HelpDeckCard: View {
                 Text(request.rewardLabel)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.green)
+
+                if showsMenu {
+                    Menu {
+                        Button(role: .destructive, action: onReport) {
+                            Label("举报这张", systemImage: "exclamationmark.bubble")
+                        }
+                        Button(action: onHide) {
+                            Label("屏蔽这张", systemImage: "eye.slash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("更多求助操作")
+                }
             }
 
             Spacer(minLength: 24)
@@ -1705,7 +1743,7 @@ struct HelpDeckCard: View {
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: showsMenu ? .contain : .combine)
         .accessibilityLabel("求一个, \(request.title), \(request.rewardLabel)")
         .accessibilityHint("左右滑动切换求助，底部输入框可以来一句")
     }
