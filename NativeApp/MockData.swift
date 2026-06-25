@@ -33,7 +33,7 @@ struct ServiceNotice: Equatable, Sendable {
     }
 }
 
-struct QuestionHistory: Identifiable, Hashable, Sendable {
+struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
     let status: String
@@ -62,7 +62,7 @@ enum HistoryDestination {
     case ask
 }
 
-struct TopPick: Hashable, Sendable {
+struct TopPick: Hashable, Codable, Sendable {
     let cardId: UUID?
     let query: String
     let preface: String
@@ -75,7 +75,7 @@ struct TopPick: Hashable, Sendable {
     let referenceImage: ReferenceImage?
 }
 
-struct ReferenceImage: Hashable, Sendable {
+struct ReferenceImage: Hashable, Codable, Sendable {
     let url: String
     let sourceURL: String?
     let sourceDomain: String?
@@ -2073,10 +2073,13 @@ final class AppSession {
 
     @ObservationIgnored private let service: any RecommendationService
     @ObservationIgnored private let documentationDemo: String?
+    @ObservationIgnored private static let favoriteChoicesKey = "favorite_choices_v1"
+    @ObservationIgnored private static let hiddenFavoriteChoiceIDsKey = "hidden_favorite_choice_ids_v1"
 
     init(service: any RecommendationService, documentationDemo: String? = nil) {
         self.service = service
         self.documentationDemo = documentationDemo
+        restoreFavoriteState()
 
         #if DEBUG
         applyDocumentationDemo(documentationDemo)
@@ -2300,11 +2303,13 @@ final class AppSession {
         favoriteChoices.removeAll { $0.id == item.id }
         hiddenFavoriteChoiceIds.remove(item.id)
         favoriteChoices.insert(item, at: 0)
+        persistFavoriteState()
     }
 
     func removeFavoriteChoice(id: UUID) {
         favoriteChoices.removeAll { $0.id == id }
         hiddenFavoriteChoiceIds.insert(id)
+        persistFavoriteState()
     }
 
     @discardableResult
@@ -2341,6 +2346,29 @@ final class AppSession {
     private func ensureHelpRequest() {
         guard currentHelpRequest == nil else { return }
         currentHelpRequest = MockData.helpRequest(for: currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery)
+    }
+
+    private func restoreFavoriteState() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: Self.favoriteChoicesKey),
+           let decoded = try? JSONDecoder().decode([QuestionHistory].self, from: data) {
+            favoriteChoices = decoded
+        }
+        if let data = defaults.data(forKey: Self.hiddenFavoriteChoiceIDsKey),
+           let decoded = try? JSONDecoder().decode([UUID].self, from: data) {
+            hiddenFavoriteChoiceIds = Set(decoded)
+        }
+    }
+
+    private func persistFavoriteState() {
+        let defaults = UserDefaults.standard
+        let favorites = Array(favoriteChoices.prefix(80))
+        if let data = try? JSONEncoder().encode(favorites) {
+            defaults.set(data, forKey: Self.favoriteChoicesKey)
+        }
+        if let data = try? JSONEncoder().encode(Array(hiddenFavoriteChoiceIds)) {
+            defaults.set(data, forKey: Self.hiddenFavoriteChoiceIDsKey)
+        }
     }
 
     private func upsertLocalHistory(query: String, status: String, helpRequestId: UUID?, topPick: TopPick?) {
