@@ -1099,6 +1099,8 @@ private struct ChatHelpCard: View {
     let isPublishing: Bool
     let onPublish: () -> Void
 
+    @State private var publishFeedbackCount = 0
+
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(alignment: .center) {
@@ -1135,7 +1137,7 @@ private struct ChatHelpCard: View {
             HelpStructuredSummary(request: request, compact: true)
 
             if request.status == .draft {
-                Button(action: onPublish) {
+                Button(action: publish) {
                     HStack(spacing: 8) {
                         if isPublishing {
                             ProgressView()
@@ -1155,6 +1157,7 @@ private struct ChatHelpCard: View {
                 .buttonStyle(.plain)
                 .disabled(isPublishing)
                 .accessibilityLabel("发出去")
+                .sensoryFeedback(.selection, trigger: publishFeedbackCount)
             } else {
                 HStack(spacing: 8) {
                     Image(systemName: "paperplane")
@@ -1181,6 +1184,12 @@ private struct ChatHelpCard: View {
         .shadow(color: .black.opacity(0.04), radius: 14, x: 0, y: 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("求一个, \(request.title), \(request.context)")
+    }
+
+    private func publish() {
+        guard !isPublishing else { return }
+        publishFeedbackCount += 1
+        onPublish()
     }
 }
 
@@ -1298,6 +1307,7 @@ struct AskScreen: View {
     @State private var isPublishing = false
     @State private var toastMessage = "发出去了，等别人来一句。"
     @State private var showsToast = false
+    @State private var publishFeedbackCount = 0
     @State private var publishTask: Task<Void, Never>?
     @State private var pollTask: Task<Void, Never>?
     @Environment(\.dismiss) private var dismiss
@@ -1363,10 +1373,12 @@ struct AskScreen: View {
             publishTask?.cancel()
             pollTask?.cancel()
         }
+        .sensoryFeedback(.selection, trigger: publishFeedbackCount)
     }
 
     private func publish() {
         guard session.helpRequest.status == .draft, !isPublishing else { return }
+        publishFeedbackCount += 1
         isPublishing = true
         publishTask?.cancel()
         publishTask = Task { @MainActor in
