@@ -178,7 +178,11 @@ struct RootView: View {
                 case .favorites:
                     FavoritesScreen(session: session, onSelectHistory: openHistoryItem)
                 case .rewards:
-                    RewardsScreen(session: session, authRevision: authRevision)
+                    RewardsScreen(
+                        session: session,
+                        authRevision: authRevision,
+                        onSelectHelpDetail: openHelpDetail
+                    )
                 case .messages:
                     MessagesScreen(
                         onMarkRead: markLightEventsRead,

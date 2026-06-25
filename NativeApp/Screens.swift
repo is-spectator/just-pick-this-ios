@@ -3075,6 +3075,7 @@ struct FavoritesScreen: View {
 struct RewardsScreen: View {
     let session: AppSession
     let authRevision: Int
+    let onSelectHelpDetail: (QuestionHistory) -> Void
 
     @State private var snapshot = UserDashboardSnapshot.empty
     @State private var isLoading = false
@@ -3134,7 +3135,18 @@ struct RewardsScreen: View {
                 } else {
                     VStack(spacing: 12) {
                         ForEach(rewardItems) { item in
-                            RewardLedgerRow(item: item)
+                            if let historyItem = historyItem(for: item) {
+                                Button {
+                                    AppHaptics.selection()
+                                    onSelectHelpDetail(historyItem)
+                                } label: {
+                                    RewardLedgerRow(item: item, showsChevron: true)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityHint("打开这条奖励对应的求助详情")
+                            } else {
+                                RewardLedgerRow(item: item)
+                            }
                         }
                     }
                     .productPanel()
@@ -3169,6 +3181,29 @@ struct RewardsScreen: View {
         let snapshotIds = Set(snapshot.rewardItems.map(\.id))
         return localPendingRewardItems.filter { !snapshotIds.contains($0.id) }.reduce(0) { total, item in
             total + (Int(item.valueLabel.replacingOccurrences(of: "+", with: "")) ?? 0)
+        }
+    }
+
+    private func historyItem(for item: RewardLedgerItem) -> QuestionHistory? {
+        guard let helpRequestId = UUID(uuidString: item.id) else { return nil }
+        return QuestionHistory(
+            id: helpRequestId,
+            query: item.title,
+            status: historyStatus(for: item.status),
+            helpRequestId: helpRequestId,
+            topPick: nil,
+            createdAt: item.createdAt
+        )
+    }
+
+    private func historyStatus(for status: RewardLedgerStatus) -> String {
+        switch status {
+        case .pending:
+            "answer_received"
+        case .granted:
+            "completed"
+        case .rejected:
+            "closed"
         }
     }
 
@@ -3715,6 +3750,7 @@ private struct HelpFinalTextPanel: View {
 
 private struct RewardLedgerRow: View {
     let item: RewardLedgerItem
+    var showsChevron = false
 
     private var statusColor: Color {
         switch item.status {
@@ -3770,6 +3806,13 @@ private struct RewardLedgerRow: View {
                     .lineSpacing(3)
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(2)
+            }
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .padding(.top, 11)
             }
         }
         .accessibilityElement(children: .combine)
