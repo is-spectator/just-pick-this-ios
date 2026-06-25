@@ -107,54 +107,62 @@ struct TopBar: View {
             .padding(.horizontal, 16)
             .frame(height: 50)
         } else {
-            HStack(spacing: 0) {
-                if let onHistory {
-                    Button(action: onHistory) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "line.3.horizontal")
-                                .font(AppTheme.Icon.toolbar)
-                                .foregroundStyle(AppTheme.text)
-                                .frame(width: 44, height: 44)
+            ZStack {
+                HStack(spacing: 0) {
+                    if let onHistory {
+                        Button(action: onHistory) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "line.3.horizontal")
+                                    .font(AppTheme.Icon.toolbar)
+                                    .foregroundStyle(AppTheme.text)
+                                    .frame(width: 44, height: 44)
 
-                            if showsHistoryBadge {
-                                Circle()
-                                    .fill(AppTheme.red)
-                                    .frame(width: 8, height: 8)
-                                    .offset(x: -7, y: 9)
+                                if showsHistoryBadge {
+                                    Circle()
+                                        .fill(AppTheme.red)
+                                        .frame(width: 8, height: 8)
+                                        .offset(x: -7, y: 9)
+                                }
                             }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("打开菜单")
+                        .accessibilityHint("打开历史、来一句、收藏和账号入口")
+                    } else {
+                        Color.clear
+                            .frame(width: 44, height: 44)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("打开菜单")
-                    .accessibilityHint("打开历史、来一句、收藏和账号入口")
-                } else {
-                    Color.clear
-                        .frame(width: 44, height: 44)
-                }
 
-                Spacer()
+                    Spacer()
+
+                    if let onNewConversation {
+                        Button(action: onNewConversation) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "plus.message")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("新对话")
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                            .foregroundStyle(AppTheme.text)
+                            .padding(.horizontal, 13)
+                            .frame(height: 40)
+                            .background(AppTheme.bubble)
+                            .clipShape(Capsule())
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("新对话")
+                        .accessibilityHint("清空当前聊天并开始新的选择")
+                    } else {
+                        Color.clear
+                            .frame(width: 86, height: 40)
+                    }
+                }
 
                 Text("皮皮")
                     .font(AppTheme.Typography.nav)
                     .foregroundStyle(AppTheme.text)
                     .accessibilityAddTraits(.isHeader)
-
-                Spacer()
-
-                if let onNewConversation {
-                    Button(action: onNewConversation) {
-                        Image(systemName: "square.and.pencil")
-                            .font(AppTheme.Icon.toolbar)
-                            .foregroundStyle(AppTheme.text)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("新对话")
-                    .accessibilityHint("清空当前聊天并开始新的选择")
-                } else {
-                    Color.clear
-                        .frame(width: 44, height: 44)
-                }
             }
             .padding(.horizontal, AppTheme.Spacing.lg)
             .frame(height: 58)
