@@ -2792,6 +2792,9 @@ struct HelpResultDetailScreen: View {
                 }
             }
         }
+        .refreshable {
+            await loadDetail()
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -3361,6 +3364,8 @@ private struct ProductEmptyState: View {
                 .foregroundStyle(AppTheme.textSecondary)
         }
         .productPanel()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(message)")
     }
 }
 
@@ -3404,6 +3409,9 @@ private struct ProductActionCard: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(subtitle)")
+        .accessibilityHint(showsChevron ? "打开相关页面" : "状态总览")
     }
 }
 
@@ -3454,6 +3462,9 @@ private struct FavoriteChoiceRow: View {
             }
         }
         .productPanel()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.topPick?.title ?? item.query), \(item.topPick?.reason ?? item.statusLabel)")
+        .accessibilityHint("打开收藏的选择")
     }
 }
 
@@ -3505,6 +3516,8 @@ private struct SubmittedAnswerRow: View {
             }
         }
         .productPanel()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(answer.status.label), \(answer.rewardLabel), \(answer.questionTitle), \(answer.text)")
     }
 }
 
@@ -3559,6 +3572,8 @@ private struct HelpDetailSummaryPanel: View {
             HelpStructuredSummary(request: request, compact: true)
         }
         .productPanel()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(request.status.label), \(request.rewardLabel), \(request.title), \(request.context)")
     }
 }
 
@@ -3589,6 +3604,8 @@ private struct HelpAnswerDetailRow: View {
                     .foregroundStyle(AppTheme.textMuted)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(answer.nickname), \(answer.timeLabel), \(answer.text)")
     }
 }
 
@@ -3627,6 +3644,8 @@ private struct HelpFinalRecommendationPanel: View {
             )
         }
         .productPanel()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("皮皮帮你收口, \(pick.title), \(pick.reason.isEmpty ? pick.subtitle : pick.reason)")
     }
 }
 
@@ -3711,6 +3730,8 @@ private struct RewardLedgerRow: View {
                     .lineLimit(2)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.status.label), \(item.valueLabel), \(item.title), \(item.subtitle)")
     }
 }
 
