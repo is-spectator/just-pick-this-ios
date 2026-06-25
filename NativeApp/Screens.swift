@@ -2895,7 +2895,8 @@ struct MyAnswersScreen: View {
                 ProductActionCard(
                     icon: "checkmark.bubble",
                     title: "已提交 \(submittedCount) 句",
-                    subtitle: "待采纳、已采纳和未采用都会在这里归档。"
+                    subtitle: "待采纳、已采纳和未采用都会在这里归档。",
+                    showsChevron: false
                 )
             }
 
@@ -3340,6 +3341,7 @@ private struct ProductActionCard: View {
     let icon: String
     let title: String
     let subtitle: String
+    var showsChevron = true
 
     var body: some View {
         HStack(spacing: 14) {
@@ -3362,9 +3364,11 @@ private struct ProductActionCard: View {
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppTheme.textMuted)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
         }
         .padding(16)
         .background(AppTheme.card)
