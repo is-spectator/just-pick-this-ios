@@ -3128,7 +3128,8 @@ struct MessagesScreen: View {
             systemImage: "bell",
             emptyTitle: "暂时没有新消息",
             emptyMessage: "有新的来一句、最终结果或奖励变化时，皮皮会放在这里。",
-            isEmpty: snapshot.lightEvents.isEmpty
+            isEmpty: snapshot.lightEvents.isEmpty,
+            isLoading: isLoading
         ) {
             if !snapshot.lightEvents.isEmpty {
                 ProductSection(title: "最新") {
@@ -3178,6 +3179,7 @@ private struct ProductListScreen<Content: View>: View {
     let emptyTitle: String
     let emptyMessage: String
     let isEmpty: Bool
+    var isLoading = false
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -3185,9 +3187,13 @@ private struct ProductListScreen<Content: View>: View {
             VStack(alignment: .leading, spacing: 22) {
                 ProductHeroHeader(title: title, subtitle: subtitle, systemImage: systemImage)
 
-                content
+                if isLoading && isEmpty {
+                    ProductPageLoadingSkeleton()
+                } else {
+                    content
+                }
 
-                if isEmpty {
+                if isEmpty && !isLoading {
                     ProductEmptyState(title: emptyTitle, message: emptyMessage, systemImage: systemImage)
                 }
             }
@@ -3198,6 +3204,63 @@ private struct ProductListScreen<Content: View>: View {
         .background(AppTheme.background.ignoresSafeArea())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.large)
+    }
+}
+
+private struct ProductPageLoadingSkeleton: View {
+    @State private var isBreathing = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            skeletonLine(width: 86, height: 13)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                ForEach(0..<3, id: \.self) { index in
+                    HStack(spacing: 12) {
+                        Circle()
+                            .fill(skeletonFill)
+                            .frame(width: 36, height: 36)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            skeletonLine(width: index == 0 ? 170 : 132, height: 14)
+                            skeletonLine(width: index == 1 ? 214 : 184, height: 12)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(16)
+
+                    if index < 2 {
+                        Divider()
+                            .padding(.leading, 64)
+                    }
+                }
+            }
+            .background(AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.border, lineWidth: 1)
+            )
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("正在加载")
+    }
+
+    private var skeletonFill: Color {
+        AppTheme.textMuted.opacity(isBreathing ? 0.16 : 0.08)
+    }
+
+    private func skeletonLine(width: CGFloat, height: CGFloat) -> some View {
+        Capsule()
+            .fill(skeletonFill)
+            .frame(width: width, height: height)
     }
 }
 
