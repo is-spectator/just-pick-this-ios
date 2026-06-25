@@ -1980,19 +1980,9 @@ struct ProfileScreen: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
+                ProductRefreshToolbarButton(isLoading: isLoading) {
                     Task { await loadSnapshot() }
-                } label: {
-                    if isLoading {
-                        ProgressView()
-                            .tint(AppTheme.text)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
                 }
-                .disabled(isLoading)
-                .accessibilityLabel("刷新")
             }
         }
         .refreshable {
@@ -2673,19 +2663,9 @@ struct MyAnswersScreen: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
+                ProductRefreshToolbarButton(isLoading: isLoading) {
                     Task { await loadSnapshot() }
-                } label: {
-                    if isLoading {
-                        ProgressView()
-                            .tint(AppTheme.text)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
                 }
-                .disabled(isLoading)
-                .accessibilityLabel("刷新")
             }
         }
         .refreshable {
@@ -2837,19 +2817,9 @@ struct RewardsScreen: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
+                ProductRefreshToolbarButton(isLoading: isLoading) {
                     Task { await loadSnapshot() }
-                } label: {
-                    if isLoading {
-                        ProgressView()
-                            .tint(AppTheme.text)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
                 }
-                .disabled(isLoading)
-                .accessibilityLabel("刷新")
             }
         }
         .refreshable {
@@ -2909,19 +2879,9 @@ struct MessagesScreen: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
+                ProductRefreshToolbarButton(isLoading: isLoading) {
                     Task { await loadSnapshot() }
-                } label: {
-                    if isLoading {
-                        ProgressView()
-                            .tint(AppTheme.text)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
                 }
-                .disabled(isLoading)
-                .accessibilityLabel("刷新")
             }
         }
         .refreshable {
@@ -3406,6 +3366,32 @@ private struct ProductEmptyInline: View {
                 .foregroundStyle(AppTheme.textSecondary)
         }
         .productPanel()
+    }
+}
+
+private struct ProductRefreshToolbarButton: View {
+    let isLoading: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.76)
+                        .tint(AppTheme.text)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.text)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .accessibilityLabel(isLoading ? "正在刷新" : "刷新")
     }
 }
 
