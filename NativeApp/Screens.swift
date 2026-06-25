@@ -2969,6 +2969,8 @@ struct FavoritesScreen: View {
     let session: AppSession
     let onSelectHistory: (QuestionHistory) -> Void
 
+    @State private var localNotice: ServiceNotice?
+
     private var savedChoices: [QuestionHistory] {
         let historyChoices = session.history.filter { item in
             item.topPick != nil || item.status == "completed" || item.status == "top1"
@@ -2990,6 +2992,10 @@ struct FavoritesScreen: View {
             emptyMessage: "推荐卡右上角的“…”里可以收藏。已经采纳的选择也会先放在这里。",
             isEmpty: savedChoices.isEmpty
         ) {
+            if let localNotice {
+                ServiceNoticePill(notice: localNotice)
+            }
+
             if !savedChoices.isEmpty {
                 ProductSection(title: "最近保存") {
                     VStack(spacing: 12) {
@@ -2997,13 +3003,22 @@ struct FavoritesScreen: View {
                             FavoriteChoiceRow(
                                 item: item,
                                 onOpen: { onSelectHistory(item) },
-                                onRemove: { session.removeFavoriteChoice(id: item.id) }
+                                onRemove: { removeFavorite(item) }
                             )
                         }
                     }
                 }
             }
         }
+    }
+
+    private func removeFavorite(_ item: QuestionHistory) {
+        session.removeFavoriteChoice(id: item.id)
+        localNotice = ServiceNotice(
+            title: "已取消收藏",
+            detail: "\(item.topPick?.title ?? item.query) 已从收藏里移除。"
+        )
+        AppHaptics.selection()
     }
 }
 
