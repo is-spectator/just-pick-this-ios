@@ -234,7 +234,8 @@ struct InputScreen: View {
             AssistantHelpRow(
                 request: request,
                 isPublishing: isPublishingHelp,
-                onPublish: { publish(request) }
+                onPublish: { publish(request) },
+                onShare: { shareHelpRequest(request) }
             )
         }
     }
@@ -338,12 +339,28 @@ struct InputScreen: View {
         sharePayload = CardSharePayload(text: shareText(for: session.topPick))
     }
 
+    private func shareHelpRequest(_ request: HelpRequest) {
+        dismissKeyboard()
+        AppHaptics.selection()
+        sharePayload = CardSharePayload(text: shareText(for: request))
+    }
+
     private func shareText(for pick: TopPick) -> String {
         let reason = pick.reason.trimmingCharacters(in: .whitespacesAndNewlines)
         let subtitle = pick.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let detail = reason.isEmpty ? subtitle : reason
         guard !detail.isEmpty else { return "\(pick.title)\n来自皮皮" }
         return "\(pick.title)\n\(detail)\n来自皮皮"
+    }
+
+    private func shareText(for request: HelpRequest) -> String {
+        let context = request.context.trimmingCharacters(in: .whitespacesAndNewlines)
+        let details = [
+            context.isEmpty ? nil : context,
+            "状态：\(request.status.label)",
+            "奖励：\(request.rewardLabel)"
+        ].compactMap { $0 }
+        return "\(request.title)\n\(details.joined(separator: "\n"))\n来自皮皮求一个"
     }
 
     private func acceptPick() {
@@ -1262,11 +1279,17 @@ private struct AssistantHelpRow: View {
     let request: HelpRequest
     let isPublishing: Bool
     let onPublish: () -> Void
+    let onShare: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             AssistantHeader(name: "皮皮")
-            ChatHelpCard(request: request, isPublishing: isPublishing, onPublish: onPublish)
+            ChatHelpCard(
+                request: request,
+                isPublishing: isPublishing,
+                onPublish: onPublish,
+                onShare: onShare
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1484,6 +1507,7 @@ private struct ChatHelpCard: View {
     let request: HelpRequest
     let isPublishing: Bool
     let onPublish: () -> Void
+    let onShare: () -> Void
 
     @State private var publishFeedbackCount = 0
 
@@ -1500,6 +1524,8 @@ private struct ChatHelpCard: View {
                 Text(request.status.label)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppTheme.textMuted)
+
+                HelpCardOverflowMenu(onShare: onShare)
             }
 
             VStack(alignment: .leading, spacing: 9) {
@@ -1557,7 +1583,7 @@ private struct ChatHelpCard: View {
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.04), radius: 14, x: 0, y: 8)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("求一个, \(request.title), \(request.context)")
     }
 
@@ -1565,6 +1591,27 @@ private struct ChatHelpCard: View {
         guard !isPublishing else { return }
         publishFeedbackCount += 1
         onPublish()
+    }
+}
+
+private struct HelpCardOverflowMenu: View {
+    let onShare: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(action: onShare) {
+                Label("分享", systemImage: "square.and.arrow.up")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("更多求一个操作")
+        .accessibilityHint("分享这张求一个")
     }
 }
 
@@ -4980,7 +5027,8 @@ private struct BottomComposerPreviewHost: View {
     ChatHelpCard(
         request: UIPolishPreviewFixtures.helpDraft,
         isPublishing: false,
-        onPublish: {}
+        onPublish: {},
+        onShare: {}
     )
     .padding()
     .appScreenBackground()
