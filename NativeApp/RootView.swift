@@ -1127,7 +1127,7 @@ private struct DrawerActionRow: View {
                 if badgeCount > 0 {
                     Text(badgeCount > 99 ? "99+" : "\(badgeCount)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppTheme.onBadge)
                         .padding(.horizontal, 6)
                         .frame(minWidth: 22, minHeight: 20)
                         .background(AppTheme.red)

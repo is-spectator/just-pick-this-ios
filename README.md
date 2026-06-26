@@ -501,3 +501,4 @@ xcodebuild \
 - `POLISH-003`/`POLISH-007`: 推荐卡入场动画会在系统“减少动态效果”开启时静态呈现。
 - `UI-005`/`POLISH-007`: 底部 Composer 使用语义正文字号、统一 composer 圆角和 44pt 发送热区，适配多行输入与 Dynamic Type。
 - `POLISH-007`: 聊天滚底、新对话提示、Toast 和折叠文本会尊重系统“减少动态效果”。
+- `DS-001`: Drawer 未读角标文字颜色收进 `AppTheme.onBadge`，避免组件里继续散落裸颜色。

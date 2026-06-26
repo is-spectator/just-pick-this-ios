@@ -13,6 +13,7 @@ enum AppTheme {
     static let borderSoft = Color(uiColor: .separator).opacity(0.2)
     static let bubble = Color(uiColor: .tertiarySystemFill)
     static let disabled = Color(uiColor: .systemGray5)
+    static let onBadge = Color.white
     static let primaryAction = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark ? .white : .black
     })
