@@ -580,7 +580,7 @@ struct DecisionCard: View {
         .onAppear {
             hasAppeared = true
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("推荐卡, \(pick.title), \(decisionReason)")
     }
 
