@@ -1012,6 +1012,9 @@ struct RequestCard: View {
             HelpStructuredSummary(request: request)
                 .padding(.top, 16)
 
+            HelpRequestStatusSummary(request: request)
+                .padding(.top, 14)
+
             if !request.answers.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("已收到一句")
@@ -1042,6 +1045,93 @@ struct RequestCard: View {
             }
         }
         .cardStyle()
+    }
+}
+
+struct HelpRequestStatusSummary: View {
+    let request: HelpRequest
+
+    private var statusColor: Color {
+        switch request.status {
+        case .draft:
+            AppTheme.textSecondary
+        case .published:
+            AppTheme.orangeText
+        case .answered:
+            AppTheme.green
+        case .completed:
+            AppTheme.green
+        case .closed:
+            AppTheme.textMuted
+        }
+    }
+
+    private var statusIcon: String {
+        switch request.status {
+        case .draft:
+            "square.and.pencil"
+        case .published:
+            "paperplane"
+        case .answered:
+            "quote.bubble"
+        case .completed:
+            "checkmark.seal"
+        case .closed:
+            "xmark.circle"
+        }
+    }
+
+    private var detailText: String {
+        let count = max(request.answerCount, request.answers.count)
+        switch request.status {
+        case .draft:
+            return "还没发布，补完背景后可以发出去。"
+        case .published:
+            return count == 0 ? "正在等懂的人来一句。" : "已收到 \(count) 句，继续等更稳。"
+        case .answered:
+            return count == 0 ? "已有回答，可以去看详情。" : "已收到 \(count) 句，可以采纳或继续等。"
+        case .completed:
+            return "已经采纳，结果可回看。"
+        case .closed:
+            return "已关闭，不再继续收集来一句。"
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            Image(systemName: statusIcon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(statusColor)
+                .frame(width: 30, height: 30)
+                .background(statusColor.opacity(0.12))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(request.status.label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(statusColor)
+
+                    Text(request.rewardLabel)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.green)
+                }
+
+                Text(detailText)
+                    .font(AppTheme.Typography.caption)
+                    .lineSpacing(3)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.bubble.opacity(0.78))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(request.status.label), \(detailText)")
     }
 }
 

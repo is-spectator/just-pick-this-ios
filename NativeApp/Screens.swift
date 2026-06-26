@@ -1466,18 +1466,7 @@ private struct ChatHelpCard: View {
                 .accessibilityLabel("发出去")
                 .sensoryFeedback(.selection, trigger: publishFeedbackCount)
             } else {
-                HStack(spacing: 8) {
-                    Image(systemName: "paperplane")
-                        .font(.system(size: 13, weight: .medium))
-
-                    Text("已发出去")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundStyle(AppTheme.textSecondary)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 10)
-                .background(AppTheme.bubble)
-                .clipShape(Capsule())
+                HelpRequestStatusSummary(request: request)
             }
         }
         .padding(18)
