@@ -1449,7 +1449,7 @@ private struct ChatRecommendationCard: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
+        .shadow(color: AppTheme.shadowCard, radius: 22, x: 0, y: 12)
         .scaleEffect(isPresented ? 1 : 0.985)
         .opacity(isPresented ? 1 : 0)
         .offset(y: isPresented ? 0 : 8)
@@ -1586,7 +1586,7 @@ private struct ChatHelpCard: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.04), radius: 14, x: 0, y: 8)
+        .shadow(color: AppTheme.shadowSubtle, radius: 14, x: 0, y: 8)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("求一个, \(request.title), \(request.context)")
     }
@@ -2280,7 +2280,7 @@ struct HelpDeckCard: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
+        .shadow(color: AppTheme.shadowCard, radius: 22, x: 0, y: 12)
         .accessibilityElement(children: showsMenu ? .contain : .combine)
         .accessibilityLabel("求一个, \(request.title), \(request.rewardLabel)")
         .accessibilityHint("左右滑动切换求助，底部输入框可以来一句")
@@ -2447,7 +2447,7 @@ struct EmptyAnswerQueueCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 10)
+        .shadow(color: AppTheme.shadowElevated, radius: 24, x: 0, y: 10)
         .accessibilityElement(children: .contain)
     }
 }

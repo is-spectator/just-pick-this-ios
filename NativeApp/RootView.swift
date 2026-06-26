@@ -59,7 +59,7 @@ struct RootView: View {
                     .allowsHitTesting(!showsDrawer)
                     .animation(activeDrawerAnimation, value: showsDrawer)
 
-                Color.black.opacity(0.18 * drawerProgress)
+                AppTheme.drawerScrim.opacity(0.18 * drawerProgress)
                     .ignoresSafeArea()
                     .allowsHitTesting(showsDrawer)
                     .onTapGesture {

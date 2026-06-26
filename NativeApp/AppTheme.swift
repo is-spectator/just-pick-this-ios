@@ -32,6 +32,11 @@ enum AppTheme {
             ? UIColor(red: 255 / 255, green: 189 / 255, blue: 122 / 255, alpha: 1)
             : UIColor(red: 107 / 255, green: 74 / 255, blue: 46 / 255, alpha: 1)
     })
+    static let shadowSubtle = Color.black.opacity(0.04)
+    static let shadowCard = Color.black.opacity(0.055)
+    static let shadowElevated = Color.black.opacity(0.06)
+    static let shadowFloating = Color.black.opacity(0.1)
+    static let drawerScrim = Color.black
 
     enum Spacing {
         static let xxs: CGFloat = 4

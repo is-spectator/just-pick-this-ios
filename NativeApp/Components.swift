@@ -259,7 +259,7 @@ struct BottomComposer: View {
             RoundedRectangle(cornerRadius: AppTheme.Radius.composer, style: .continuous)
                 .stroke(isFocused ? AppTheme.primaryAction.opacity(0.9) : AppTheme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
+        .shadow(color: AppTheme.shadowSubtle, radius: 2, x: 0, y: 1)
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 8)
@@ -575,7 +575,7 @@ struct DecisionCard: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
+        .shadow(color: AppTheme.shadowCard, radius: 22, x: 0, y: 12)
         .scaleEffect(isPresented ? 1 : 0.985)
         .opacity(isPresented ? 1 : 0)
         .offset(y: isPresented ? 0 : 8)
@@ -1333,7 +1333,7 @@ struct AnswerRequestSquareCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 10)
+        .shadow(color: AppTheme.shadowElevated, radius: 24, x: 0, y: 10)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("求一个, \(request.title), \(reward)")
     }
@@ -1373,7 +1373,7 @@ struct PrimaryButton: View {
                 .frame(height: 52)
                 .background(AppTheme.primaryAction)
                 .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.1), radius: 14, x: 0, y: 8)
+                .shadow(color: AppTheme.shadowFloating, radius: 14, x: 0, y: 8)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -1414,6 +1414,6 @@ private extension View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .stroke(AppTheme.border, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.06), radius: 24, x: 0, y: 10)
+            .shadow(color: AppTheme.shadowElevated, radius: 24, x: 0, y: 10)
     }
 }
