@@ -450,6 +450,7 @@ struct InputScreen: View {
             return
         }
         decisionLocation = location
+        manualLocationText = location.label
         persistDecisionLocation(location)
         rememberDecisionLocation(location.label)
         locationMessage = "已使用\(location.label)。"
