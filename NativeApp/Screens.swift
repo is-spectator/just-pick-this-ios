@@ -4225,13 +4225,13 @@ private struct ProductHeroHeader: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(AppTheme.Typography.productHeroTitle)
                     .foregroundStyle(AppTheme.text)
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
 
                 Text(subtitle)
-                    .font(.system(size: 14))
+                    .font(AppTheme.Typography.productHeroSubtitle)
                     .lineSpacing(4)
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(3)
@@ -4272,12 +4272,12 @@ private struct ProductEmptyState: View {
                 .foregroundStyle(AppTheme.textMuted)
 
             Text(title)
-                .font(.system(size: 18, weight: .semibold))
+                .font(AppTheme.Typography.productEmptyTitle)
                 .foregroundStyle(AppTheme.text)
                 .lineLimit(2)
 
             Text(message)
-                .font(.system(size: 14))
+                .font(AppTheme.Typography.productEmptyMessage)
                 .lineSpacing(4)
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(3)
@@ -4305,11 +4305,11 @@ private struct ProductActionCard: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(AppTheme.Typography.productActionTitle)
                     .foregroundStyle(AppTheme.text)
                     .lineLimit(2)
                 Text(subtitle)
-                    .font(.system(size: 13))
+                    .font(AppTheme.Typography.productActionSubtitle)
                     .lineSpacing(3)
                     .foregroundStyle(AppTheme.textSecondary)
                     .lineLimit(3)
@@ -4319,7 +4319,7 @@ private struct ProductActionCard: View {
 
             if showsChevron {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppTheme.Icon.small)
                     .foregroundStyle(AppTheme.textMuted)
             }
         }
@@ -4346,7 +4346,7 @@ private struct FavoriteChoiceRow: View {
             HStack(alignment: .top, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "bookmark.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(AppTheme.Icon.inline)
                         .foregroundStyle(AppTheme.text)
                         .frame(width: 34, height: 34)
                         .background(AppTheme.bubble)
@@ -4354,12 +4354,12 @@ private struct FavoriteChoiceRow: View {
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(item.topPick?.title ?? item.query)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(AppTheme.Typography.productRowTitle)
                             .foregroundStyle(AppTheme.text)
                             .lineLimit(2)
 
                         Text(item.topPick?.reason ?? item.statusLabel)
-                            .font(.system(size: 13))
+                            .font(AppTheme.Typography.productRowBody)
                             .lineSpacing(3)
                             .foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(2)
@@ -4372,7 +4372,7 @@ private struct FavoriteChoiceRow: View {
 
                 Button(action: onRemove) {
                     Image(systemName: "bookmark.slash")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(AppTheme.Icon.inline)
                         .foregroundStyle(AppTheme.textSecondary)
                         .frame(width: 44, height: 44)
                         .background(AppTheme.bubble)
@@ -4396,7 +4396,7 @@ private struct SubmittedAnswerRow: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "quote.bubble.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(AppTheme.Icon.inline)
                     .foregroundStyle(AppTheme.text)
                     .frame(width: 34, height: 34)
                     .background(AppTheme.bubble)
@@ -4405,7 +4405,7 @@ private struct SubmittedAnswerRow: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(answer.status.label)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(AppTheme.Typography.productStatus)
                             .foregroundStyle(AppTheme.green)
                             .padding(.horizontal, 9)
                             .padding(.vertical, 5)
@@ -4413,23 +4413,23 @@ private struct SubmittedAnswerRow: View {
                             .clipShape(Capsule())
 
                         Text(answer.rewardLabel)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(AppTheme.Typography.productStatus)
                             .foregroundStyle(AppTheme.textSecondary)
 
                         Spacer(minLength: 0)
 
                         Text(answer.timeLabel)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(AppTheme.Typography.productMeta)
                             .foregroundStyle(AppTheme.textMuted)
                     }
 
                     Text(answer.questionTitle)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(AppTheme.Typography.productRowTitle)
                         .foregroundStyle(AppTheme.text)
                         .lineLimit(2)
 
                     Text(answer.text)
-                        .font(.system(size: 14))
+                        .font(AppTheme.Typography.productRowBody)
                         .lineSpacing(4)
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(3)
@@ -4450,7 +4450,7 @@ private struct HelpDetailSummaryPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
                 Text(request.status.label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppTheme.Typography.productStatus)
                     .foregroundStyle(AppTheme.text)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -4458,7 +4458,7 @@ private struct HelpDetailSummaryPanel: View {
                     .clipShape(Capsule())
 
                 Text(request.rewardLabel)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppTheme.Typography.productStatus)
                     .foregroundStyle(AppTheme.green)
 
                 Spacer(minLength: 0)
@@ -4469,7 +4469,7 @@ private struct HelpDetailSummaryPanel: View {
                         .tint(AppTheme.textMuted)
                 } else {
                     Text("\(request.answerCount) 句")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AppTheme.Typography.meta)
                         .foregroundStyle(AppTheme.textMuted)
                 }
             }
@@ -4483,7 +4483,7 @@ private struct HelpDetailSummaryPanel: View {
 
             CollapsibleText(
                 text: request.context,
-                font: .system(size: 14),
+                font: AppTheme.Typography.productRowBody,
                 color: AppTheme.textSecondary,
                 collapsedLineLimit: 3,
                 lineSpacing: 4,
@@ -4504,7 +4504,7 @@ private struct HelpAnswerDetailRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "quote.bubble")
-                .font(.system(size: 14, weight: .semibold))
+                .font(AppTheme.Icon.inline)
                 .foregroundStyle(AppTheme.text)
                 .frame(width: 34, height: 34)
                 .background(AppTheme.bubble)
@@ -4513,7 +4513,7 @@ private struct HelpAnswerDetailRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 CollapsibleText(
                     text: answer.text,
-                    font: .system(size: 15, weight: .medium),
+                    font: AppTheme.Typography.drawerRowTitle,
                     color: AppTheme.text,
                     collapsedLineLimit: 4,
                     lineSpacing: 4,
@@ -4521,7 +4521,7 @@ private struct HelpAnswerDetailRow: View {
                 )
 
                 Text("\(answer.nickname) · \(answer.timeLabel)")
-                    .font(.system(size: 12))
+                    .font(AppTheme.Typography.caption)
                     .foregroundStyle(AppTheme.textMuted)
             }
         }
@@ -4537,7 +4537,7 @@ private struct HelpFinalRecommendationPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(AppTheme.Icon.inline)
                     .foregroundStyle(AppTheme.green)
                     .frame(width: 34, height: 34)
                     .background(AppTheme.green.opacity(0.12))
@@ -4545,7 +4545,7 @@ private struct HelpFinalRecommendationPanel: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("皮皮帮你收口")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AppTheme.Typography.meta)
                         .foregroundStyle(AppTheme.textMuted)
                     Text(pick.title)
                         .font(.system(size: CardTextFitting.requestTitleSize(pick.title, compact: true), weight: .semibold))
@@ -4557,7 +4557,7 @@ private struct HelpFinalRecommendationPanel: View {
 
             CollapsibleText(
                 text: pick.reason.isEmpty ? pick.subtitle : pick.reason,
-                font: .system(size: 14),
+                font: AppTheme.Typography.productRowBody,
                 color: AppTheme.textSecondary,
                 collapsedLineLimit: 3,
                 lineSpacing: 4,
@@ -4576,12 +4576,12 @@ private struct HelpFinalTextPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("皮皮帮你收口")
-                .font(.system(size: 12, weight: .medium))
+                .font(AppTheme.Typography.meta)
                 .foregroundStyle(AppTheme.textMuted)
 
             CollapsibleText(
                 text: answer.text,
-                font: .system(size: 15, weight: .medium),
+                font: AppTheme.Typography.drawerRowTitle,
                 color: AppTheme.text,
                 collapsedLineLimit: 4,
                 lineSpacing: 4,

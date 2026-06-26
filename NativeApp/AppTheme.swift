@@ -78,6 +78,16 @@ enum AppTheme {
         static let drawerRowTitle = Font.subheadline.weight(.medium)
         static let drawerBadge = Font.caption2.weight(.semibold)
         static let recommendationSubtitle = Font.subheadline.weight(.medium)
+        static let productHeroTitle = Font.title2.weight(.semibold)
+        static let productHeroSubtitle = Font.subheadline
+        static let productEmptyTitle = Font.headline.weight(.semibold)
+        static let productEmptyMessage = Font.subheadline
+        static let productActionTitle = Font.headline.weight(.semibold)
+        static let productActionSubtitle = Font.footnote
+        static let productRowTitle = Font.callout.weight(.semibold)
+        static let productRowBody = Font.footnote
+        static let productStatus = Font.caption.weight(.semibold)
+        static let productMeta = Font.caption2.weight(.medium)
     }
 
     enum Icon {

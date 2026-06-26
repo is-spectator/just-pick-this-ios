@@ -522,3 +522,4 @@ xcodebuild \
 - `POLISH-005`: 来一句 Deck 的卡片正文改为内部纵向滚动，长标题仍限制在 3 行内，长背景和结构化约束不会把底部状态挤出卡片。
 - `DS-001`/`POLISH-001`: 采纳/不采纳状态按钮的前景色收进 `AppTheme.onStatusAction`，避免组件直接散落固定白色。
 - `DS-004`/`DS-005`/`STATE-003`: 产品页 Hero、空状态、ActionCard 和列表骨架接入 `AppTheme` 的语义图标与圆角 token，减少空/加载状态里的魔法数字。
+- `DS-002`: 产品页 Hero、空状态、ActionCard、收藏行和求助详情行接入产品语义 Typography token，继续收敛固定字号并保留 Dynamic Type 适配。
