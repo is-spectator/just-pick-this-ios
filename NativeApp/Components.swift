@@ -812,7 +812,7 @@ struct RejectIconButton: View {
 
                 Image(systemName: "xmark")
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(AppTheme.onStatusAction)
             }
             .frame(width: 44, height: 44)
         }
@@ -834,12 +834,12 @@ struct AcceptIconButton: View {
 
                 if isLoading {
                     ProgressView()
-                        .tint(Color.white)
+                        .tint(AppTheme.onStatusAction)
                         .scaleEffect(0.72)
                 } else {
                     Image(systemName: "checkmark")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(AppTheme.onStatusAction)
                 }
             }
             .frame(width: 44, height: 44)
