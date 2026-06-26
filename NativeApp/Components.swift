@@ -606,8 +606,14 @@ struct DecisionCard: View {
                     image
                         .resizable()
                         .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 228)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
+                        .clipped()
+                        .accessibilityHidden(true)
                 case .failure:
                     Color.clear
+                        .frame(height: 0)
                         .task {
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 imageLoadFailed = true
@@ -615,8 +621,12 @@ struct DecisionCard: View {
                         }
                 case .empty:
                     RecommendationImageSkeleton()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 228)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
                 @unknown default:
                     Color.clear
+                        .frame(height: 0)
                         .task {
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 imageLoadFailed = true
@@ -624,11 +634,6 @@ struct DecisionCard: View {
                         }
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 228)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
-            .clipped()
-            .accessibilityHidden(true)
         }
     }
 }
@@ -727,8 +732,12 @@ struct ReferenceWebPreview: View {
                             .scaledToFit()
                             .frame(maxWidth: .infinity, maxHeight: 160)
                             .padding(10)
+                            .frame(maxWidth: .infinity, minHeight: 150)
+                            .background(AppTheme.bubble.opacity(0.7))
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.preview, style: .continuous))
                     case .failure:
                         Color.clear
+                            .frame(height: 0)
                             .task {
                                 withAnimation(.easeInOut(duration: 0.18)) {
                                     imageLoadFailed = true
@@ -738,8 +747,11 @@ struct ReferenceWebPreview: View {
                         ProgressView()
                             .tint(AppTheme.textMuted)
                             .frame(maxWidth: .infinity, minHeight: 150)
+                            .background(AppTheme.bubble.opacity(0.7))
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.preview, style: .continuous))
                     @unknown default:
                         Color.clear
+                            .frame(height: 0)
                             .task {
                                 withAnimation(.easeInOut(duration: 0.18)) {
                                     imageLoadFailed = true
@@ -747,9 +759,6 @@ struct ReferenceWebPreview: View {
                             }
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 150)
-                .background(AppTheme.bubble.opacity(0.7))
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.preview, style: .continuous))
             }
 
             if let sourceURL {

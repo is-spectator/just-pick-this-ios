@@ -1482,8 +1482,14 @@ private struct ChatRecommendationCard: View {
                     image
                         .resizable()
                         .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 228)
+                        .background(AppTheme.bubble)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
+                        .accessibilityHidden(true)
                 case .failure:
                     Color.clear
+                        .frame(height: 0)
                         .task {
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 imageLoadFailed = true
@@ -1491,8 +1497,13 @@ private struct ChatRecommendationCard: View {
                         }
                 case .empty:
                     RecommendationImageSkeleton()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 228)
+                        .background(AppTheme.bubble)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
                 @unknown default:
                     Color.clear
+                        .frame(height: 0)
                         .task {
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 imageLoadFailed = true
@@ -1500,11 +1511,6 @@ private struct ChatRecommendationCard: View {
                         }
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 228)
-            .background(AppTheme.bubble)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
-            .accessibilityHidden(true)
         }
     }
 }
