@@ -85,7 +85,7 @@ struct TopBar: View {
             HStack {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 22, weight: .medium))
+                        .font(AppTheme.Icon.back)
                         .foregroundStyle(AppTheme.text)
                         .frame(width: 44, height: 44, alignment: .leading)
                         .contentShape(Rectangle())
@@ -139,7 +139,7 @@ struct TopBar: View {
                         Button(action: onNewConversation) {
                             HStack(spacing: 6) {
                                 Image(systemName: "plus.message")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(AppTheme.Icon.action)
                                 Text("新对话")
                                     .font(.system(size: 15, weight: .semibold))
                             }
@@ -235,7 +235,7 @@ struct BottomComposer: View {
                             .scaleEffect(0.74)
                     } else {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(AppTheme.Icon.composer)
                             .foregroundStyle(canSend ? AppTheme.onPrimaryAction : AppTheme.textMuted)
                     }
                 }
@@ -681,7 +681,7 @@ struct RecommendationOverflowMenu: View {
             .disabled(feedbackState == .issue)
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .semibold))
+                .font(AppTheme.Icon.menu)
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 44, height: 44)
                 .background(.ultraThinMaterial)

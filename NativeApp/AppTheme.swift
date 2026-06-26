@@ -71,7 +71,17 @@ enum AppTheme {
     }
 
     enum Icon {
+        static let tiny = Font.system(size: 12, weight: .semibold)
+        static let small = Font.system(size: 13, weight: .semibold)
+        static let inline = Font.system(size: 14, weight: .semibold)
+        static let action = Font.system(size: 15, weight: .semibold)
+        static let clear = Font.system(size: 16, weight: .semibold)
+        static let composer = Font.system(size: 17, weight: .semibold)
+        static let menu = Font.system(size: 17, weight: .semibold)
+        static let deckMenu = Font.system(size: 18, weight: .semibold)
+        static let back = Font.system(size: 22, weight: .medium)
         static let toolbar = Font.system(size: 20, weight: .semibold)
+        static let avatar = Font.system(size: 28, weight: .medium)
         static let row = Font.system(size: 17, weight: .semibold)
     }
 

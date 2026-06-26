@@ -562,7 +562,7 @@ private struct DecisionLocationBar: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: location == nil ? "location" : "location.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(AppTheme.Icon.inline)
                     .foregroundStyle(AppTheme.text)
                     .frame(width: 28, height: 28)
                     .background(AppTheme.bubble)
@@ -589,7 +589,7 @@ private struct DecisionLocationBar: View {
                         .frame(width: 30, height: 30)
                 } else {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppTheme.Icon.tiny)
                         .foregroundStyle(AppTheme.textMuted)
                         .frame(width: 30, height: 30)
                 }
@@ -1608,7 +1608,7 @@ private struct HelpCardOverflowMenu: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .semibold))
+                .font(AppTheme.Icon.menu)
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -2230,7 +2230,7 @@ struct HelpDeckCard: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(AppTheme.Icon.deckMenu)
                             .foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
@@ -2365,7 +2365,7 @@ struct ServiceNoticePill: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: notice.title == "皮皮" ? "quote.bubble" : "exclamationmark.triangle")
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppTheme.Icon.tiny)
                 .foregroundStyle(notice.title == "皮皮" ? AppTheme.textSecondary : AppTheme.orangeText)
                 .padding(.top, 1)
 

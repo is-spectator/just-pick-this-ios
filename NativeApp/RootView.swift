@@ -760,7 +760,7 @@ private struct ChatDrawer: View {
     private var drawerSearch: some View {
         HStack(spacing: AppTheme.Spacing.xs) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
+                .font(AppTheme.Icon.action)
                 .foregroundStyle(AppTheme.textMuted)
 
             TextField("搜索历史、求一个和收藏", text: $searchText)
@@ -773,7 +773,7 @@ private struct ChatDrawer: View {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(AppTheme.Icon.clear)
                         .foregroundStyle(AppTheme.textMuted)
                         .frame(width: 44, height: 44)
                         .contentShape(Circle())
@@ -830,7 +830,7 @@ private struct ChatDrawer: View {
         Button(action: isSignedIn ? onOpenProfile : onLogin) {
             HStack(spacing: AppTheme.Spacing.sm) {
                 Image(systemName: AuthTokenStore.email == nil ? "person.crop.circle" : "person.crop.circle.fill")
-                    .font(.system(size: 28, weight: .medium))
+                    .font(AppTheme.Icon.avatar)
                     .foregroundStyle(AppTheme.text)
                     .frame(width: 44, height: 44)
 
@@ -847,7 +847,7 @@ private struct ChatDrawer: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppTheme.Icon.tiny)
                     .foregroundStyle(AppTheme.textMuted)
             }
             .padding(.horizontal, AppTheme.Spacing.lg)
@@ -1070,7 +1070,7 @@ private struct DrawerNoticePill: View {
     var body: some View {
         HStack(spacing: AppTheme.Spacing.xs) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 14, weight: .semibold))
+                .font(AppTheme.Icon.inline)
                 .foregroundStyle(AppTheme.green)
 
             Text(text)
