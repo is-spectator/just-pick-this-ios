@@ -2146,6 +2146,12 @@ final class AppSession {
         defaults.removeObject(forKey: Self.favoriteChoicesKey)
         defaults.removeObject(forKey: Self.hiddenFavoriteChoiceIDsKey)
         defaults.removeObject(forKey: Self.submittedAnswersKey)
+        defaults.removeObject(forKey: "seen_light_event_ids")
+        defaults.removeObject(forKey: "pinned_history_ids")
+        defaults.removeObject(forKey: "hidden_history_ids")
+        defaults.removeObject(forKey: "renamed_history_titles")
+        defaults.removeObject(forKey: "recent_decision_location_labels")
+        defaults.removeObject(forKey: "active_decision_location_context")
     }
 
     func submit(query: String, locationContext: DecisionLocationContext? = nil) async -> RecommendationDecision {

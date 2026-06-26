@@ -2321,6 +2321,7 @@ struct ProfileScreen: View {
     @State private var isAccountActionRunning = false
     @State private var accountActionMessage: String?
     @State private var showsDeleteAccountConfirmation = false
+    @State private var showsClearLocalDataConfirmation = false
 
     private var signedIn: Bool {
         AuthTokenStore.email != nil
@@ -2398,6 +2399,14 @@ struct ProfileScreen: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("会清除当前邮箱登录、撤销会话，并把账号标记为已删除。这个操作不能在 App 内撤回。")
+        }
+        .confirmationDialog("清除本机记录？", isPresented: $showsClearLocalDataConfirmation, titleVisibility: .visible) {
+            Button("清除本机记录", role: .destructive) {
+                clearLocalData()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("会清除这台设备上的历史、收藏、回答草稿和当前会话；邮箱登录不会退出。")
         }
     }
 
@@ -2613,6 +2622,30 @@ struct ProfileScreen: View {
                 }
                 .padding(16)
 
+                Divider()
+                    .padding(.leading, 16)
+
+                Button(role: .destructive) {
+                    showsClearLocalDataConfirmation = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "trash.slash")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("清除本机记录")
+                                .font(.system(size: 15, weight: .medium))
+                            Text("保留登录，只清空这台设备上的历史、收藏和回答。")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(16)
+                }
+                .buttonStyle(.plain)
+                .disabled(isAccountActionRunning)
+
                 if signedIn {
                     Divider()
                         .padding(.leading, 16)
@@ -2728,6 +2761,15 @@ struct ProfileScreen: View {
                 onAuthChanged()
             }
         }
+    }
+
+    private func clearLocalData() {
+        guard !isAccountActionRunning else { return }
+        session.clearLocalUserData()
+        snapshot = .empty
+        accountActionMessage = "本机记录已清除。"
+        AppHaptics.warning()
+        onAuthChanged()
     }
 
     private func deleteAccount() {

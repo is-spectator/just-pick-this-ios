@@ -198,6 +198,8 @@ struct RootView: View {
                         },
                         onAuthChanged: {
                             authRevision += 1
+                            chatRevision += 1
+                            restoreDrawerHistoryPreferences()
                             refreshMessageBadge()
                         },
                         onHistorySelect: openHistoryItem,
