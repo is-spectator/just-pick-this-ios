@@ -238,13 +238,15 @@ struct InputScreen: View {
         guard !query.isEmpty, !session.isSubmitting else { return }
 
         dismissKeyboard()
-        submit(query)
+        submit(query, shouldAppendUserBubble: shouldAppendUserBubble(for: query))
     }
 
-    private func submit(_ query: String) {
+    private func submit(_ query: String, shouldAppendUserBubble: Bool = true) {
         draft = ""
         lastFailedQuery = nil
-        entries.append(.user(UUID(), query))
+        if shouldAppendUserBubble {
+            entries.append(.user(UUID(), query))
+        }
         submitTask?.cancel()
         submitTask = Task { @MainActor in
             let decision = await session.submit(query: query, locationContext: decisionLocation)
@@ -279,7 +281,16 @@ struct InputScreen: View {
         guard let retryQuery, !retryQuery.isEmpty, !session.isSubmitting else { return }
 
         dismissKeyboard()
-        submit(retryQuery)
+        AppHaptics.selection()
+        submit(retryQuery, shouldAppendUserBubble: shouldAppendUserBubble(for: retryQuery))
+    }
+
+    private func shouldAppendUserBubble(for query: String) -> Bool {
+        guard let failedQuery = lastFailedQuery?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !failedQuery.isEmpty else {
+            return true
+        }
+        return failedQuery != query.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func makeHelpRequestFromPick() {
