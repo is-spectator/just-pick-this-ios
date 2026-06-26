@@ -675,9 +675,11 @@ struct RecommendationOverflowMenu: View {
 
 struct ReferenceWebPreview: View {
     let image: ReferenceImage
+    @State private var imageLoadFailed = false
 
     private var imageURL: URL? {
-        URL(string: image.url)
+        guard !imageLoadFailed else { return nil }
+        return URL(string: image.url)
     }
 
     private var sourceURL: URL? {
@@ -697,27 +699,39 @@ struct ReferenceWebPreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            AsyncImage(url: imageURL) { phase in
-                switch phase {
-                case .success(let loadedImage):
-                    loadedImage
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: 160)
-                        .padding(10)
-                case .failure:
-                    referencePlaceholder(title: "图片加载失败")
-                case .empty:
-                    ProgressView()
-                        .tint(AppTheme.textMuted)
-                        .frame(maxWidth: .infinity, minHeight: 150)
-                @unknown default:
-                    referencePlaceholder(title: "参考图片")
+            if let imageURL {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .success(let loadedImage):
+                        loadedImage
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: 160)
+                            .padding(10)
+                    case .failure:
+                        Color.clear
+                            .task {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    imageLoadFailed = true
+                                }
+                            }
+                    case .empty:
+                        ProgressView()
+                            .tint(AppTheme.textMuted)
+                            .frame(maxWidth: .infinity, minHeight: 150)
+                    @unknown default:
+                        Color.clear
+                            .task {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    imageLoadFailed = true
+                                }
+                            }
+                    }
                 }
+                .frame(maxWidth: .infinity, minHeight: 150)
+                .background(AppTheme.bubble.opacity(0.7))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
-            .frame(maxWidth: .infinity, minHeight: 150)
-            .background(AppTheme.bubble.opacity(0.7))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if let sourceURL {
                 Link(destination: sourceURL) {
@@ -729,7 +743,7 @@ struct ReferenceWebPreview: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(sourceLabel)
+        .accessibilityLabel(imageLoadFailed ? "\(sourceLabel)，图片不可用" : sourceLabel)
     }
 
     private var sourceRow: some View {
@@ -756,16 +770,6 @@ struct ReferenceWebPreview: View {
         .appMinimumTouchTarget()
     }
 
-    private func referencePlaceholder(title: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: "photo")
-                .font(.system(size: 22, weight: .medium))
-            Text(title)
-                .font(.system(size: 12, weight: .medium))
-        }
-        .foregroundStyle(AppTheme.textMuted)
-        .frame(maxWidth: .infinity, minHeight: 150)
-    }
 }
 
 struct RejectIconButton: View {
