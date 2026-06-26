@@ -104,7 +104,7 @@ struct TopBar: View {
                 Color.clear
                     .frame(width: 44, height: 44)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, AppTheme.Spacing.md)
             .frame(height: 50)
         } else {
             ZStack {
@@ -137,14 +137,14 @@ struct TopBar: View {
 
                     if let onNewConversation {
                         Button(action: onNewConversation) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: AppTheme.Spacing.xs) {
                                 Image(systemName: "plus.message")
                                     .font(AppTheme.Icon.action)
                                 Text("新对话")
                                     .font(AppTheme.Typography.action)
                             }
                             .foregroundStyle(AppTheme.text)
-                            .padding(.horizontal, 13)
+                            .padding(.horizontal, AppTheme.Spacing.sm)
                             .frame(height: 40)
                             .background(AppTheme.bubble)
                             .clipShape(Capsule())
@@ -213,7 +213,7 @@ struct BottomComposer: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: AppTheme.Spacing.xs) {
             TextField(placeholder, text: $text, axis: .vertical)
                 .focused($isFocused)
                 .font(AppTheme.Typography.body)
@@ -249,9 +249,9 @@ struct BottomComposer: View {
             .accessibilityLabel("发送")
             .accessibilityHint(canSend ? "发送当前输入" : "输入内容后可以发送")
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 6)
-        .padding(.vertical, 7)
+        .padding(.leading, AppTheme.Spacing.lg)
+        .padding(.trailing, AppTheme.Spacing.xs)
+        .padding(.vertical, AppTheme.Spacing.xs)
         .frame(minHeight: 56, maxHeight: 120)
         .background(AppTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.composer, style: .continuous))
@@ -260,9 +260,9 @@ struct BottomComposer: View {
                 .stroke(isFocused ? AppTheme.primaryAction.opacity(0.9) : AppTheme.border, lineWidth: 1)
         )
         .shadow(color: AppTheme.shadowSubtle, radius: 2, x: 0, y: 1)
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, AppTheme.Spacing.lg)
+        .padding(.top, AppTheme.Spacing.sm)
+        .padding(.bottom, AppTheme.Spacing.xs)
         .background(AppTheme.background)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -303,14 +303,14 @@ struct QueryBubble: View {
                 .font(.system(size: 14))
                 .lineSpacing(2)
                 .foregroundStyle(AppTheme.text)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.xs)
                 .background(AppTheme.bubble)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble, style: .continuous))
                 .frame(maxWidth: 315, alignment: .trailing)
         }
-        .padding(.top, 4)
-        .padding(.bottom, 18)
+        .padding(.top, AppTheme.Spacing.xxs)
+        .padding(.bottom, AppTheme.Spacing.lg)
     }
 }
 
@@ -466,7 +466,7 @@ struct DecisionCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
             if imageURL != nil {
                 heroImage
                     .overlay(alignment: .topTrailing) {
@@ -482,7 +482,7 @@ struct DecisionCard: View {
             }
 
             ZStack(alignment: .topTrailing) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                     if let supportingSubtitle {
                         Text(supportingSubtitle)
                             .font(AppTheme.Typography.recommendationSubtitle)
@@ -520,7 +520,7 @@ struct DecisionCard: View {
                 }
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: AppTheme.Spacing.sm) {
                 Button(action: onAskHuman) {
                     Text("求一个")
                         .font(AppTheme.Typography.primaryButton)
@@ -542,7 +542,7 @@ struct DecisionCard: View {
                     acceptFeedbackCount += 1
                     onAccept()
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: AppTheme.Spacing.xs) {
                         if isAccepting {
                             ProgressView()
                                 .tint(AppTheme.onPrimaryAction)
@@ -566,7 +566,7 @@ struct DecisionCard: View {
             }
         }
         .padding(imageURL == nil ? 22 : 16)
-        .padding(.bottom, 20)
+        .padding(.bottom, AppTheme.Spacing.lg)
         .frame(minHeight: imageURL == nil ? 270 : nil, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.card)

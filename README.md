@@ -514,5 +514,6 @@ xcodebuild \
 - `HELP-003`: 来一句 Deck 的下一张预览固定从右侧露出 12–20pt，静止态也能明确暗示左右滑动。
 - `DS-001`: 卡片、Composer、Deck 和 Drawer 遮罩阴影颜色收进 `AppTheme` token，业务视图不再散落裸 `.black.opacity(...)`。
 - `DS-002`: TopBar、Drawer、Composer 键盘工具、推荐卡按钮和主路径元信息文本接入语义化 `Typography` token，减少固定 `.system(size:)` 并保留 Dynamic Type 适配空间。
+- `DS-003`: TopBar、Composer、用户气泡、推荐卡和 Drawer 行项目的主路径间距接入 `AppTheme.Spacing`，收敛 6/7/13/18 等魔法数字。
 - `DS-004`/`CARD-008`: 主聊天气泡、推荐卡、求一个卡、来一句 Deck 和空状态卡接入语义化 `Radius` token，核心卡片圆角不再散落魔法数字。
 - `DS-005`: 主导航、Drawer 搜索/账号入口、Composer 发送键、推荐/求助卡 `…` 菜单和服务提示图标接入 `AppTheme.Icon` token，主路径 SF Symbols 尺寸和字重统一。

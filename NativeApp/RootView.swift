@@ -834,7 +834,7 @@ private struct ChatDrawer: View {
                     .foregroundStyle(AppTheme.text)
                     .frame(width: 44, height: 44)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(AuthTokenStore.displayName ?? (AuthTokenStore.email == nil ? "登录" : "已登录"))
                         .font(AppTheme.Typography.drawerActionTitle)
                         .foregroundStyle(AppTheme.text)
@@ -1112,7 +1112,7 @@ private struct DrawerActionRow: View {
                     .foregroundStyle(AppTheme.text)
                     .frame(width: 32, height: 32)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(title)
                         .font(AppTheme.Typography.drawerActionTitle)
                         .foregroundStyle(AppTheme.text)
@@ -1128,7 +1128,7 @@ private struct DrawerActionRow: View {
                     Text(badgeCount > 99 ? "99+" : "\(badgeCount)")
                         .font(AppTheme.Typography.drawerBadge)
                         .foregroundStyle(AppTheme.onBadge)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, AppTheme.Spacing.xs)
                         .frame(minWidth: 22, minHeight: 20)
                         .background(AppTheme.red)
                         .clipShape(Capsule())
@@ -1167,7 +1167,7 @@ private struct DrawerHistoryRow: View {
                     .foregroundStyle(isPinned ? AppTheme.text : AppTheme.textMuted)
                     .frame(width: 28, height: 28)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(title)
                         .font(AppTheme.Typography.drawerRowTitle)
                         .foregroundStyle(AppTheme.text)
@@ -1214,7 +1214,7 @@ private struct DrawerSearchResultRow: View {
                     .foregroundStyle(AppTheme.textMuted)
                     .frame(width: 28, height: 28)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
                     Text(title)
                         .font(AppTheme.Typography.drawerRowTitle)
                         .foregroundStyle(AppTheme.text)
