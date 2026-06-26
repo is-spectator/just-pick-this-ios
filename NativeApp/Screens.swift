@@ -1351,9 +1351,36 @@ private struct ChatRecommendationCard: View {
                         )
                             .padding(12)
                     }
-            } else {
-                HStack {
-                    Spacer()
+            }
+
+            ZStack(alignment: .topTrailing) {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let supportingSubtitle {
+                        Text(supportingSubtitle)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(2)
+                    }
+
+                    Text(pick.title)
+                        .font(.system(size: CardTextFitting.recommendationTitleSize(pick.title, hasImage: imageURL != nil, compact: true), weight: .bold))
+                        .lineSpacing(3)
+                        .foregroundStyle(AppTheme.text)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.72)
+
+                    CollapsibleText(
+                        text: decisionReason,
+                        font: .system(size: 18, weight: .medium),
+                        color: AppTheme.textSecondary,
+                        collapsedLineLimit: 3,
+                        lineSpacing: 5,
+                        expandThreshold: 68
+                    )
+                }
+                .padding(.trailing, imageURL == nil ? 44 : 0)
+
+                if imageURL == nil {
                     RecommendationOverflowMenu(
                         feedbackState: feedbackState,
                         onFavorite: onFavorite,
@@ -1361,32 +1388,8 @@ private struct ChatRecommendationCard: View {
                         onChange: markChange,
                         onReportIssue: markIssue
                     )
+                    .offset(x: 8, y: -8)
                 }
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                if let supportingSubtitle {
-                    Text(supportingSubtitle)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(2)
-                }
-
-                Text(pick.title)
-                    .font(.system(size: CardTextFitting.recommendationTitleSize(pick.title, hasImage: imageURL != nil, compact: true), weight: .bold))
-                    .lineSpacing(3)
-                    .foregroundStyle(AppTheme.text)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.72)
-
-                CollapsibleText(
-                    text: decisionReason,
-                    font: .system(size: 18, weight: .medium),
-                    color: AppTheme.textSecondary,
-                    collapsedLineLimit: 3,
-                    lineSpacing: 5,
-                    expandThreshold: 68
-                )
             }
 
             HStack(spacing: 12) {
