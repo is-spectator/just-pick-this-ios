@@ -2835,9 +2835,39 @@ struct ProfileScreen: View {
     }
 }
 
+private enum HelpStatusFilter: String, CaseIterable, Identifiable {
+    case all
+    case draft
+    case collecting
+    case answered
+    case completed
+    case closed
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all:
+            "全部"
+        case .draft:
+            "草稿"
+        case .collecting:
+            "收集中"
+        case .answered:
+            "已有结果"
+        case .completed:
+            "已完成"
+        case .closed:
+            "已关闭"
+        }
+    }
+}
+
 struct MyHelpScreen: View {
     let session: AppSession
     let onSelectHelpDetail: (QuestionHistory) -> Void
+
+    @State private var selectedStatusFilter: HelpStatusFilter = .all
 
     private var helpItems: [QuestionHistory] {
         session.history.filter { item in
@@ -2845,6 +2875,23 @@ struct MyHelpScreen: View {
             || item.status == "waiting_for_human"
             || item.status == "answer_received"
             || item.status == "closed"
+        }
+    }
+
+    private var filteredHelpItems: [QuestionHistory] {
+        switch selectedStatusFilter {
+        case .all:
+            helpItems
+        case .draft:
+            []
+        case .collecting:
+            helpItems.filter { $0.status == "waiting_for_human" }
+        case .answered:
+            helpItems.filter { $0.status == "answer_received" }
+        case .completed:
+            helpItems.filter { $0.status == "completed" || $0.status == "top1" }
+        case .closed:
+            helpItems.filter { $0.status == "closed" }
         }
     }
 
@@ -2873,6 +2920,21 @@ struct MyHelpScreen: View {
         helpItems.filter { $0.status == "closed" }.count
     }
 
+    private var statusSummaries: [(filter: HelpStatusFilter, value: Int, secondary: String?)] {
+        [
+            (.all, draftCount + helpItems.count, nil),
+            (.draft, draftCount, draftCount > 0 ? "待发布" : nil),
+            (.collecting, collectingCount, collectingCount > 0 ? "等来一句" : nil),
+            (.answered, answeredCount, answeredCount > 0 ? "可查看" : nil),
+            (.completed, completedCount, completedCount > 0 ? "已收口" : nil),
+            (.closed, closedCount, closedCount > 0 ? "不再收集" : nil),
+        ]
+    }
+
+    private var showsDraftSection: Bool {
+        currentDraft != nil && (selectedStatusFilter == .all || selectedStatusFilter == .draft)
+    }
+
     private var statusColumns: [GridItem] {
         [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
     }
@@ -2888,45 +2950,102 @@ struct MyHelpScreen: View {
         ) {
             ProductSection(title: "状态") {
                 LazyVGrid(columns: statusColumns, spacing: 10) {
-                    ProfileMetricTile(value: "\(draftCount)", label: "草稿", secondary: draftCount > 0 ? "待发布" : nil)
-                    ProfileMetricTile(value: "\(collectingCount)", label: "收集中", secondary: collectingCount > 0 ? "等来一句" : nil)
-                    ProfileMetricTile(value: "\(answeredCount)", label: "已有结果", secondary: answeredCount > 0 ? "可查看" : nil)
-                    ProfileMetricTile(
-                        value: "\(completedCount)",
-                        label: "已完成",
-                        secondary: completedCount > 0 ? "已收口" : nil
-                    )
-                    ProfileMetricTile(value: "\(closedCount)", label: "已关闭", secondary: closedCount > 0 ? "不再收集" : nil)
+                    ForEach(statusSummaries, id: \.filter) { summary in
+                        HelpStatusFilterTile(
+                            value: "\(summary.value)",
+                            label: summary.filter.label,
+                            secondary: summary.secondary,
+                            isSelected: selectedStatusFilter == summary.filter
+                        ) {
+                            AppHaptics.selection()
+                            selectedStatusFilter = summary.filter
+                        }
+                    }
                 }
             }
 
-            if let currentDraft {
+            if showsDraftSection, let currentDraft {
                 ProductSection(title: "草稿") {
                     RequestCard(request: currentDraft)
                 }
             }
 
-            if !helpItems.isEmpty {
-                ProductSection(title: "求助记录") {
-                    VStack(spacing: 0) {
-                        ForEach(Array(helpItems.enumerated()), id: \.element.id) { index, item in
-                            Button {
-                                onSelectHelpDetail(item)
-                            } label: {
-                                HelpHistoryRow(item: item)
-                            }
-                            .buttonStyle(.plain)
-
-                            if index < helpItems.count - 1 {
-                                Divider()
-                                    .padding(.leading, 16)
-                            }
-                        }
+            if selectedStatusFilter != .draft {
+                ProductSection(title: selectedStatusFilter == .all ? "求助记录" : "\(selectedStatusFilter.label)记录") {
+                    if filteredHelpItems.isEmpty {
+                        ProductEmptyInline(
+                            title: "这个状态下还没有记录",
+                            message: "换个状态看看，或者回到全部。"
+                        )
+                    } else {
+                        helpHistoryList
                     }
-                    .productPanel()
                 }
             }
         }
+    }
+
+    private var helpHistoryList: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(filteredHelpItems.enumerated()), id: \.element.id) { index, item in
+                Button {
+                    onSelectHelpDetail(item)
+                } label: {
+                    HelpHistoryRow(item: item)
+                }
+                .buttonStyle(.plain)
+
+                if index < filteredHelpItems.count - 1 {
+                    Divider()
+                        .padding(.leading, 16)
+                }
+            }
+        }
+        .productPanel()
+    }
+}
+
+private struct HelpStatusFilterTile: View {
+    let value: String
+    let label: String
+    let secondary: String?
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(value)
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                if let secondary {
+                    Text(secondary)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppTheme.green)
+                        .lineLimit(1)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 98, alignment: .topLeading)
+            .background(isSelected ? AppTheme.bubble : AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(isSelected ? AppTheme.text : AppTheme.border, lineWidth: isSelected ? 1.4 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label)，\(value) 条")
+        .accessibilityHint(isSelected ? "当前筛选" : "筛选这个状态")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
