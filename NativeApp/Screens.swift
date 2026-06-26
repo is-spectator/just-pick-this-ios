@@ -1324,12 +1324,14 @@ private struct ChatRecommendationCard: View {
                     .lineLimit(3)
                     .minimumScaleFactor(0.72)
 
-                Text(decisionReason)
-                    .font(.system(size: 18, weight: .medium))
-                    .lineSpacing(5)
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
+                CollapsibleText(
+                    text: decisionReason,
+                    font: .system(size: 18, weight: .medium),
+                    color: AppTheme.textSecondary,
+                    collapsedLineLimit: 3,
+                    lineSpacing: 5,
+                    expandThreshold: 68
+                )
             }
 
             HStack(spacing: 12) {
@@ -4079,11 +4081,14 @@ private struct ProductHeroHeader: View {
                 Text(title)
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(AppTheme.text)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
 
                 Text(subtitle)
                     .font(.system(size: 14))
                     .lineSpacing(4)
                     .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(3)
             }
         }
         .padding(18)
@@ -4123,11 +4128,13 @@ private struct ProductEmptyState: View {
             Text(title)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppTheme.text)
+                .lineLimit(2)
 
             Text(message)
                 .font(.system(size: 14))
                 .lineSpacing(4)
                 .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(3)
         }
         .productPanel()
         .accessibilityElement(children: .combine)
@@ -4154,10 +4161,12 @@ private struct ProductActionCard: View {
                 Text(title)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(AppTheme.text)
+                    .lineLimit(2)
                 Text(subtitle)
                     .font(.system(size: 13))
                     .lineSpacing(3)
                     .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(3)
             }
 
             Spacer()
@@ -4518,10 +4527,12 @@ private struct ProductEmptyInline: View {
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppTheme.text)
+                .lineLimit(2)
             Text(message)
                 .font(.system(size: 13))
                 .lineSpacing(3)
                 .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(3)
         }
         .productPanel()
     }
@@ -4786,6 +4797,7 @@ private struct ProfileMessageRow: View {
                 Text(event.title)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppTheme.text)
+                    .lineLimit(2)
                 Text(event.body)
                     .font(.system(size: 13))
                     .lineSpacing(3)

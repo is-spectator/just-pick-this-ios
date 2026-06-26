@@ -491,12 +491,14 @@ struct DecisionCard: View {
                     .lineLimit(3)
                     .minimumScaleFactor(0.74)
 
-                Text(decisionReason)
-                    .font(.system(size: 20, weight: .medium))
-                    .lineSpacing(5)
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                CollapsibleText(
+                    text: decisionReason,
+                    font: .system(size: 20, weight: .medium),
+                    color: AppTheme.textSecondary,
+                    collapsedLineLimit: 2,
+                    lineSpacing: 5,
+                    expandThreshold: 54
+                )
             }
 
             HStack(spacing: 12) {
