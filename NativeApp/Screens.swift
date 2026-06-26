@@ -82,6 +82,7 @@ struct InputScreen: View {
     @State private var lastFailedQuery: String?
     @State private var sharePayload: CardSharePayload?
     @AppStorage("recent_decision_location_labels") private var recentDecisionLocationLabelsRaw = ""
+    @AppStorage("active_decision_location_context") private var activeDecisionLocationRaw = ""
 
     private var recentDecisionLocationLabels: [String] {
         recentDecisionLocationLabelsRaw
@@ -173,6 +174,9 @@ struct InputScreen: View {
         .onDisappear {
             submitTask?.cancel()
             toastTask?.cancel()
+        }
+        .onAppear {
+            restoreDecisionLocation()
         }
         .sheet(isPresented: $showsLocationPicker) {
             LocationPickerSheet(
@@ -423,6 +427,7 @@ struct InputScreen: View {
             if let location = await DeviceLocationProvider.shared.currentDecisionLocation() {
                 decisionLocation = location
                 manualLocationText = location.label
+                persistDecisionLocation(location)
                 rememberDecisionLocation(location.label)
                 locationMessage = "已使用当前位置。"
                 showsLocationPicker = false
@@ -439,6 +444,7 @@ struct InputScreen: View {
             return
         }
         decisionLocation = location
+        persistDecisionLocation(location)
         rememberDecisionLocation(location.label)
         locationMessage = "已使用\(location.label)。"
         showsLocationPicker = false
@@ -448,6 +454,7 @@ struct InputScreen: View {
         guard let location = DecisionLocationContext.manual(label) else { return }
         decisionLocation = location
         manualLocationText = location.label
+        persistDecisionLocation(location)
         rememberDecisionLocation(location.label)
         locationMessage = "已使用\(location.label)。"
         showsLocationPicker = false
@@ -456,8 +463,27 @@ struct InputScreen: View {
     private func clearDecisionLocation() {
         decisionLocation = nil
         manualLocationText = ""
+        activeDecisionLocationRaw = ""
         locationMessage = nil
         showsLocationPicker = false
+    }
+
+    private func restoreDecisionLocation() {
+        guard decisionLocation == nil,
+              let data = activeDecisionLocationRaw.data(using: .utf8),
+              let location = try? JSONDecoder().decode(DecisionLocationContext.self, from: data) else {
+            return
+        }
+        decisionLocation = location
+        manualLocationText = location.label
+    }
+
+    private func persistDecisionLocation(_ location: DecisionLocationContext) {
+        guard let data = try? JSONEncoder().encode(location),
+              let encoded = String(data: data, encoding: .utf8) else {
+            return
+        }
+        activeDecisionLocationRaw = encoded
     }
 
     private func rememberDecisionLocation(_ label: String) {

@@ -155,7 +155,7 @@ enum SubmitState: Equatable {
     case loading
 }
 
-struct DecisionLocationContext: Equatable, Sendable {
+struct DecisionLocationContext: Equatable, Codable, Sendable {
     let label: String
     let city: String?
     let area: String?
