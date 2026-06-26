@@ -2841,7 +2841,7 @@ struct MyHelpScreen: View {
     var body: some View {
         ProductListScreen(
             title: "我的求一个",
-            subtitle: "草稿、收集中和已有结果都在这里。",
+            subtitle: "草稿、收集中、已有结果、已完成和已关闭都在这里。",
             systemImage: "questionmark.bubble",
             emptyTitle: "还没有求一个",
             emptyMessage: "在聊天里点“求一个”，发出去后就会出现在这里。",
@@ -2855,8 +2855,9 @@ struct MyHelpScreen: View {
                     ProfileMetricTile(
                         value: "\(completedCount)",
                         label: "已完成",
-                        secondary: closedCount > 0 ? "\(closedCount) 已关闭" : nil
+                        secondary: completedCount > 0 ? "已收口" : nil
                     )
+                    ProfileMetricTile(value: "\(closedCount)", label: "已关闭", secondary: closedCount > 0 ? "不再收集" : nil)
                 }
             }
 
