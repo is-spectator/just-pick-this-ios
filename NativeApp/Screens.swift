@@ -2915,9 +2915,9 @@ struct ProfileScreen: View {
                 .padding(16)
             }
             .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.panel, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.panel, style: .continuous)
                     .stroke(AppTheme.border, lineWidth: 1)
             )
         }
@@ -4182,9 +4182,9 @@ private struct ProductPageLoadingSkeleton: View {
                 }
             }
             .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.panel, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.panel, style: .continuous)
                     .stroke(AppTheme.border, lineWidth: 1)
             )
         }
@@ -4217,7 +4217,7 @@ private struct ProductHeroHeader: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: systemImage)
-                .font(.system(size: 22, weight: .semibold))
+                .font(AppTheme.Icon.productHero)
                 .foregroundStyle(AppTheme.text)
                 .frame(width: 48, height: 48)
                 .background(AppTheme.bubble)
@@ -4240,9 +4240,9 @@ private struct ProductHeroHeader: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chatCard, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.chatCard, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
     }
@@ -4268,7 +4268,7 @@ private struct ProductEmptyState: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Image(systemName: systemImage)
-                .font(.system(size: 24, weight: .semibold))
+                .font(AppTheme.Icon.productEmpty)
                 .foregroundStyle(AppTheme.textMuted)
 
             Text(title)
@@ -4297,7 +4297,7 @@ private struct ProductActionCard: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
+                .font(AppTheme.Icon.productAction)
                 .foregroundStyle(AppTheme.onPrimaryAction)
                 .frame(width: 44, height: 44)
                 .background(AppTheme.primaryAction)
@@ -4325,9 +4325,9 @@ private struct ProductActionCard: View {
         }
         .padding(16)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.panel, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.panel, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
@@ -4744,9 +4744,9 @@ private extension View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.panel, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.panel, style: .continuous)
                     .stroke(AppTheme.border, lineWidth: 1)
             )
     }
