@@ -2363,6 +2363,18 @@ final class AppSession {
         persistFavoriteState()
     }
 
+    func restoreFavoriteChoice(_ item: QuestionHistory) {
+        favoriteChoices.removeAll { $0.id == item.id }
+        hiddenFavoriteChoiceIds.remove(item.id)
+        favoriteChoices.insert(item, at: 0)
+        persistFavoriteState()
+    }
+
+    func unhideFavoriteChoice(id: UUID) {
+        hiddenFavoriteChoiceIds.remove(id)
+        persistFavoriteState()
+    }
+
     func deleteHistoryItem(id: UUID) {
         history.removeAll { $0.id == id }
         persistHistory()

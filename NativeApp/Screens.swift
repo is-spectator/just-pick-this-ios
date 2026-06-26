@@ -3187,6 +3187,8 @@ struct FavoritesScreen: View {
     let onSelectHistory: (QuestionHistory) -> Void
 
     @State private var localNotice: ServiceNotice?
+    @State private var removedFavoriteSnapshot: FavoriteRemovalSnapshot?
+    @State private var noticeTask: Task<Void, Never>?
 
     private var savedChoices: [QuestionHistory] {
         let historyChoices = session.history.filter { item in
@@ -3210,7 +3212,11 @@ struct FavoritesScreen: View {
             isEmpty: savedChoices.isEmpty
         ) {
             if let localNotice {
-                ServiceNoticePill(notice: localNotice)
+                if removedFavoriteSnapshot == nil {
+                    ServiceNoticePill(notice: localNotice)
+                } else {
+                    FavoriteUndoNotice(notice: localNotice, onUndo: undoRemoveFavorite)
+                }
             }
 
             if !savedChoices.isEmpty {
@@ -3227,15 +3233,84 @@ struct FavoritesScreen: View {
                 }
             }
         }
+        .onDisappear {
+            noticeTask?.cancel()
+        }
     }
 
     private func removeFavorite(_ item: QuestionHistory) {
+        removedFavoriteSnapshot = FavoriteRemovalSnapshot(
+            item: item,
+            wasExplicitFavorite: session.favoriteChoices.contains(where: { $0.id == item.id })
+        )
         session.removeFavoriteChoice(id: item.id)
         localNotice = ServiceNotice(
             title: "已取消收藏",
             detail: "\(item.topPick?.title ?? item.query) 已从收藏里移除。"
         )
         AppHaptics.selection()
+        scheduleNoticeClear(for: "已取消收藏")
+    }
+
+    private func undoRemoveFavorite() {
+        guard let snapshot = removedFavoriteSnapshot else { return }
+        noticeTask?.cancel()
+        if snapshot.wasExplicitFavorite {
+            session.restoreFavoriteChoice(snapshot.item)
+        } else {
+            session.unhideFavoriteChoice(id: snapshot.item.id)
+        }
+        removedFavoriteSnapshot = nil
+        localNotice = ServiceNotice(
+            title: "已恢复收藏",
+            detail: "\(snapshot.item.topPick?.title ?? snapshot.item.query) 已回到收藏。"
+        )
+        AppHaptics.success()
+        scheduleNoticeClear(for: "已恢复收藏")
+    }
+
+    private func scheduleNoticeClear(for title: String) {
+        noticeTask?.cancel()
+        noticeTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(2_200))
+            guard !Task.isCancelled else { return }
+            if localNotice?.title == title {
+                localNotice = nil
+            }
+            if title == "已取消收藏" {
+                removedFavoriteSnapshot = nil
+            }
+        }
+    }
+}
+
+private struct FavoriteRemovalSnapshot {
+    let item: QuestionHistory
+    let wasExplicitFavorite: Bool
+}
+
+private struct FavoriteUndoNotice: View {
+    let notice: ServiceNotice
+    let onUndo: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            ServiceNoticePill(notice: notice)
+
+            Button("撤销", action: onUndo)
+                .font(AppTheme.Typography.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.text)
+                .frame(minWidth: 52, minHeight: 40)
+                .background(AppTheme.card)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(AppTheme.border, lineWidth: 1)
+                )
+                .buttonStyle(.plain)
+                .accessibilityHint("恢复刚才取消的收藏")
+        }
+        .accessibilityElement(children: .contain)
     }
 }
 
