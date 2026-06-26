@@ -1562,6 +1562,7 @@ struct AskScreen: View {
     @State private var isPublishing = false
     @State private var toastMessage = "发出去了，等别人来一句。"
     @State private var showsToast = false
+    @State private var showsCloseConfirmation = false
     @State private var publishFeedbackCount = 0
     @State private var publishTask: Task<Void, Never>?
     @State private var pollTask: Task<Void, Never>?
@@ -1602,6 +1603,10 @@ struct AskScreen: View {
                             }
                             .padding(.top, 20)
                         }
+                        if canCloseHelpRequest {
+                            closeHelpButton
+                                .padding(.top, 12)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 18)
@@ -1629,6 +1634,44 @@ struct AskScreen: View {
             pollTask?.cancel()
         }
         .sensoryFeedback(.selection, trigger: publishFeedbackCount)
+        .confirmationDialog("关闭这张求一个？", isPresented: $showsCloseConfirmation, titleVisibility: .visible) {
+            Button("关闭求助", role: .destructive) {
+                closeHelpRequest()
+            }
+            Button("继续等", role: .cancel) {}
+        } message: {
+            Text("关闭后不会继续收集来一句，但你还能在“我的求一个”里回看。")
+        }
+    }
+
+    private var canCloseHelpRequest: Bool {
+        switch session.helpRequest.status {
+        case .draft, .published, .answered:
+            true
+        case .completed, .closed:
+            false
+        }
+    }
+
+    private var closeHelpButton: some View {
+        Button {
+            guard !isPublishing else { return }
+            showsCloseConfirmation = true
+        } label: {
+            Text("关闭求助")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(AppTheme.red)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(AppTheme.surface)
+                .overlay(
+                    Capsule()
+                        .stroke(AppTheme.red.opacity(0.28), lineWidth: 1)
+                )
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("关闭求助")
     }
 
     private func publish() {
@@ -1649,6 +1692,22 @@ struct AskScreen: View {
         }
     }
 
+    private func closeHelpRequest() {
+        guard canCloseHelpRequest, !isPublishing else { return }
+        publishTask?.cancel()
+        pollTask?.cancel()
+        session.closeCurrentHelpRequest()
+        AppHaptics.success()
+        toastMessage = "已关闭，不再继续收集来一句。"
+        showsToast = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else { return }
+            showsToast = false
+            onHome()
+        }
+    }
+
     private func goBack() {
         guard !isPublishing else { return }
         if session.helpRequest.status == .draft {
@@ -1660,6 +1719,7 @@ struct AskScreen: View {
 
     private func startPolling() {
         pollTask?.cancel()
+        guard session.helpRequest.status == .published || session.helpRequest.status == .answered else { return }
         pollTask = Task { @MainActor in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
@@ -2835,6 +2895,8 @@ struct HelpResultDetailScreen: View {
 
     private func status(from raw: String) -> HelpRequestStatus {
         switch raw {
+        case "closed":
+            .closed
         case "completed", "top1":
             .completed
         case "answer_received":

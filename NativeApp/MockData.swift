@@ -51,6 +51,8 @@ struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
             "等人来一句"
         case "answer_received":
             "已收到一句"
+        case "closed":
+            "已关闭"
         default:
             "处理中"
         }
@@ -88,6 +90,7 @@ enum HelpRequestStatus: String, Codable, Hashable, Sendable {
     case published
     case answered
     case completed
+    case closed
 
     var label: String {
         switch self {
@@ -99,6 +102,8 @@ enum HelpRequestStatus: String, Codable, Hashable, Sendable {
             "已收到一句"
         case .completed:
             "已采纳"
+        case .closed:
+            "已关闭"
         }
     }
 }
@@ -1601,7 +1606,9 @@ private struct V1HelpCardSummary: Decodable {
             .published
         case "final_ready", "answered":
             .answered
-        case "closed", "completed":
+        case "closed":
+            .closed
+        case "completed":
             .completed
         default:
             .draft
@@ -2241,6 +2248,18 @@ final class AppSession {
         return false
     }
 
+    func closeCurrentHelpRequest() {
+        guard currentHelpRequest != nil else { return }
+        currentHelpRequest?.status = .closed
+        let request = helpRequest
+        upsertLocalHistory(
+            query: request.title,
+            status: "closed",
+            helpRequestId: request.id,
+            topPick: currentTopPick
+        )
+    }
+
     func loadAnswerQueue() async {
         #if DEBUG
         if documentationDemo == "answer", !answerQueue.isEmpty {
@@ -2508,7 +2527,7 @@ final class AppSession {
             return true
         }
 
-        return item.status == "waiting_for_human" || item.status == "answer_received"
+        return item.status == "waiting_for_human" || item.status == "answer_received" || item.status == "closed"
     }
 
     private func fallbackHelpRequest(for item: QuestionHistory) -> HelpRequest {
@@ -2545,6 +2564,8 @@ final class AppSession {
 
     private func helpRequestStatus(for item: QuestionHistory) -> HelpRequestStatus {
         switch item.status {
+        case "closed":
+            .closed
         case "completed":
             .completed
         case "answer_received":
