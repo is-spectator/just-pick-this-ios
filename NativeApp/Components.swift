@@ -306,7 +306,7 @@ struct QueryBubble: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(AppTheme.bubble)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble, style: .continuous))
                 .frame(maxWidth: 315, alignment: .trailing)
         }
         .padding(.top, 4)
@@ -570,9 +570,9 @@ struct DecisionCard: View {
         .frame(minHeight: imageURL == nil ? 270 : nil, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: AppTheme.shadowCard, radius: 22, x: 0, y: 12)
@@ -626,7 +626,7 @@ struct DecisionCard: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 228)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
             .clipped()
             .accessibilityHidden(true)
         }
@@ -749,7 +749,7 @@ struct ReferenceWebPreview: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 150)
                 .background(AppTheme.bubble.opacity(0.7))
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.preview, style: .continuous))
             }
 
             if let sourceURL {
@@ -1328,9 +1328,9 @@ struct AnswerRequestSquareCard: View {
         .frame(maxWidth: .infinity)
         .aspectRatio(1, contentMode: .fit)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: AppTheme.shadowElevated, radius: 24, x: 0, y: 10)
@@ -1409,9 +1409,9 @@ private extension View {
     func cardStyle() -> some View {
         padding(22)
             .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
                     .stroke(AppTheme.border, lineWidth: 1)
             )
             .shadow(color: AppTheme.shadowElevated, radius: 24, x: 0, y: 10)

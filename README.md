@@ -513,3 +513,4 @@ xcodebuild \
 - `DS-006`: Drawer 搜索清空按钮和聊天 notice 操作按钮补齐最小触控区域，避免小图标/小胶囊按钮难点。
 - `HELP-003`: 来一句 Deck 的下一张预览固定从右侧露出 12–20pt，静止态也能明确暗示左右滑动。
 - `DS-001`: 卡片、Composer、Deck 和 Drawer 遮罩阴影颜色收进 `AppTheme` token，业务视图不再散落裸 `.black.opacity(...)`。
+- `DS-004`/`CARD-008`: 主聊天气泡、推荐卡、求一个卡、来一句 Deck 和空状态卡接入语义化 `Radius` token，核心卡片圆角不再散落魔法数字。

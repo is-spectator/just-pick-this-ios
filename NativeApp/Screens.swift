@@ -597,9 +597,9 @@ private struct DecisionLocationBar: View {
             .padding(.horizontal, 12)
             .frame(minHeight: 52)
             .background(AppTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.bubble, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.bubble, style: .continuous)
                     .stroke(AppTheme.border, lineWidth: 1)
             )
             .padding(.horizontal, 18)
@@ -1444,9 +1444,9 @@ private struct ChatRecommendationCard: View {
         .frame(minHeight: imageURL == nil ? 270 : nil, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: AppTheme.shadowCard, radius: 22, x: 0, y: 12)
@@ -1501,7 +1501,7 @@ private struct ChatRecommendationCard: View {
             .frame(maxWidth: .infinity)
             .frame(height: 228)
             .background(AppTheme.bubble)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
             .accessibilityHidden(true)
         }
     }
@@ -1581,9 +1581,9 @@ private struct ChatHelpCard: View {
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chatCard, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.chatCard, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: AppTheme.shadowSubtle, radius: 14, x: 0, y: 8)
@@ -2275,9 +2275,9 @@ struct HelpDeckCard: View {
         }
         .padding(24)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: AppTheme.shadowCard, radius: 22, x: 0, y: 12)
@@ -2331,9 +2331,9 @@ struct HelpDeckLoadingCard: View {
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .onAppear {
@@ -2385,7 +2385,7 @@ struct ServiceNoticePill: View {
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(notice.title == "皮皮" ? AppTheme.card : AppTheme.orangeBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.notice, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(notice.title), \(notice.detail)")
     }
@@ -2442,9 +2442,9 @@ struct EmptyAnswerQueueCard: View {
         .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.card, style: .continuous)
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: AppTheme.shadowElevated, radius: 24, x: 0, y: 10)

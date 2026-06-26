@@ -49,10 +49,17 @@ enum AppTheme {
     }
 
     enum Radius {
+        static let notice: CGFloat = 12
         static let chip: CGFloat = 14
+        static let preview: CGFloat = 16
+        static let bubble: CGFloat = 18
+        static let panel: CGFloat = 20
+        static let media: CGFloat = 22
+        static let chatCard: CGFloat = 22
         static let composer: CGFloat = 24
         static let card: CGFloat = 24
         static let sheet: CGFloat = 28
+        static let featureCard: CGFloat = 28
     }
 
     enum Typography {
