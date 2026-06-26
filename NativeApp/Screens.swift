@@ -3884,6 +3884,7 @@ private struct RewardStatusFilterTile: View {
 }
 
 struct MessagesScreen: View {
+    let onEventsLoaded: ([UserLightEvent]) -> Void
     let onMarkRead: ([UserLightEvent]) -> Void
     let onOpenEvent: (UserLightEvent) -> Void
 
@@ -3906,6 +3907,7 @@ struct MessagesScreen: View {
                         ForEach(Array(snapshot.lightEvents.enumerated()), id: \.element.id) { index, event in
                             Button {
                                 AppHaptics.selection()
+                                onMarkRead([event])
                                 onOpenEvent(event)
                             } label: {
                                 ProfileMessageRow(event: event)
@@ -3924,8 +3926,28 @@ struct MessagesScreen: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ProductRefreshToolbarButton(isLoading: isLoading) {
-                    Task { await loadSnapshot() }
+                HStack(spacing: 10) {
+                    if !snapshot.lightEvents.isEmpty {
+                        Button {
+                            AppHaptics.selection()
+                            onMarkRead(snapshot.lightEvents)
+                        } label: {
+                            Text("全部已读")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppTheme.text)
+                                .padding(.horizontal, 10)
+                                .frame(minHeight: 36)
+                                .background(AppTheme.bubble)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isLoading)
+                        .accessibilityHint("清除消息中心未读红点")
+                    }
+
+                    ProductRefreshToolbarButton(isLoading: isLoading) {
+                        Task { await loadSnapshot() }
+                    }
                 }
             }
         }
@@ -3943,7 +3965,7 @@ struct MessagesScreen: View {
         isLoading = true
         snapshot = await ProfileAPIService().fetchSnapshot()
         isLoading = false
-        onMarkRead(snapshot.lightEvents)
+        onEventsLoaded(snapshot.lightEvents)
     }
 }
 

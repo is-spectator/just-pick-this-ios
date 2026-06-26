@@ -187,6 +187,7 @@ struct RootView: View {
                     )
                 case .messages:
                     MessagesScreen(
+                        onEventsLoaded: noteLightEventsLoaded,
                         onMarkRead: markLightEventsRead,
                         onOpenEvent: openLightEvent
                     )
@@ -399,10 +400,18 @@ struct RootView: View {
 
     private func markLightEventsRead(_ events: [UserLightEvent]) {
         var seen = seenLightEventIDs()
-        seen.formUnion(latestLightEventIDs)
+        if latestLightEventIDs.isEmpty {
+            latestLightEventIDs.formUnion(events.map(\.id))
+        }
         seen.formUnion(events.map(\.id))
         seenLightEventIDsRaw = seen.sorted().joined(separator: ",")
-        unreadLightCount = 0
+        unreadLightCount = latestLightEventIDs.subtracting(seen).count
+    }
+
+    private func noteLightEventsLoaded(_ events: [UserLightEvent]) {
+        let ids = Set(events.map(\.id))
+        latestLightEventIDs = ids
+        unreadLightCount = ids.subtracting(seenLightEventIDs()).count
     }
 
     private func seenLightEventIDs() -> Set<String> {
