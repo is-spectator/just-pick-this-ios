@@ -775,7 +775,7 @@ private struct ChatDrawer: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppTheme.textMuted)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 44, height: 44)
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)

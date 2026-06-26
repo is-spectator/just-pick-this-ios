@@ -1204,6 +1204,7 @@ private struct AssistantNoticeRow: View {
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .appMinimumTouchTarget()
                     .accessibilityLabel(actionTitle)
                 }
             }
