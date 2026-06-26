@@ -33,6 +33,12 @@ struct ServiceNotice: Equatable, Sendable {
     }
 }
 
+struct PublishHelpResult: Sendable {
+    let request: HelpRequest
+    let didPublish: Bool
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -208,7 +214,7 @@ enum CardFeedbackAction: String, Sendable {
 
 protocol RecommendationService: Sendable {
     func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult
-    func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest
+    func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult
     func refresh(_ request: HelpRequest) async -> HelpRequest
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
@@ -281,7 +287,7 @@ struct BackendRecommendationService: RecommendationService {
         ))
     }
 
-    func publish(_ helpRequest: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest {
+    func publish(_ helpRequest: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult {
         do {
             let response: V1ChatTurnResponse = try await perform(makeRequest(
                 path: "/v1/chat/turn",
@@ -294,9 +300,14 @@ struct BackendRecommendationService: RecommendationService {
                     metadata: ["help_card_id": helpRequest.id.uuidString]
                 )
             ))
-            return response.helpCards?.first?.model(fallbackTitle: helpRequest.title) ?? publishedFallback(helpRequest)
+            let published = response.helpCards?.first?.model(fallbackTitle: helpRequest.title) ?? publishedFallback(helpRequest)
+            return PublishHelpResult(request: published, didPublish: true, notice: nil)
         } catch {
-            return publishedFallback(helpRequest)
+            return PublishHelpResult(
+                request: helpRequest,
+                didPublish: false,
+                notice: MockData.publishUnavailableNotice(error: error)
+            )
         }
     }
 
@@ -1815,10 +1826,10 @@ struct MockCloudRecommendationService: RecommendationService {
         )
     }
 
-    func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest {
+    func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult {
         var updated = request
         updated.status = .published
-        return updated
+        return PublishHelpResult(request: updated, didPublish: true, notice: nil)
     }
 
     func refresh(_ request: HelpRequest) async -> HelpRequest {
@@ -2234,12 +2245,15 @@ final class AppSession {
         currentHelpRequest?.context += "\n补充: \(supplement)"
     }
 
-    func publishCurrentRequest() async {
+    func publishCurrentRequest() async -> Bool {
         ensureHelpRequest()
-        guard let request = currentHelpRequest else { return }
-        let published = await service.publish(request, sessionId: sessionId, questionId: currentQuestionId)
-        currentHelpRequest = published
-        upsertLocalHistory(query: published.title, status: "waiting_for_human", helpRequestId: published.id, topPick: currentTopPick)
+        guard let request = currentHelpRequest else { return false }
+        let result = await service.publish(request, sessionId: sessionId, questionId: currentQuestionId)
+        currentHelpRequest = result.request
+        serviceNotice = result.notice
+        guard result.didPublish else { return false }
+        upsertLocalHistory(query: result.request.title, status: "waiting_for_human", helpRequestId: result.request.id, topPick: currentTopPick)
+        return true
     }
 
     func refreshCurrentHelpRequest() async -> Bool {
@@ -2651,6 +2665,13 @@ enum MockData {
         ServiceNotice(
             title: "皮皮",
             detail: "这轮没连上服务，原话我先留着。你可以重试，或者改一句再发。"
+        )
+    }
+
+    static func publishUnavailableNotice(error _: Error) -> ServiceNotice {
+        ServiceNotice(
+            title: "皮皮",
+            detail: "这次没发出去，草稿还在。你可以重试。"
         )
     }
 

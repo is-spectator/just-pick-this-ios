@@ -362,13 +362,18 @@ struct InputScreen: View {
         dismissKeyboard()
         isPublishingHelp = true
         Task { @MainActor in
-            await session.publishCurrentRequest()
+            let didPublish = await session.publishCurrentRequest()
             if let updated = session.currentHelpRequest {
                 updateHelpEntry(updated)
             }
-            AppHaptics.success()
             isPublishingHelp = false
-            entries.append(.notice(UUID(), ServiceNotice(title: "皮皮", detail: "发出去了，等懂的人来一句。")))
+            if didPublish {
+                AppHaptics.success()
+                entries.append(.notice(UUID(), ServiceNotice(title: "皮皮", detail: "发出去了，等懂的人来一句。")))
+            } else if let notice = session.serviceNotice {
+                AppHaptics.warning()
+                entries.append(.notice(UUID(), notice))
+            }
         }
     }
 
@@ -1779,15 +1784,22 @@ struct AskScreen: View {
         isPublishing = true
         publishTask?.cancel()
         publishTask = Task { @MainActor in
-            await session.publishCurrentRequest()
-            AppHaptics.success()
+            let didPublish = await session.publishCurrentRequest()
             isPublishing = false
-            toastMessage = "发出去了，等别人来一句。"
+            if didPublish {
+                AppHaptics.success()
+                toastMessage = "发出去了，等别人来一句。"
+            } else {
+                AppHaptics.warning()
+                toastMessage = session.serviceNotice?.detail ?? "这次没发出去，草稿还在。你可以重试。"
+            }
             showsToast = true
             try? await Task.sleep(for: .milliseconds(650))
             guard !Task.isCancelled else { return }
             showsToast = false
-            onHome()
+            if didPublish {
+                onHome()
+            }
         }
     }
 
