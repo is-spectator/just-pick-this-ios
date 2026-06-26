@@ -379,6 +379,7 @@ struct CollapsibleText: View {
     var lineSpacing: CGFloat = 4
     var expandThreshold: Int = 78
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
 
     private var trimmedText: String {
@@ -400,7 +401,7 @@ struct CollapsibleText: View {
 
             if shouldOfferExpansion {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                         isExpanded.toggle()
                     }
                 } label: {
@@ -1380,6 +1381,8 @@ struct ToastView: View {
     let message: String
     let isVisible: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack {
             Spacer()
@@ -1391,8 +1394,8 @@ struct ToastView: View {
                 .background(AppTheme.primaryAction)
                 .clipShape(Capsule())
                 .opacity(isVisible ? 1 : 0)
-                .offset(y: isVisible ? 0 : 8)
-                .animation(.easeOut(duration: 0.22), value: isVisible)
+                .offset(y: reduceMotion ? 0 : (isVisible ? 0 : 8))
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: isVisible)
         }
         .padding(.bottom, 110)
         .allowsHitTesting(false)

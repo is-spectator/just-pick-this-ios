@@ -43,6 +43,8 @@ private struct ActivityShareSheet: UIViewControllerRepresentable {
 }
 
 struct InputScreen: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let session: AppSession
     let showsMessageBadge: Bool
     let onDecision: (RecommendationDecision) -> Void
@@ -85,6 +87,10 @@ struct InputScreen: View {
                 "大同古城"
             ]
         )
+    }
+
+    private var newConversationToastTransition: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top))
     }
 
     var body: some View {
@@ -190,10 +196,10 @@ struct InputScreen: View {
                     .background(AppTheme.primaryAction)
                     .clipShape(Capsule())
                     .padding(.top, 8)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(newConversationToastTransition)
             }
         }
-        .animation(.easeOut(duration: 0.18), value: session.isSubmitting)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: session.isSubmitting)
     }
 
     @ViewBuilder
@@ -378,7 +384,7 @@ struct InputScreen: View {
 
     private func scrollToBottom(with proxy: ScrollViewProxy) {
         DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.2)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                 if session.isSubmitting {
                     proxy.scrollTo("thinking", anchor: .bottom)
                 } else if let last = entries.last {
@@ -399,13 +405,13 @@ struct InputScreen: View {
 
     private func showNewConversationToast() {
         toastTask?.cancel()
-        withAnimation(.easeOut(duration: 0.18)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
             showsNewConversationToast = true
         }
         toastTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_400_000_000)
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.18)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                 showsNewConversationToast = false
             }
         }
