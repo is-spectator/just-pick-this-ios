@@ -525,3 +525,4 @@ xcodebuild \
 - `DS-002`: 产品页 Hero、空状态、ActionCard、收藏行和求助详情行接入产品语义 Typography token，继续收敛固定字号并保留 Dynamic Type 适配。
 - `STATE-005`/`DS-002`: 产品页刷新按钮补充轻触感反馈，产品内联空态文案也改用语义 Typography token。
 - `HELP-001`/`HELP-006`/`DS-002`: 来一句 Deck 标题、奖励、说明和空状态操作接入语义 Typography token，空 Deck 的刷新/回聊天操作补充轻触感反馈。
+- `CARD-005`/`CARD-006`/`DS-002`/`STATE-005`: 求一个卡、状态摘要、结构化信息和来一句方卡接入语义 Typography token，主按钮补充轻触感反馈。

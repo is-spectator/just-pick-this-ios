@@ -1011,7 +1011,7 @@ struct RequestCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("求一个")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(AppTheme.Typography.requestEyebrow)
                     .tracking(1.6)
                     .foregroundStyle(AppTheme.textMuted)
 
@@ -1019,17 +1019,17 @@ struct RequestCard: View {
 
                 if let reward {
                     Text(reward)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppTheme.Typography.requestReward)
                         .foregroundStyle(AppTheme.green)
                 } else {
                     Text(request.status.label)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AppTheme.Typography.requestSummaryLabel)
                         .foregroundStyle(AppTheme.textMuted)
                 }
             }
 
             Text(request.title)
-                .font(.system(size: CardTextFitting.requestTitleSize(request.title), weight: .semibold))
+                .font(AppTheme.Typography.requestTitle(size: CardTextFitting.requestTitleSize(request.title)))
                 .lineSpacing(2)
                 .foregroundStyle(AppTheme.text)
                 .lineLimit(3)
@@ -1038,7 +1038,7 @@ struct RequestCard: View {
 
             CollapsibleText(
                 text: request.context,
-                font: .system(size: 13),
+                font: AppTheme.Typography.requestBody,
                 color: AppTheme.textSecondary,
                 collapsedLineLimit: 3,
                 lineSpacing: 4,
@@ -1055,18 +1055,18 @@ struct RequestCard: View {
             if !request.answers.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("已收到一句")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AppTheme.Typography.requestSummaryLabel)
                         .foregroundStyle(AppTheme.textMuted)
 
                     ForEach(request.answers) { answer in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(answer.text)
-                                .font(.system(size: 15, weight: .medium))
+                                .font(AppTheme.Typography.requestAnswer)
                                 .lineSpacing(4)
                                 .foregroundStyle(AppTheme.text)
 
                             Text("\(answer.nickname) · \(answer.timeLabel)")
-                                .font(.system(size: 12))
+                                .font(AppTheme.Typography.requestAnswerMeta)
                                 .foregroundStyle(AppTheme.textMuted)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1137,7 +1137,7 @@ struct HelpRequestStatusSummary: View {
     var body: some View {
         HStack(alignment: .top, spacing: 11) {
             Image(systemName: statusIcon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppTheme.Icon.small)
                 .foregroundStyle(statusColor)
                 .frame(width: 30, height: 30)
                 .background(statusColor.opacity(0.12))
@@ -1146,11 +1146,11 @@ struct HelpRequestStatusSummary: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Text(request.status.label)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppTheme.Typography.requestStatus)
                         .foregroundStyle(statusColor)
 
                     Text(request.rewardLabel)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppTheme.Typography.requestReward)
                         .foregroundStyle(AppTheme.green)
                 }
 
@@ -1197,12 +1197,12 @@ struct HelpStructuredSummary: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .top, spacing: 10) {
                     Text(row.0)
-                        .font(.system(size: compact ? 11 : 12, weight: .medium))
+                        .font(compact ? AppTheme.Typography.requestSummaryLabelCompact : AppTheme.Typography.requestSummaryLabel)
                         .foregroundStyle(AppTheme.textMuted)
                         .frame(width: compact ? 58 : 70, alignment: .leading)
 
                     Text(row.1)
-                        .font(.system(size: compact ? 13 : 14, weight: .medium))
+                        .font(compact ? AppTheme.Typography.requestSummaryValueCompact : AppTheme.Typography.requestSummaryValue)
                         .lineSpacing(3)
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(valueLineLimit)
@@ -1287,28 +1287,28 @@ struct AnswerRequestSquareCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("求一个")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(AppTheme.Typography.requestEyebrow)
                     .tracking(1.6)
                     .foregroundStyle(AppTheme.textMuted)
 
                 Spacer()
 
                 Text(reward)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(AppTheme.Typography.requestReward)
                     .foregroundStyle(AppTheme.green)
             }
 
             Spacer(minLength: 18)
 
             Text(request.title)
-                .font(.system(size: CardTextFitting.requestTitleSize(request.title, compact: true), weight: .semibold))
+                .font(AppTheme.Typography.requestTitle(size: CardTextFitting.requestTitleSize(request.title, compact: true)))
                 .lineSpacing(4)
                 .foregroundStyle(AppTheme.text)
                 .lineLimit(3)
                 .minimumScaleFactor(0.82)
 
             Text(request.context)
-                .font(.system(size: 15))
+                .font(AppTheme.Typography.requestBody)
                 .lineSpacing(6)
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(3)
@@ -1318,15 +1318,15 @@ struct AnswerRequestSquareCard: View {
 
             HStack(spacing: 8) {
                 Image(systemName: "quote.bubble")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(AppTheme.Icon.small)
 
                 Text("只要来一句")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(AppTheme.Typography.requestSummaryValueCompact)
 
                 Spacer()
 
                 Text("写完即送")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(AppTheme.Typography.requestSummaryLabel)
                     .foregroundStyle(AppTheme.textMuted)
             }
             .foregroundStyle(AppTheme.text)
@@ -1357,11 +1357,11 @@ struct PageIntro: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 26, weight: .semibold))
+                .font(AppTheme.Typography.pageIntroTitle)
                 .foregroundStyle(AppTheme.text)
 
             Text(subtitle)
-                .font(.system(size: 14))
+                .font(AppTheme.Typography.pageIntroSubtitle)
                 .lineSpacing(4)
                 .foregroundStyle(AppTheme.textSecondary)
         }
@@ -1376,9 +1376,12 @@ struct PrimaryButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            AppHaptics.selection()
+            action()
+        } label: {
             Text(title)
-                .font(.system(size: 15, weight: .medium))
+                .font(AppTheme.Typography.primaryButton)
                 .foregroundStyle(AppTheme.onPrimaryAction)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
@@ -1401,7 +1404,7 @@ struct ToastView: View {
         VStack {
             Spacer()
             Text(message)
-                .font(.system(size: 13))
+                .font(AppTheme.Typography.toast)
                 .foregroundStyle(AppTheme.onPrimaryAction)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)

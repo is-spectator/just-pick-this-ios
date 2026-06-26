@@ -88,6 +88,23 @@ enum AppTheme {
         static let productRowBody = Font.footnote
         static let productStatus = Font.caption.weight(.semibold)
         static let productMeta = Font.caption2.weight(.medium)
+        static let requestEyebrow = Font.caption2.weight(.medium)
+        static let requestReward = Font.caption.weight(.semibold)
+        static let requestStatus = Font.caption.weight(.semibold)
+        static let requestBody = Font.footnote
+        static let requestAnswer = Font.callout.weight(.medium)
+        static let requestAnswerMeta = Font.caption
+        static let requestSummaryLabel = Font.caption.weight(.medium)
+        static let requestSummaryValue = Font.footnote.weight(.medium)
+        static let requestSummaryLabelCompact = Font.caption2.weight(.medium)
+        static let requestSummaryValueCompact = Font.caption.weight(.medium)
+        static let pageIntroTitle = Font.title.weight(.semibold)
+        static let pageIntroSubtitle = Font.footnote
+        static let toast = Font.caption
+
+        static func requestTitle(size: CGFloat) -> Font {
+            Font.system(size: size, weight: .semibold)
+        }
     }
 
     enum Icon {
