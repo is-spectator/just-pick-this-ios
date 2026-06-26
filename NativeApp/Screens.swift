@@ -186,6 +186,7 @@ struct InputScreen: View {
                 message: locationMessage,
                 suggestedLocations: suggestedDecisionLocationLabels,
                 onUseCurrent: useCurrentLocation,
+                onOpenSettings: openLocationSettings,
                 onSelectSuggestion: selectSuggestedLocation,
                 onSaveManual: saveManualLocation,
                 onClear: clearDecisionLocation
@@ -468,6 +469,11 @@ struct InputScreen: View {
         showsLocationPicker = false
     }
 
+    private func openLocationSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
     private func restoreDecisionLocation() {
         guard decisionLocation == nil,
               let data = activeDecisionLocationRaw.data(using: .utf8),
@@ -578,6 +584,7 @@ private struct LocationPickerSheet: View {
     let message: String?
     let suggestedLocations: [String]
     let onUseCurrent: () -> Void
+    let onOpenSettings: () -> Void
     let onSelectSuggestion: (String) -> Void
     let onSaveManual: () -> Void
     let onClear: () -> Void
@@ -608,6 +615,10 @@ private struct LocationPickerSheet: View {
     private var showsManualSearchResult: Bool {
         guard !manualQuery.isEmpty else { return false }
         return !filteredSuggestions.contains { $0.localizedCaseInsensitiveCompare(manualQuery) == .orderedSame }
+    }
+
+    private var showsSettingsAction: Bool {
+        message?.contains("没拿到当前位置") == true
     }
 
     var body: some View {
@@ -749,9 +760,37 @@ private struct LocationPickerSheet: View {
                 }
 
                 if let message {
-                    Text(message)
-                        .font(AppTheme.Typography.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
+                    HStack(alignment: .center, spacing: 10) {
+                        Text(message)
+                            .font(AppTheme.Typography.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineSpacing(3)
+
+                        Spacer(minLength: 8)
+
+                        if showsSettingsAction {
+                            Button(action: onOpenSettings) {
+                                Text("去设置")
+                                    .font(AppTheme.Typography.caption.weight(.semibold))
+                                    .foregroundStyle(AppTheme.text)
+                                    .padding(.horizontal, 12)
+                                    .frame(height: 32)
+                                    .background(AppTheme.bubble)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("打开定位设置")
+                            .accessibilityHint("前往系统设置，为 pipii 开启定位权限")
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(AppTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous)
+                            .stroke(AppTheme.borderSoft, lineWidth: 1)
+                    )
                 }
 
                 Spacer()
