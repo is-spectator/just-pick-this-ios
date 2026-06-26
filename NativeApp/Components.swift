@@ -414,6 +414,8 @@ enum RecommendationFeedbackState: Equatable {
 }
 
 struct DecisionCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let pick: TopPick
     let isFollowingUp: Bool
     let isAccepting: Bool
@@ -449,6 +451,10 @@ struct DecisionCard: View {
         let subtitle = pick.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !subtitle.isEmpty, subtitle != decisionReason else { return nil }
         return subtitle
+    }
+
+    private var isPresented: Bool {
+        reduceMotion || hasAppeared
     }
 
     var body: some View {
@@ -559,10 +565,10 @@ struct DecisionCard: View {
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.055), radius: 22, x: 0, y: 12)
-        .scaleEffect(hasAppeared ? 1 : 0.985)
-        .opacity(hasAppeared ? 1 : 0)
-        .offset(y: hasAppeared ? 0 : 8)
-        .animation(.spring(response: 0.34, dampingFraction: 0.88), value: hasAppeared)
+        .scaleEffect(isPresented ? 1 : 0.985)
+        .opacity(isPresented ? 1 : 0)
+        .offset(y: isPresented ? 0 : 8)
+        .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.88), value: hasAppeared)
         .onAppear {
             hasAppeared = true
         }
