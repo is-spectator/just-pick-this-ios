@@ -483,6 +483,7 @@ private struct ChatDrawer: View {
     @State private var searchText = ""
     @State private var renamingItem: QuestionHistory?
     @State private var renameText = ""
+    @State private var deletingItem: QuestionHistory?
     @State private var drawerNotice: String?
     @State private var drawerNoticeTask: Task<Void, Never>?
 
@@ -598,6 +599,23 @@ private struct ChatDrawer: View {
         } message: {
             Text("只会修改本机显示名称。")
         }
+        .confirmationDialog("删除这条会话？", isPresented: deleteConfirmationBinding, titleVisibility: .visible) {
+            Button("删除会话", role: .destructive) {
+                if let deletingItem {
+                    hideHistory(deletingItem)
+                }
+                deletingItem = nil
+            }
+            Button("取消", role: .cancel) {
+                deletingItem = nil
+            }
+        } message: {
+            if let deletingItem {
+                Text("会从这台设备的抽屉历史里移除“\(effectiveTitle(for: deletingItem))”。")
+            } else {
+                Text("会从这台设备的抽屉历史里移除。")
+            }
+        }
         .onDisappear {
             drawerNoticeTask?.cancel()
         }
@@ -661,6 +679,17 @@ private struct ChatDrawer: View {
                 if !isPresented {
                     renamingItem = nil
                     renameText = ""
+                }
+            }
+        )
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { deletingItem != nil },
+            set: { isPresented in
+                if !isPresented {
+                    deletingItem = nil
                 }
             }
         )
@@ -819,7 +848,7 @@ private struct ChatDrawer: View {
                             renameText = effectiveTitle(for: item)
                         },
                         onPinToggle: { togglePinned(item) },
-                        onDelete: { hideHistory(item) }
+                        onDelete: { requestDeleteHistory(item) }
                     )
                 }
             }
@@ -847,7 +876,7 @@ private struct ChatDrawer: View {
                             renameText = effectiveTitle(for: item)
                         },
                         onPinToggle: { togglePinned(item) },
-                        onDelete: { hideHistory(item) }
+                        onDelete: { requestDeleteHistory(item) }
                     )
                 }
             }
@@ -928,6 +957,10 @@ private struct ChatDrawer: View {
             pinnedHistoryIDs.insert(item.id)
             showDrawerNotice("已置顶会话")
         }
+    }
+
+    private func requestDeleteHistory(_ item: QuestionHistory) {
+        deletingItem = item
     }
 
     private func hideHistory(_ item: QuestionHistory) {
