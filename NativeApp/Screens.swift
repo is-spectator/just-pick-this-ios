@@ -42,23 +42,6 @@ private struct ActivityShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-private enum AppHaptics {
-    @MainActor
-    static func selection() {
-        UISelectionFeedbackGenerator().selectionChanged()
-    }
-
-    @MainActor
-    static func success() {
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-    }
-
-    @MainActor
-    static func warning() {
-        UINotificationFeedbackGenerator().notificationOccurred(.warning)
-    }
-}
-
 struct InputScreen: View {
     let session: AppSession
     let showsMessageBadge: Bool

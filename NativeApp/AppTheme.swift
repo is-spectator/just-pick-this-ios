@@ -77,3 +77,20 @@ extension View {
             .contentShape(Rectangle())
     }
 }
+
+enum AppHaptics {
+    @MainActor
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    @MainActor
+    static func success() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    @MainActor
+    static func warning() {
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+    }
+}

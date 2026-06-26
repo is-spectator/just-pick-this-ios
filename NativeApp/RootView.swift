@@ -69,7 +69,7 @@ struct RootView: View {
                     pinnedHistoryIDs: $pinnedHistoryIDs,
                     hiddenHistoryIDs: $hiddenHistoryIDs,
                     renamedHistoryTitles: $renamedHistoryTitles,
-                    onClose: closeDrawer,
+                    onClose: { closeDrawer() },
                     onNewConversation: startNewConversationFromDrawer,
                     onSelectHistory: openHistoryItem,
                     onDeleteHistory: deleteHistoryItemFromDrawer,
@@ -82,7 +82,8 @@ struct RootView: View {
                     onOpenMessages: { openDrawerRoute(.messages) },
                     onOpenProfile: { openDrawerRoute(.profile) },
                     onLogin: {
-                        closeDrawer()
+                        AppHaptics.selection()
+                        closeDrawer(haptic: false)
                         showsEmailLogin = true
                     },
                     unreadLightCount: unreadLightCount,
@@ -218,12 +219,18 @@ struct RootView: View {
     }
 
     private func openDrawer() {
+        guard !showsDrawer else { return }
+        AppHaptics.selection()
         withAnimation(drawerAnimation) {
             showsDrawer = true
         }
     }
 
-    private func closeDrawer() {
+    private func closeDrawer(haptic: Bool = true) {
+        guard showsDrawer else { return }
+        if haptic {
+            AppHaptics.selection()
+        }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
             showsDrawer = false
         }
@@ -233,18 +240,21 @@ struct RootView: View {
         session.startNewConversation()
         path.removeAll()
         chatRevision += 1
-        closeDrawer()
+        AppHaptics.success()
+        closeDrawer(haptic: false)
     }
 
     private func openDrawerRoute(_ route: AppRoute) {
-        closeDrawer()
+        AppHaptics.selection()
+        closeDrawer(haptic: false)
         path.removeAll()
         path.append(route)
     }
 
     private func openHistoryItem(_ item: QuestionHistory) {
+        AppHaptics.selection()
         Task { @MainActor in
-            closeDrawer()
+            closeDrawer(haptic: false)
             let destination = await session.restoreHistoryItem(item)
             path.removeAll()
             switch destination {
@@ -267,7 +277,8 @@ struct RootView: View {
     }
 
     private func openHelpDetail(_ item: QuestionHistory) {
-        closeDrawer()
+        AppHaptics.selection()
+        closeDrawer(haptic: false)
         path.append(.helpDetail(item))
     }
 
@@ -616,6 +627,7 @@ private struct ChatDrawer: View {
                         renamedHistoryTitles[item.id] = trimmed
                         showDrawerNotice("已重命名会话")
                     }
+                    AppHaptics.success()
                 }
                 renamingItem = nil
                 renameText = ""
@@ -975,6 +987,7 @@ private struct ChatDrawer: View {
     }
 
     private func togglePinned(_ item: QuestionHistory) {
+        AppHaptics.selection()
         if pinnedHistoryIDs.contains(item.id) {
             pinnedHistoryIDs.remove(item.id)
             showDrawerNotice("已取消置顶")
@@ -985,6 +998,7 @@ private struct ChatDrawer: View {
     }
 
     private func requestDeleteHistory(_ item: QuestionHistory) {
+        AppHaptics.warning()
         deletingItem = item
     }
 
@@ -998,6 +1012,7 @@ private struct ChatDrawer: View {
         pinnedHistoryIDs.remove(item.id)
         renamedHistoryTitles[item.id] = nil
         onDeleteHistory(item)
+        AppHaptics.success()
         showDrawerNotice("已删除会话")
     }
 
@@ -1013,6 +1028,7 @@ private struct ChatDrawer: View {
         }
         onRestoreHistory(snapshot.item)
         deletedHistorySnapshot = nil
+        AppHaptics.success()
         showDrawerNotice("已恢复会话")
     }
 
