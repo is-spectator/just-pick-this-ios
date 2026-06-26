@@ -4671,11 +4671,11 @@ private struct ProductEmptyInline: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(AppTheme.Typography.productRowTitle)
                 .foregroundStyle(AppTheme.text)
                 .lineLimit(2)
             Text(message)
-                .font(.system(size: 13))
+                .font(AppTheme.Typography.productRowBody)
                 .lineSpacing(3)
                 .foregroundStyle(AppTheme.textSecondary)
                 .lineLimit(3)
@@ -4689,7 +4689,10 @@ private struct ProductRefreshToolbarButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            AppHaptics.selection()
+            action()
+        } label: {
             ZStack {
                 if isLoading {
                     ProgressView()
@@ -4697,7 +4700,7 @@ private struct ProductRefreshToolbarButton: View {
                         .tint(AppTheme.text)
                 } else {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(AppTheme.Icon.clear)
                         .foregroundStyle(AppTheme.text)
                 }
             }
