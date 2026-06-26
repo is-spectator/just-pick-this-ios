@@ -567,7 +567,7 @@ private struct DecisionLocationBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(location == nil ? "选择决策地点" : "当前决策地点：\(location?.displayLabel ?? "")")
-        .accessibilityHint("打开地点选择，可使用当前定位、搜索或手动输入地点")
+        .accessibilityHint("打开地点选择，可使用当前定位、常用地点或手动输入地点")
     }
 }
 
@@ -679,7 +679,7 @@ private struct LocationPickerSheet: View {
                 .accessibilityHint("授权后把当前位置设为本次决策地点")
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("搜索或输入地点")
+                    Text("输入或选择地点")
                         .font(AppTheme.Typography.caption.weight(.semibold))
                         .foregroundStyle(AppTheme.textSecondary)
 
@@ -710,7 +710,7 @@ private struct LocationPickerSheet: View {
 
                     if !filteredSuggestions.isEmpty || showsManualSearchResult {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(manualQuery.isEmpty ? "常用地点" : "搜索结果")
+                            Text(manualQuery.isEmpty ? "常用地点" : "匹配的常用地点")
                                 .font(AppTheme.Typography.caption.weight(.semibold))
                                 .foregroundStyle(AppTheme.textMuted)
                                 .padding(.top, 2)
