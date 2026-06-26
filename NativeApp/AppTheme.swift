@@ -50,11 +50,11 @@ enum AppTheme {
     }
 
     enum Typography {
-        static let nav = Font.system(size: 18, weight: .semibold)
-        static let title = Font.system(size: 28, weight: .bold)
-        static let cardTitle = Font.system(size: 24, weight: .bold)
-        static let body = Font.system(size: 16)
-        static let caption = Font.system(size: 13)
+        static let nav = Font.headline.weight(.semibold)
+        static let title = Font.largeTitle.weight(.bold)
+        static let cardTitle = Font.title2.weight(.bold)
+        static let body = Font.body
+        static let caption = Font.caption
     }
 
     enum Icon {
