@@ -3062,6 +3062,50 @@ private struct HelpStatusFilterTile: View {
     }
 }
 
+private struct AnswerStatusFilterTile: View {
+    let value: String
+    let label: String
+    let secondary: String?
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(value)
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                if let secondary {
+                    Text(secondary)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppTheme.green)
+                        .lineLimit(1)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 98, alignment: .topLeading)
+            .background(isSelected ? AppTheme.bubble : AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(isSelected ? AppTheme.text : AppTheme.border, lineWidth: isSelected ? 1.4 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label)，\(value) 条")
+        .accessibilityHint(isSelected ? "当前筛选" : "筛选这个回答状态")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
 struct HelpResultDetailScreen: View {
     let session: AppSession
     let historyItem: QuestionHistory
@@ -3182,6 +3226,40 @@ struct HelpResultDetailScreen: View {
     }
 }
 
+private enum AnswerStatusFilter: String, CaseIterable {
+    case all
+    case pending
+    case accepted
+    case rejected
+
+    var label: String {
+        switch self {
+        case .all: "全部"
+        case .pending: "待采纳"
+        case .accepted: "已采纳"
+        case .rejected: "未采用"
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .all: "还没来过一句"
+        case .pending: "暂无待采纳"
+        case .accepted: "暂无已采纳"
+        case .rejected: "暂无未采用"
+        }
+    }
+
+    var emptyMessage: String {
+        switch self {
+        case .all: "去来一句 Deck，写完后待采纳和奖励会显示在这里。"
+        case .pending: "刚提交的回答会先出现在这里，等对方采纳。"
+        case .accepted: "被采纳的回答会归档到这里，也会同步奖励。"
+        case .rejected: "未采用只是这次没被选中，不影响继续回答。"
+        }
+    }
+}
+
 struct MyAnswersScreen: View {
     let session: AppSession
     let onOpenAnswerDeck: () -> Void
@@ -3190,6 +3268,7 @@ struct MyAnswersScreen: View {
 
     @State private var snapshot = UserDashboardSnapshot.empty
     @State private var isLoading = false
+    @State private var selectedStatus: AnswerStatusFilter = .all
 
     private var localPendingAnswers: [SubmittedAnswerRecord] {
         session.submittedAnswers.filter { $0.status == .pending }
@@ -3215,6 +3294,19 @@ struct MyAnswersScreen: View {
         max(snapshot.answeredCount, session.submittedAnswers.count)
     }
 
+    private var filteredSubmittedAnswers: [SubmittedAnswerRecord] {
+        switch selectedStatus {
+        case .all:
+            session.submittedAnswers
+        case .pending:
+            session.submittedAnswers.filter { $0.status == .pending }
+        case .accepted:
+            session.submittedAnswers.filter { $0.status == .accepted }
+        case .rejected:
+            session.submittedAnswers.filter { $0.status == .rejected }
+        }
+    }
+
     var body: some View {
         ProductListScreen(
             title: "我的回答",
@@ -3226,20 +3318,43 @@ struct MyAnswersScreen: View {
         ) {
             ProductSection(title: "状态") {
                 HStack(spacing: 10) {
-                    ProfileMetricTile(
+                    AnswerStatusFilterTile(
                         value: "\(pendingAnswerCount)",
                         label: "待采纳",
-                        secondary: pendingAnswerCount > 0 ? "\(snapshot.pendingReward) 待确认" : answerTierLabel
-                    )
-                    ProfileMetricTile(
+                        secondary: pendingAnswerCount > 0 ? "\(snapshot.pendingReward) 待确认" : answerTierLabel,
+                        isSelected: selectedStatus == .pending
+                    ) {
+                        selectedStatus = selectedStatus == .pending ? .all : .pending
+                        AppHaptics.selection()
+                    }
+                    AnswerStatusFilterTile(
                         value: "\(acceptedAnswerCount)",
                         label: "已采纳",
-                        secondary: acceptedAnswerCount > 0 ? "+\(snapshot.grantedReward)" : nil
-                    )
-                    ProfileMetricTile(
+                        secondary: acceptedAnswerCount > 0 ? "+\(snapshot.grantedReward)" : nil,
+                        isSelected: selectedStatus == .accepted
+                    ) {
+                        selectedStatus = selectedStatus == .accepted ? .all : .accepted
+                        AppHaptics.selection()
+                    }
+                    AnswerStatusFilterTile(
                         value: "\(rejectedAnswerCount)",
                         label: "未采用",
-                        secondary: rejectedAnswerCount > 0 ? "+\(snapshot.rejectedReward)" : nil
+                        secondary: rejectedAnswerCount > 0 ? "+\(snapshot.rejectedReward)" : nil,
+                        isSelected: selectedStatus == .rejected
+                    ) {
+                        selectedStatus = selectedStatus == .rejected ? .all : .rejected
+                        AppHaptics.selection()
+                    }
+                }
+            }
+
+            if selectedStatus != .all {
+                ProductSection(title: "当前筛选") {
+                    ProductActionCard(
+                        icon: "line.3.horizontal.decrease.circle",
+                        title: selectedStatus.label,
+                        subtitle: "再点一次上方状态可回到全部。",
+                        showsChevron: false
                     )
                 }
             }
@@ -3264,10 +3379,10 @@ struct MyAnswersScreen: View {
                 .buttonStyle(.plain)
             }
 
-            if !session.submittedAnswers.isEmpty {
-                ProductSection(title: "最近提交") {
+            if !filteredSubmittedAnswers.isEmpty {
+                ProductSection(title: selectedStatus == .all ? "最近提交" : selectedStatus.label) {
                     VStack(spacing: 12) {
-                        ForEach(session.submittedAnswers) { answer in
+                        ForEach(filteredSubmittedAnswers) { answer in
                             Button {
                                 AppHaptics.selection()
                                 onSelectHelpDetail(historyItem(for: answer))
@@ -3278,6 +3393,14 @@ struct MyAnswersScreen: View {
                             .accessibilityHint("打开原问题详情")
                         }
                     }
+                }
+            } else if session.submittedAnswers.isEmpty || selectedStatus != .all {
+                ProductSection(title: selectedStatus == .all ? "最近提交" : selectedStatus.label) {
+                    ProductEmptyState(
+                        title: selectedStatus.emptyTitle,
+                        message: selectedStatus.emptyMessage,
+                        systemImage: "quote.bubble"
+                    )
                 }
             }
 
