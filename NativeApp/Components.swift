@@ -308,6 +308,7 @@ struct QueryBubble: View {
 }
 
 struct RecommendationImageSkeleton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isBreathing = false
 
     var body: some View {
@@ -326,6 +327,7 @@ struct RecommendationImageSkeleton: View {
             .padding(18)
         }
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
                 isBreathing = true
             }

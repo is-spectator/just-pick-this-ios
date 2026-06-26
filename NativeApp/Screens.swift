@@ -2199,6 +2199,7 @@ struct HelpDeckCard: View {
 }
 
 struct HelpDeckLoadingCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isBreathing = false
 
     var body: some View {
@@ -2247,6 +2248,7 @@ struct HelpDeckLoadingCard: View {
                 .stroke(AppTheme.border, lineWidth: 1)
         )
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
                 isBreathing = true
             }
@@ -4007,6 +4009,7 @@ private struct ProductListScreen<Content: View>: View {
 }
 
 private struct ProductPageLoadingSkeleton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isBreathing = false
 
     var body: some View {
@@ -4044,6 +4047,7 @@ private struct ProductPageLoadingSkeleton: View {
             )
         }
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
                 isBreathing = true
             }

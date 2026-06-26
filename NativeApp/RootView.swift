@@ -1248,6 +1248,7 @@ private struct DrawerSearchResultRow: View {
 }
 
 private struct DrawerHistorySkeletonSection: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isBreathing = false
 
     var body: some View {
@@ -1265,6 +1266,7 @@ private struct DrawerHistorySkeletonSection: View {
         }
         .accessibilityHidden(true)
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
                 isBreathing = true
             }
