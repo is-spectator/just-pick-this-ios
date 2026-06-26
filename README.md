@@ -524,3 +524,4 @@ xcodebuild \
 - `DS-004`/`DS-005`/`STATE-003`: 产品页 Hero、空状态、ActionCard 和列表骨架接入 `AppTheme` 的语义图标与圆角 token，减少空/加载状态里的魔法数字。
 - `DS-002`: 产品页 Hero、空状态、ActionCard、收藏行和求助详情行接入产品语义 Typography token，继续收敛固定字号并保留 Dynamic Type 适配。
 - `STATE-005`/`DS-002`: 产品页刷新按钮补充轻触感反馈，产品内联空态文案也改用语义 Typography token。
+- `HELP-001`/`HELP-006`/`DS-002`: 来一句 Deck 标题、奖励、说明和空状态操作接入语义 Typography token，空 Deck 的刷新/回聊天操作补充轻触感反馈。

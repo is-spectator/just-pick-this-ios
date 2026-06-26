@@ -2009,11 +2009,11 @@ struct AnswerScreen: View {
                         VStack(spacing: 0) {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text("来一句")
-                                    .font(.system(size: 24, weight: .semibold))
+                                    .font(AppTheme.Typography.productHeroTitle)
                                     .foregroundStyle(AppTheme.text)
 
                                 Text("帮 TA 少纠结一次。")
-                                    .font(.system(size: 14))
+                                    .font(AppTheme.Typography.productHeroSubtitle)
                                     .foregroundStyle(AppTheme.textSecondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2258,14 +2258,14 @@ struct HelpDeckCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center) {
                 Text("求一个")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppTheme.Typography.productStatus)
                     .tracking(1.2)
                     .foregroundStyle(AppTheme.textMuted)
 
                 Spacer()
 
                 Text(request.rewardLabel)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppTheme.Typography.productEmptyTitle)
                     .foregroundStyle(AppTheme.green)
 
                 if showsMenu {
@@ -2300,7 +2300,7 @@ struct HelpDeckCard: View {
                         .multilineTextAlignment(.leading)
 
                     Text(request.context)
-                        .font(.system(size: 17))
+                        .font(AppTheme.Typography.body)
                         .lineSpacing(6)
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(4)
@@ -2320,7 +2320,7 @@ struct HelpDeckCard: View {
 
             HStack(spacing: 8) {
                 Text(request.answerCount > 0 ? "\(request.answerCount) 人已答" : "看懂了，就来一句。")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(AppTheme.Typography.drawerRowTitle)
                     .foregroundStyle(AppTheme.textSecondary)
 
                 Spacer()
@@ -2451,18 +2451,21 @@ struct EmptyAnswerQueueCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("暂时没有求一个")
-                .font(.system(size: 18, weight: .semibold))
+                .font(AppTheme.Typography.productEmptyTitle)
                 .foregroundStyle(AppTheme.text)
 
             Text("晚点再来，或者自己发一个。")
-                .font(.system(size: 14))
+                .font(AppTheme.Typography.productEmptyMessage)
                 .lineSpacing(4)
                 .foregroundStyle(AppTheme.textSecondary)
 
             HStack(spacing: 12) {
-                Button(action: onRefresh) {
+                Button {
+                    AppHaptics.selection()
+                    onRefresh()
+                } label: {
                     Text("刷新")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(AppTheme.Typography.primaryButton)
                         .foregroundStyle(AppTheme.text)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
@@ -2477,9 +2480,12 @@ struct EmptyAnswerQueueCard: View {
                 .accessibilityLabel("刷新求一个")
                 .accessibilityHint("重新获取可以回答的求助卡")
 
-                Button(action: onBackToChat) {
+                Button {
+                    AppHaptics.selection()
+                    onBackToChat()
+                } label: {
                     Text("回聊天")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(AppTheme.Typography.primaryButton)
                         .foregroundStyle(AppTheme.onPrimaryAction)
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
