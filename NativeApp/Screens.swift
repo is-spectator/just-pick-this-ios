@@ -605,6 +605,11 @@ private struct LocationPickerSheet: View {
         !manualQuery.isEmpty
     }
 
+    private var showsManualSearchResult: Bool {
+        guard !manualQuery.isEmpty else { return false }
+        return !filteredSuggestions.contains { $0.localizedCaseInsensitiveCompare(manualQuery) == .orderedSame }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
@@ -703,18 +708,33 @@ private struct LocationPickerSheet: View {
                     .background(AppTheme.bubble)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
 
-                    if !filteredSuggestions.isEmpty {
-                        VStack(spacing: 2) {
+                    if !filteredSuggestions.isEmpty || showsManualSearchResult {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(manualQuery.isEmpty ? "常用地点" : "搜索结果")
+                                .font(AppTheme.Typography.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.textMuted)
+                                .padding(.top, 2)
+
                             ForEach(filteredSuggestions, id: \.self) { label in
-                                LocationSuggestionRow(label: label) {
+                                LocationSuggestionRow(label: label, subtitle: "常用地点") {
                                     onSelectSuggestion(label)
+                                }
+                            }
+
+                            if showsManualSearchResult {
+                                LocationSuggestionRow(
+                                    label: manualQuery,
+                                    subtitle: "按输入使用这个地点",
+                                    systemImage: "mappin.and.ellipse"
+                                ) {
+                                    onSelectSuggestion(manualQuery)
                                 }
                             }
                         }
                     }
 
                     Button(action: onSaveManual) {
-                        Text("保存地点")
+                        Text("使用这个地点")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppTheme.onPrimaryAction)
                             .frame(maxWidth: .infinity)
@@ -756,20 +776,31 @@ private struct LocationPickerSheet: View {
 
 private struct LocationSuggestionRow: View {
     let label: String
+    var subtitle: String? = nil
+    var systemImage: String = "magnifyingglass"
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
+                Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppTheme.textMuted)
                     .frame(width: 28, height: 28)
 
-                Text(label)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppTheme.text)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppTheme.text)
+                        .lineLimit(1)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(AppTheme.Typography.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
 
                 Spacer()
 
