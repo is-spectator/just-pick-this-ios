@@ -2376,6 +2376,12 @@ final class AppSession {
         submitState = .idle
     }
 
+    func restoreDeletedHistoryItem(_ item: QuestionHistory) {
+        history.removeAll { $0.id == item.id }
+        history.insert(item, at: 0)
+        persistHistory()
+    }
+
     @discardableResult
     func sendCurrentTopPickFeedback(action: CardFeedbackAction, reason: String) async -> Bool {
         await service.sendCardFeedback(id: currentTopPick?.cardId, action: action, reason: reason)

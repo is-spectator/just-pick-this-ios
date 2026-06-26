@@ -73,6 +73,7 @@ struct RootView: View {
                     onNewConversation: startNewConversationFromDrawer,
                     onSelectHistory: openHistoryItem,
                     onDeleteHistory: deleteHistoryItemFromDrawer,
+                    onRestoreHistory: restoreHistoryItemFromDrawer,
                     onOpenAnswerDeck: { openDrawerRoute(.answerDeck) },
                     onOpenMyHelp: { openDrawerRoute(.myHelp) },
                     onOpenMyAnswers: { openDrawerRoute(.myAnswers) },
@@ -258,6 +259,10 @@ struct RootView: View {
         session.deleteHistoryItem(id: item.id)
         pinnedHistoryIDs.remove(item.id)
         renamedHistoryTitles[item.id] = nil
+    }
+
+    private func restoreHistoryItemFromDrawer(_ item: QuestionHistory) {
+        session.restoreDeletedHistoryItem(item)
     }
 
     private func openHelpDetail(_ item: QuestionHistory) {
@@ -468,6 +473,7 @@ private struct ChatDrawer: View {
     let onNewConversation: () -> Void
     let onSelectHistory: (QuestionHistory) -> Void
     let onDeleteHistory: (QuestionHistory) -> Void
+    let onRestoreHistory: (QuestionHistory) -> Void
     let onOpenAnswerDeck: () -> Void
     let onOpenMyHelp: () -> Void
     let onOpenMyAnswers: () -> Void
@@ -484,6 +490,7 @@ private struct ChatDrawer: View {
     @State private var renamingItem: QuestionHistory?
     @State private var renameText = ""
     @State private var deletingItem: QuestionHistory?
+    @State private var deletedHistorySnapshot: DeletedHistorySnapshot?
     @State private var drawerNotice: String?
     @State private var drawerNoticeTask: Task<Void, Never>?
 
@@ -549,7 +556,15 @@ private struct ChatDrawer: View {
                     drawerSearch
 
                     if let drawerNotice {
-                        DrawerNoticePill(text: drawerNotice)
+                        if deletedHistorySnapshot == nil {
+                            DrawerNoticePill(text: drawerNotice)
+                        } else {
+                            DrawerNoticePill(
+                                text: drawerNotice,
+                                actionTitle: "撤销",
+                                action: undoDeletedHistory
+                            )
+                        }
                     }
 
                     if isSearching {
@@ -964,11 +979,31 @@ private struct ChatDrawer: View {
     }
 
     private func hideHistory(_ item: QuestionHistory) {
+        deletedHistorySnapshot = DeletedHistorySnapshot(
+            item: item,
+            wasPinned: pinnedHistoryIDs.contains(item.id),
+            renamedTitle: renamedHistoryTitles[item.id]
+        )
         hiddenHistoryIDs.insert(item.id)
         pinnedHistoryIDs.remove(item.id)
         renamedHistoryTitles[item.id] = nil
         onDeleteHistory(item)
         showDrawerNotice("已删除会话")
+    }
+
+    private func undoDeletedHistory() {
+        guard let snapshot = deletedHistorySnapshot else { return }
+        drawerNoticeTask?.cancel()
+        hiddenHistoryIDs.remove(snapshot.item.id)
+        if snapshot.wasPinned {
+            pinnedHistoryIDs.insert(snapshot.item.id)
+        }
+        if let renamedTitle = snapshot.renamedTitle {
+            renamedHistoryTitles[snapshot.item.id] = renamedTitle
+        }
+        onRestoreHistory(snapshot.item)
+        deletedHistorySnapshot = nil
+        showDrawerNotice("已恢复会话")
     }
 
     private func showDrawerNotice(_ text: String) {
@@ -978,8 +1013,17 @@ private struct ChatDrawer: View {
             try? await Task.sleep(for: .milliseconds(1_500))
             guard !Task.isCancelled else { return }
             drawerNotice = nil
+            if text == "已删除会话" {
+                deletedHistorySnapshot = nil
+            }
         }
     }
+}
+
+private struct DeletedHistorySnapshot {
+    let item: QuestionHistory
+    let wasPinned: Bool
+    let renamedTitle: String?
 }
 
 private enum DrawerHistoryDateGroup {
@@ -990,6 +1034,8 @@ private enum DrawerHistoryDateGroup {
 
 private struct DrawerNoticePill: View {
     let text: String
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
         HStack(spacing: AppTheme.Spacing.xs) {
@@ -1002,12 +1048,21 @@ private struct DrawerNoticePill: View {
                 .foregroundStyle(AppTheme.textSecondary)
 
             Spacer(minLength: 0)
+
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font(AppTheme.Typography.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .buttonStyle(.plain)
+                    .frame(minWidth: 44, minHeight: 32)
+                    .accessibilityHint("恢复刚才删除的会话")
+            }
         }
         .padding(.horizontal, AppTheme.Spacing.md)
         .frame(minHeight: 40)
         .background(AppTheme.green.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: action == nil ? .combine : .contain)
         .accessibilityLabel(text)
     }
 }
