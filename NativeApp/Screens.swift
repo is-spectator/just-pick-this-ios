@@ -848,9 +848,10 @@ private struct LocationSuggestionRow: View {
                     .foregroundStyle(AppTheme.textMuted)
             }
             .padding(.horizontal, 12)
-            .frame(height: 42)
+            .frame(minHeight: AppTheme.TouchTarget.minimum)
             .background(AppTheme.card)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("选择地点 \(label)")

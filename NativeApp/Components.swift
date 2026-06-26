@@ -149,6 +149,7 @@ struct TopBar: View {
                             .background(AppTheme.bubble)
                             .clipShape(Capsule())
                             .contentShape(Capsule())
+                            .appMinimumTouchTarget()
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("新对话")
@@ -750,6 +751,7 @@ struct ReferenceWebPreview: View {
         .padding(.vertical, 8)
         .background(AppTheme.bubble)
         .clipShape(Capsule())
+        .appMinimumTouchTarget()
     }
 
     private func referencePlaceholder(title: String) -> some View {
@@ -880,6 +882,7 @@ struct FollowupChip: View {
                 Capsule()
                     .stroke(AppTheme.borderSoft, lineWidth: 1)
             )
+            .appMinimumTouchTarget()
             .opacity(isDisabled ? 0.52 : 1)
         }
         .disabled(isDisabled)

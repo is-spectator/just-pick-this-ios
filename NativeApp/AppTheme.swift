@@ -61,10 +61,19 @@ enum AppTheme {
         static let toolbar = Font.system(size: 20, weight: .semibold)
         static let row = Font.system(size: 17, weight: .semibold)
     }
+
+    enum TouchTarget {
+        static let minimum: CGFloat = 44
+    }
 }
 
 extension View {
     func appScreenBackground() -> some View {
         background(AppTheme.background.ignoresSafeArea())
+    }
+
+    func appMinimumTouchTarget() -> some View {
+        frame(minWidth: AppTheme.TouchTarget.minimum, minHeight: AppTheme.TouchTarget.minimum)
+            .contentShape(Rectangle())
     }
 }

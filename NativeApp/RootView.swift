@@ -777,6 +777,7 @@ private struct ChatDrawer: View {
             .padding(.horizontal, AppTheme.Spacing.md)
             .background(AppTheme.text.opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.chip, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("新对话")
