@@ -178,11 +178,16 @@ struct BottomComposer: View {
     let isSending: Bool
     let onSend: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @FocusState private var isFocused: Bool
     @State private var sendFeedbackCount = 0
 
     private var canSend: Bool {
         !isSending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var inputLineLimit: ClosedRange<Int> {
+        dynamicTypeSize.isAccessibilitySize ? 1...4 : 1...3
     }
 
     private func send() {
@@ -208,12 +213,13 @@ struct BottomComposer: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .bottom, spacing: 8) {
             TextField(placeholder, text: $text, axis: .vertical)
                 .focused($isFocused)
-                .font(.system(size: 15))
+                .font(AppTheme.Typography.body)
                 .foregroundStyle(AppTheme.text)
-                .lineLimit(1...3)
+                .lineLimit(inputLineLimit)
+                .multilineTextAlignment(.leading)
                 .textInputAutocapitalization(.never)
                 .submitLabel(.send)
                 .disabled(isSending)
@@ -241,15 +247,16 @@ struct BottomComposer: View {
             }
             .disabled(!canSend)
             .accessibilityLabel("发送")
+            .accessibilityHint(canSend ? "发送当前输入" : "输入内容后可以发送")
         }
         .padding(.leading, 18)
         .padding(.trailing, 6)
         .padding(.vertical, 7)
         .frame(minHeight: 56, maxHeight: 120)
         .background(AppTheme.card)
-        .clipShape(Capsule())
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.composer, style: .continuous))
         .overlay(
-            Capsule()
+            RoundedRectangle(cornerRadius: AppTheme.Radius.composer, style: .continuous)
                 .stroke(isFocused ? AppTheme.primaryAction.opacity(0.9) : AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.04), radius: 2, x: 0, y: 1)
