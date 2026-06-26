@@ -1175,6 +1175,7 @@ struct HelpRequestStatusSummary: View {
 struct HelpStructuredSummary: View {
     let request: HelpRequest
     var compact: Bool = false
+    var valueLineLimit: Int?
 
     private var rows: [(String, String)] {
         var result: [(String, String)] = []
@@ -1204,6 +1205,7 @@ struct HelpStructuredSummary: View {
                         .font(.system(size: compact ? 13 : 14, weight: .medium))
                         .lineSpacing(3)
                         .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(valueLineLimit)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

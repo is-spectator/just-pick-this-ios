@@ -2288,30 +2288,35 @@ struct HelpDeckCard: View {
                 }
             }
 
-            Spacer(minLength: 24)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(request.title)
+                        .font(.system(size: CardTextFitting.requestTitleSize(request.title) + 8, weight: .semibold))
+                        .lineSpacing(4)
+                        .foregroundStyle(AppTheme.text)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.76)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
 
-            Text(request.title)
-                .font(.system(size: CardTextFitting.requestTitleSize(request.title) + 8, weight: .semibold))
-                .lineSpacing(4)
-                .foregroundStyle(AppTheme.text)
-                .lineLimit(3)
-                .minimumScaleFactor(0.76)
+                    Text(request.context)
+                        .font(.system(size: 17))
+                        .lineSpacing(6)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(4)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HelpStructuredSummary(request: request, compact: true, valueLineLimit: 2)
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .multilineTextAlignment(.leading)
+                .padding(.top, 22)
+                .padding(.bottom, 18)
+            }
+            .scrollIndicators(.hidden)
+            .accessibilityHint("内容过长时可以上下滚动阅读，左右滑动切换求助")
 
-            Text(request.context)
-                .font(.system(size: 17))
-                .lineSpacing(6)
-                .foregroundStyle(AppTheme.textSecondary)
-                .lineLimit(3)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 18)
-
-            HelpStructuredSummary(request: request, compact: true)
-                .padding(.top, 20)
-
-            Spacer(minLength: 26)
+            Spacer(minLength: 12)
 
             HStack(spacing: 8) {
                 Text(request.answerCount > 0 ? "\(request.answerCount) 人已答" : "看懂了，就来一句。")
