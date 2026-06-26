@@ -2145,7 +2145,7 @@ struct HelpDeckStack: View {
                         HelpDeckCard(request: next)
                             .frame(width: cardWidth, height: cardHeight)
                             .scaleEffect(reduceMotion ? 1 : 0.95 + 0.03 * dragProgress)
-                            .offset(x: reduceMotion ? 22 : (dragOffset >= 0 ? -28 + 10 * dragProgress : 24 - 10 * dragProgress))
+                            .offset(x: reduceMotion ? 18 : 18 - 6 * dragProgress)
                             .opacity(reduceMotion ? 0.64 : 0.52 + 0.18 * dragProgress)
                             .allowsHitTesting(false)
                     }
