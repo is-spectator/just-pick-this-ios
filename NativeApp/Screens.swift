@@ -1183,6 +1183,7 @@ private struct ChatRecommendationCard: View {
     @State private var hasAppeared = false
     @State private var acceptFeedbackCount = 0
     @State private var imageLoadFailed = false
+    @State private var feedbackState: RecommendationFeedbackState?
 
     private var imageURL: URL? {
         guard !imageLoadFailed else { return nil }
@@ -1211,10 +1212,11 @@ private struct ChatRecommendationCard: View {
                 heroImage
                     .overlay(alignment: .topTrailing) {
                         RecommendationOverflowMenu(
+                            feedbackState: feedbackState,
                             onFavorite: onFavorite,
                             onShare: onShare,
-                            onChange: onChange,
-                            onReportIssue: onReportIssue
+                            onChange: markChange,
+                            onReportIssue: markIssue
                         )
                             .padding(12)
                     }
@@ -1222,10 +1224,11 @@ private struct ChatRecommendationCard: View {
                 HStack {
                     Spacer()
                     RecommendationOverflowMenu(
+                        feedbackState: feedbackState,
                         onFavorite: onFavorite,
                         onShare: onShare,
-                        onChange: onChange,
-                        onReportIssue: onReportIssue
+                        onChange: markChange,
+                        onReportIssue: markIssue
                     )
                 }
             }
@@ -1319,6 +1322,16 @@ private struct ChatRecommendationCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("推荐卡, \(pick.title), \(decisionReason)")
+    }
+
+    private func markChange() {
+        feedbackState = .change
+        onChange()
+    }
+
+    private func markIssue() {
+        feedbackState = .issue
+        onReportIssue()
     }
 
     @ViewBuilder

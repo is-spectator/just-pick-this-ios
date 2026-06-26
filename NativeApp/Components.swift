@@ -405,6 +405,11 @@ struct CollapsibleText: View {
     }
 }
 
+enum RecommendationFeedbackState: Equatable {
+    case change
+    case issue
+}
+
 struct DecisionCard: View {
     let pick: TopPick
     let isFollowingUp: Bool
@@ -420,6 +425,7 @@ struct DecisionCard: View {
     @State private var imageLoadFailed = false
     @State private var hasAppeared = false
     @State private var acceptFeedbackCount = 0
+    @State private var feedbackState: RecommendationFeedbackState?
 
     private var imageURL: URL? {
         guard !imageLoadFailed else { return nil }
@@ -448,10 +454,11 @@ struct DecisionCard: View {
                 heroImage
                     .overlay(alignment: .topTrailing) {
                         RecommendationOverflowMenu(
+                            feedbackState: feedbackState,
                             onFavorite: onFavorite,
                             onShare: onShare,
-                            onChange: onReject,
-                            onReportIssue: onReportIssue
+                            onChange: markChange,
+                            onReportIssue: markIssue
                         )
                             .padding(12)
                     }
@@ -459,10 +466,11 @@ struct DecisionCard: View {
                 HStack {
                     Spacer()
                     RecommendationOverflowMenu(
+                        feedbackState: feedbackState,
                         onFavorite: onFavorite,
                         onShare: onShare,
-                        onChange: onReject,
-                        onReportIssue: onReportIssue
+                        onChange: markChange,
+                        onReportIssue: markIssue
                     )
                 }
             }
@@ -557,6 +565,16 @@ struct DecisionCard: View {
         .accessibilityLabel("推荐卡, \(pick.title), \(decisionReason)")
     }
 
+    private func markChange() {
+        feedbackState = .change
+        onReject()
+    }
+
+    private func markIssue() {
+        feedbackState = .issue
+        onReportIssue()
+    }
+
     @ViewBuilder
     private var heroImage: some View {
         if let imageURL {
@@ -594,17 +612,20 @@ struct DecisionCard: View {
 }
 
 struct RecommendationOverflowMenu: View {
+    var feedbackState: RecommendationFeedbackState?
     let onFavorite: () -> Void
     let onShare: () -> Void
     let onChange: () -> Void
     let onReportIssue: () -> Void
 
     init(
+        feedbackState: RecommendationFeedbackState? = nil,
         onFavorite: @escaping () -> Void = {},
         onShare: @escaping () -> Void = {},
         onChange: @escaping () -> Void = {},
         onReportIssue: @escaping () -> Void = {}
     ) {
+        self.feedbackState = feedbackState
         self.onFavorite = onFavorite
         self.onShare = onShare
         self.onChange = onChange
@@ -622,12 +643,20 @@ struct RecommendationOverflowMenu: View {
             }
 
             Button(action: onChange) {
-                Label("不合适，换一个", systemImage: "arrow.triangle.2.circlepath")
+                Label(
+                    feedbackState == .change ? "已标记不合适" : "不合适，换一个",
+                    systemImage: feedbackState == .change ? "checkmark.circle" : "arrow.triangle.2.circlepath"
+                )
             }
+            .disabled(feedbackState == .change)
 
             Button(role: .destructive, action: onReportIssue) {
-                Label("信息有误", systemImage: "exclamationmark.bubble")
+                Label(
+                    feedbackState == .issue ? "已标记信息有误" : "信息有误",
+                    systemImage: feedbackState == .issue ? "checkmark.circle" : "exclamationmark.bubble"
+                )
             }
+            .disabled(feedbackState == .issue)
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 17, weight: .semibold))
