@@ -3609,6 +3609,40 @@ private struct FavoriteUndoNotice: View {
     }
 }
 
+private enum RewardStatusFilter: String, CaseIterable {
+    case all
+    case pending
+    case granted
+    case rejected
+
+    var label: String {
+        switch self {
+        case .all: "全部"
+        case .pending: "待确认"
+        case .granted: "已获得"
+        case .rejected: "未采用"
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .all: "还没有奖励明细"
+        case .pending: "暂无待确认"
+        case .granted: "暂无已获得"
+        case .rejected: "暂无未采用"
+        }
+    }
+
+    var emptyMessage: String {
+        switch self {
+        case .all: "帮别人来一句，被采纳或待确认的奖励会出现在这里。"
+        case .pending: "刚提交的来一句会先挂起，等对方采纳。"
+        case .granted: "被采纳后，奖励会归档到这里。"
+        case .rejected: "未采用的记录会放在这里，不影响继续来一句。"
+        }
+    }
+}
+
 struct RewardsScreen: View {
     let session: AppSession
     let authRevision: Int
@@ -3616,6 +3650,7 @@ struct RewardsScreen: View {
 
     @State private var snapshot = UserDashboardSnapshot.empty
     @State private var isLoading = false
+    @State private var selectedStatus: RewardStatusFilter = .all
 
     private var localPendingRewardItems: [RewardLedgerItem] {
         session.submittedAnswers
@@ -3642,6 +3677,19 @@ struct RewardsScreen: View {
         return items
     }
 
+    private var filteredRewardItems: [RewardLedgerItem] {
+        switch selectedStatus {
+        case .all:
+            rewardItems
+        case .pending:
+            rewardItems.filter { $0.status == .pending }
+        case .granted:
+            rewardItems.filter { $0.status == .granted }
+        case .rejected:
+            rewardItems.filter { $0.status == .rejected }
+        }
+    }
+
     var body: some View {
         ProductListScreen(
             title: "奖励",
@@ -3653,25 +3701,63 @@ struct RewardsScreen: View {
         ) {
             ProductSection(title: "积分") {
                 HStack(spacing: 10) {
-                    ProfileMetricTile(value: "\(snapshot.grantedReward)", label: "已获得", secondary: nil)
-                    ProfileMetricTile(
+                    RewardStatusFilterTile(
+                        value: "\(snapshot.grantedReward)",
+                        label: RewardStatusFilter.granted.label,
+                        secondary: nil,
+                        isSelected: selectedStatus == .granted
+                    ) {
+                        AppHaptics.selection()
+                        selectedStatus = selectedStatus == .granted ? .all : .granted
+                    }
+                    RewardStatusFilterTile(
                         value: "\(snapshot.pendingReward + pendingLocalRewardValue)",
-                        label: "待确认",
-                        secondary: pendingLocalRewardValue > 0 ? "含刚提交" : nil
-                    )
-                    ProfileMetricTile(value: "\(snapshot.rejectedReward)", label: "未采用", secondary: nil)
+                        label: RewardStatusFilter.pending.label,
+                        secondary: pendingLocalRewardValue > 0 ? "含刚提交" : nil,
+                        isSelected: selectedStatus == .pending
+                    ) {
+                        AppHaptics.selection()
+                        selectedStatus = selectedStatus == .pending ? .all : .pending
+                    }
+                    RewardStatusFilterTile(
+                        value: "\(snapshot.rejectedReward)",
+                        label: RewardStatusFilter.rejected.label,
+                        secondary: nil,
+                        isSelected: selectedStatus == .rejected
+                    ) {
+                        AppHaptics.selection()
+                        selectedStatus = selectedStatus == .rejected ? .all : .rejected
+                    }
                 }
             }
 
-            ProductSection(title: "明细") {
-                if rewardItems.isEmpty {
+            if selectedStatus != .all {
+                ProductSection(title: "当前筛选") {
+                    Button {
+                        AppHaptics.selection()
+                        selectedStatus = .all
+                    } label: {
+                        ProductActionCard(
+                            icon: "line.3.horizontal.decrease.circle",
+                            title: selectedStatus.label,
+                            subtitle: "只看\(selectedStatus.label)奖励；再点一次上方状态可回到全部。",
+                            showsChevron: false
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("查看全部奖励明细")
+                }
+            }
+
+            ProductSection(title: selectedStatus == .all ? "明细" : "\(selectedStatus.label)明细") {
+                if filteredRewardItems.isEmpty {
                     ProductEmptyInline(
-                        title: "还没有奖励明细",
-                        message: "去来一句写一句，被采纳或待确认的奖励会归档到这里。"
+                        title: selectedStatus.emptyTitle,
+                        message: selectedStatus.emptyMessage
                     )
                 } else {
                     VStack(spacing: 12) {
-                        ForEach(rewardItems) { item in
+                        ForEach(filteredRewardItems) { item in
                             if let historyItem = historyItem(for: item) {
                                 Button {
                                     AppHaptics.selection()
@@ -3750,6 +3836,50 @@ struct RewardsScreen: View {
         isLoading = true
         snapshot = await ProfileAPIService().fetchSnapshot()
         isLoading = false
+    }
+}
+
+private struct RewardStatusFilterTile: View {
+    let value: String
+    let label: String
+    let secondary: String?
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(value)
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                if let secondary {
+                    Text(secondary)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppTheme.green)
+                        .lineLimit(1)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 98, alignment: .topLeading)
+            .background(isSelected ? AppTheme.bubble : AppTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(isSelected ? AppTheme.text : AppTheme.border, lineWidth: isSelected ? 1.4 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label)，\(value)")
+        .accessibilityHint(isSelected ? "当前筛选" : "筛选这个奖励状态")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
