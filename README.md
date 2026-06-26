@@ -515,3 +515,4 @@ xcodebuild \
 - `DS-001`: 卡片、Composer、Deck 和 Drawer 遮罩阴影颜色收进 `AppTheme` token，业务视图不再散落裸 `.black.opacity(...)`。
 - `DS-004`/`CARD-008`: 主聊天气泡、推荐卡、求一个卡、来一句 Deck 和空状态卡接入语义化 `Radius` token，核心卡片圆角不再散落魔法数字。
 - `DS-005`: 主导航、Drawer 搜索/账号入口、Composer 发送键、推荐/求助卡 `…` 菜单和服务提示图标接入 `AppTheme.Icon` token，主路径 SF Symbols 尺寸和字重统一。
+- `DS-006`: 定位失败恢复操作里的“重试 / 去设置”补齐 44pt 最小触控区域，视觉胶囊保持克制但命中范围符合 iOS 触控规范。

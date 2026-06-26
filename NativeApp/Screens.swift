@@ -813,6 +813,7 @@ private struct LocationPickerSheet: View {
                                     .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
+                            .appMinimumTouchTarget()
                             .disabled(isLocating)
                             .accessibilityLabel("重新获取定位")
                             .accessibilityHint("再次尝试使用当前定位作为决策地点")
@@ -827,6 +828,7 @@ private struct LocationPickerSheet: View {
                                     .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
+                            .appMinimumTouchTarget()
                             .accessibilityLabel("打开定位设置")
                             .accessibilityHint("前往系统设置，为 pipii 开启定位权限")
                         }
