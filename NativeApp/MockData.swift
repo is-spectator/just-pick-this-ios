@@ -188,6 +188,43 @@ struct DecisionLocationContext: Equatable, Codable, Sendable {
         let label = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !label.isEmpty else { return nil }
 
+        return context(label: label, source: "manual")
+    }
+
+    static func inferred(from message: String) -> DecisionLocationContext? {
+        let normalized = message
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+
+        for marker in ["我到了", "我到", "我在", "现在在", "目前在"] {
+            if let label = locationLabel(after: marker, in: normalized) {
+                return context(label: label, source: "message")
+            }
+        }
+
+        let knownLocations = [
+            "上海互联网宝地",
+            "北京三里屯",
+            "北京市朝阳区",
+            "朝阳区",
+            "望京 SOHO",
+            "望京SOHO",
+            "南锣鼓巷",
+            "大同古城",
+            "五道口"
+        ]
+        if let label = knownLocations.first(where: { normalized.localizedCaseInsensitiveContains($0) }) {
+            return context(label: label, source: "message")
+        }
+
+        return nil
+    }
+
+    private static func context(label: String, source: String) -> DecisionLocationContext? {
+        let label = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty else { return nil }
+
         let cityCandidates = ["北京", "上海", "广州", "深圳", "杭州", "成都", "重庆", "南京", "苏州", "武汉", "西安", "长沙", "厦门", "大同"]
         let city = cityCandidates.first { label.localizedCaseInsensitiveContains($0) }
         let area = city == label ? nil : label
@@ -197,8 +234,27 @@ struct DecisionLocationContext: Equatable, Codable, Sendable {
             area: area,
             latitude: nil,
             longitude: nil,
-            source: "manual"
+            source: source
         )
+    }
+
+    private static func locationLabel(after marker: String, in text: String) -> String? {
+        guard let markerRange = text.range(of: marker, options: [.caseInsensitive]) else { return nil }
+        let remainder = text[markerRange.upperBound...]
+        let stopCharacters = CharacterSet(charactersIn: "，,。.!！?？；;、\n")
+        let firstClause = String(remainder.prefix { scalar in
+            String(scalar).rangeOfCharacter(from: stopCharacters) == nil
+        })
+        let stopWords = ["想", "要", "帮", "给", "找", "吃", "点", "喝", "逛", "买"]
+        var label = firstClause.trimmingCharacters(in: .whitespacesAndNewlines)
+        for stopWord in stopWords {
+            if let range = label.range(of: stopWord) {
+                label = String(label[..<range.lowerBound])
+            }
+        }
+        label = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard label.count >= 2 else { return nil }
+        return label
     }
 }
 

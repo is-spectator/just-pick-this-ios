@@ -248,6 +248,7 @@ struct InputScreen: View {
     }
 
     private func submit(_ query: String, shouldAppendUserBubble: Bool = true) {
+        let activeLocation = updateDecisionLocationFromMessageIfNeeded(query) ?? decisionLocation
         draft = ""
         lastFailedQuery = nil
         if shouldAppendUserBubble {
@@ -255,7 +256,7 @@ struct InputScreen: View {
         }
         submitTask?.cancel()
         submitTask = Task { @MainActor in
-            let decision = await session.submit(query: query, locationContext: decisionLocation)
+            let decision = await session.submit(query: query, locationContext: activeLocation)
             guard !Task.isCancelled else { return }
             appendAssistantResponse(for: decision, originalQuery: query)
         }
@@ -465,6 +466,16 @@ struct InputScreen: View {
         rememberDecisionLocation(location.label)
         locationMessage = "已使用\(location.label)。"
         showsLocationPicker = false
+    }
+
+    private func updateDecisionLocationFromMessageIfNeeded(_ query: String) -> DecisionLocationContext? {
+        guard let location = DecisionLocationContext.inferred(from: query) else { return nil }
+        decisionLocation = location
+        manualLocationText = location.label
+        persistDecisionLocation(location)
+        rememberDecisionLocation(location.label)
+        locationMessage = "已从对话识别为\(location.label)。"
+        return location
     }
 
     private func clearDecisionLocation() {
