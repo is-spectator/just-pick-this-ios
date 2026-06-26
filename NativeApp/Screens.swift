@@ -1633,6 +1633,7 @@ struct ResultScreen: View {
     @State private var isAccepting = false
     @State private var sharePayload: CardSharePayload?
     @State private var localNotice: ServiceNotice?
+    @State private var isComposerFocused = false
 
     var body: some View {
         AppChrome(showsBack: true, backAction: onBackHome) {
@@ -1660,10 +1661,19 @@ struct ResultScreen: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 18)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissKeyboard()
+                }
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { _ in dismissKeyboard() }
+            )
         } footer: {
-            BottomComposer(text: $draft, placeholder: "继续问一句", isSending: isFollowingUp) {
+            BottomComposer(text: $draft, placeholder: "继续问一句", focused: $isComposerFocused, isSending: isFollowingUp) {
                 submitDraftFollowup()
             }
         }
@@ -1675,6 +1685,7 @@ struct ResultScreen: View {
     private func submitDraftFollowup() {
         let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
+        dismissKeyboard()
         draft = ""
         followUp(question)
     }
@@ -1694,6 +1705,7 @@ struct ResultScreen: View {
 
     private func accept() {
         guard !isAccepting else { return }
+        dismissKeyboard()
         isAccepting = true
         Task { @MainActor in
             await session.acceptCurrentTopPick()
@@ -1704,17 +1716,20 @@ struct ResultScreen: View {
     }
 
     private func askHuman() {
+        dismissKeyboard()
         AppHaptics.selection()
         onAskHuman()
     }
 
     private func favoritePick() {
+        dismissKeyboard()
         AppHaptics.success()
         session.saveCurrentTopPickToFavorites()
         localNotice = ServiceNotice(title: "已收藏", detail: "这张推荐已经放进 Drawer 里的收藏。")
     }
 
     private func changePick() {
+        dismissKeyboard()
         AppHaptics.selection()
         localNotice = nil
         Task {
@@ -1724,6 +1739,7 @@ struct ResultScreen: View {
     }
 
     private func reportPickIssue() {
+        dismissKeyboard()
         AppHaptics.warning()
         localNotice = ServiceNotice(title: "收到", detail: "这张卡已标记为信息有误，我会避开这类错误。")
         Task {
@@ -1732,8 +1748,13 @@ struct ResultScreen: View {
     }
 
     private func sharePick() {
+        dismissKeyboard()
         AppHaptics.selection()
         sharePayload = CardSharePayload(text: shareText(for: session.topPick))
+    }
+
+    private func dismissKeyboard() {
+        isComposerFocused = false
     }
 
     private func shareText(for pick: TopPick) -> String {
@@ -1757,6 +1778,7 @@ struct AskScreen: View {
     @State private var publishFeedbackCount = 0
     @State private var publishTask: Task<Void, Never>?
     @State private var pollTask: Task<Void, Never>?
+    @State private var isComposerFocused = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1801,14 +1823,24 @@ struct AskScreen: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 18)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        dismissKeyboard()
+                    }
                 }
                 .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8)
+                        .onChanged { _ in dismissKeyboard() }
+                )
 
                 ToastView(message: toastMessage, isVisible: showsToast)
             }
         } footer: {
             if session.helpRequest.status == .draft {
-                BottomComposer(text: $draft, placeholder: "补一句背景", isSending: isPublishing) {
+                BottomComposer(text: $draft, placeholder: "补一句背景", focused: $isComposerFocused, isSending: isPublishing) {
+                    dismissKeyboard()
                     session.addHelpContext(draft)
                     draft = ""
                 }
@@ -1867,6 +1899,7 @@ struct AskScreen: View {
 
     private func publish() {
         guard session.helpRequest.status == .draft, !isPublishing else { return }
+        dismissKeyboard()
         publishFeedbackCount += 1
         isPublishing = true
         publishTask?.cancel()
@@ -1892,6 +1925,7 @@ struct AskScreen: View {
 
     private func closeHelpRequest() {
         guard canCloseHelpRequest, !isPublishing else { return }
+        dismissKeyboard()
         publishTask?.cancel()
         pollTask?.cancel()
         session.closeCurrentHelpRequest()
@@ -1908,6 +1942,7 @@ struct AskScreen: View {
 
     private func goBack() {
         guard !isPublishing else { return }
+        dismissKeyboard()
         if session.helpRequest.status == .draft {
             dismiss()
         } else {
@@ -1934,11 +1969,16 @@ struct AskScreen: View {
     }
 
     private func acceptAnswer() {
+        dismissKeyboard()
         Task { @MainActor in
             await session.acceptCurrentHelpAnswer()
             AppHaptics.success()
             onHome()
         }
+    }
+
+    private func dismissKeyboard() {
+        isComposerFocused = false
     }
 }
 
