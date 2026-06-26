@@ -64,10 +64,19 @@ enum AppTheme {
 
     enum Typography {
         static let nav = Font.headline.weight(.semibold)
+        static let navCompact = Font.subheadline.weight(.semibold)
         static let title = Font.largeTitle.weight(.bold)
         static let cardTitle = Font.title2.weight(.bold)
         static let body = Font.body
         static let caption = Font.caption
+        static let action = Font.subheadline.weight(.semibold)
+        static let primaryButton = Font.callout.weight(.semibold)
+        static let inlineControl = Font.caption.weight(.semibold)
+        static let meta = Font.caption.weight(.medium)
+        static let drawerActionTitle = Font.subheadline.weight(.semibold)
+        static let drawerRowTitle = Font.subheadline.weight(.medium)
+        static let drawerBadge = Font.caption2.weight(.semibold)
+        static let recommendationSubtitle = Font.subheadline.weight(.medium)
     }
 
     enum Icon {

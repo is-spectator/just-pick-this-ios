@@ -794,7 +794,7 @@ private struct ChatDrawer: View {
                 Image(systemName: "plus.message")
                     .font(AppTheme.Icon.row)
                 Text("新对话")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(AppTheme.Typography.action)
                 Spacer()
             }
             .foregroundStyle(AppTheme.text)
@@ -836,7 +836,7 @@ private struct ChatDrawer: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(AuthTokenStore.displayName ?? (AuthTokenStore.email == nil ? "登录" : "已登录"))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(AppTheme.Typography.drawerActionTitle)
                         .foregroundStyle(AppTheme.text)
                     Text(AuthTokenStore.email ?? "同步历史、奖励和账号")
                         .font(AppTheme.Typography.caption)
@@ -1114,7 +1114,7 @@ private struct DrawerActionRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(AppTheme.Typography.drawerActionTitle)
                         .foregroundStyle(AppTheme.text)
                     Text(subtitle)
                         .font(AppTheme.Typography.caption)
@@ -1126,7 +1126,7 @@ private struct DrawerActionRow: View {
 
                 if badgeCount > 0 {
                     Text(badgeCount > 99 ? "99+" : "\(badgeCount)")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(AppTheme.Typography.drawerBadge)
                         .foregroundStyle(AppTheme.onBadge)
                         .padding(.horizontal, 6)
                         .frame(minWidth: 22, minHeight: 20)
@@ -1163,13 +1163,13 @@ private struct DrawerHistoryRow: View {
         Button(action: onOpen) {
             HStack(spacing: AppTheme.Spacing.sm) {
                 Image(systemName: isPinned ? "pin.fill" : "message")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(AppTheme.Icon.action)
                     .foregroundStyle(isPinned ? AppTheme.text : AppTheme.textMuted)
                     .frame(width: 28, height: 28)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(AppTheme.Typography.drawerRowTitle)
                         .foregroundStyle(AppTheme.text)
                         .lineLimit(1)
                     Text(subtitle)
@@ -1210,13 +1210,13 @@ private struct DrawerSearchResultRow: View {
         Button(action: onOpen) {
             HStack(spacing: AppTheme.Spacing.sm) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(AppTheme.Icon.action)
                     .foregroundStyle(AppTheme.textMuted)
                     .frame(width: 28, height: 28)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(AppTheme.Typography.drawerRowTitle)
                         .foregroundStyle(AppTheme.text)
                         .lineLimit(1)
                     Text(subtitle)
@@ -1228,7 +1228,7 @@ private struct DrawerSearchResultRow: View {
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppTheme.Icon.tiny)
                     .foregroundStyle(AppTheme.textMuted)
             }
             .padding(.horizontal, AppTheme.Spacing.sm)

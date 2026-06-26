@@ -96,7 +96,7 @@ struct TopBar: View {
                 Spacer()
 
                 Text("就选这个")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(AppTheme.Typography.navCompact)
                     .foregroundStyle(AppTheme.text)
 
                 Spacer()
@@ -141,7 +141,7 @@ struct TopBar: View {
                                 Image(systemName: "plus.message")
                                     .font(AppTheme.Icon.action)
                                 Text("新对话")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(AppTheme.Typography.action)
                             }
                             .foregroundStyle(AppTheme.text)
                             .padding(.horizontal, 13)
@@ -271,7 +271,7 @@ struct BottomComposer: View {
                     isFocused = false
                     externalFocus = false
                 }
-                .font(.system(size: 15, weight: .semibold))
+                .font(AppTheme.Typography.action)
                 .accessibilityLabel("收起键盘")
             }
         }
@@ -406,7 +406,7 @@ struct CollapsibleText: View {
                     }
                 } label: {
                     Text(isExpanded ? "收起" : "展开")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppTheme.Typography.inlineControl)
                         .foregroundStyle(AppTheme.text)
                 }
                 .buttonStyle(.plain)
@@ -485,7 +485,7 @@ struct DecisionCard: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if let supportingSubtitle {
                         Text(supportingSubtitle)
-                            .font(.system(size: 15, weight: .medium))
+                            .font(AppTheme.Typography.recommendationSubtitle)
                             .foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(2)
                     }
@@ -523,7 +523,7 @@ struct DecisionCard: View {
             HStack(spacing: 12) {
                 Button(action: onAskHuman) {
                     Text("求一个")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(AppTheme.Typography.primaryButton)
                         .foregroundStyle(AppTheme.text)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
@@ -550,7 +550,7 @@ struct DecisionCard: View {
                         }
 
                         Text(isAccepting ? "确认中" : "就这个")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(AppTheme.Typography.primaryButton)
                     }
                     .foregroundStyle(AppTheme.onPrimaryAction)
                     .frame(maxWidth: .infinity)
