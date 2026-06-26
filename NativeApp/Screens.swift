@@ -2017,6 +2017,7 @@ struct AnswerScreen: View {
 }
 
 struct HelpDeckStack: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let current: HelpRequest?
     let next: HelpRequest?
     let isLoading: Bool
@@ -2043,9 +2044,9 @@ struct HelpDeckStack: View {
                     if let next {
                         HelpDeckCard(request: next)
                             .frame(width: cardWidth, height: cardHeight)
-                            .scaleEffect(0.95 + 0.03 * dragProgress)
-                            .offset(x: dragOffset >= 0 ? -28 + 10 * dragProgress : 24 - 10 * dragProgress)
-                            .opacity(0.52 + 0.18 * dragProgress)
+                            .scaleEffect(reduceMotion ? 1 : 0.95 + 0.03 * dragProgress)
+                            .offset(x: reduceMotion ? 22 : (dragOffset >= 0 ? -28 + 10 * dragProgress : 24 - 10 * dragProgress))
+                            .opacity(reduceMotion ? 0.64 : 0.52 + 0.18 * dragProgress)
                             .allowsHitTesting(false)
                     }
 
@@ -2057,8 +2058,8 @@ struct HelpDeckStack: View {
                     )
                         .frame(width: cardWidth, height: cardHeight)
                         .offset(x: dragOffset)
-                        .scaleEffect(1 - 0.035 * dragProgress)
-                        .rotationEffect(.degrees(Double(dragOffset / 36)))
+                        .scaleEffect(reduceMotion ? 1 : 1 - 0.035 * dragProgress)
+                        .rotationEffect(.degrees(reduceMotion ? 0 : Double(dragOffset / 36)))
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
@@ -2066,18 +2067,23 @@ struct HelpDeckStack: View {
                                 }
                                 .onEnded { value in
                                     if abs(value.translation.width) > 90 {
-                                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                            dragOffset = value.translation.width > 0 ? cardWidth : -cardWidth
-                                        }
                                         committedSwipeCount += 1
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                                        if reduceMotion {
                                             onAdvance()
-                                            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
-                                                dragOffset = 0
+                                            dragOffset = 0
+                                        } else {
+                                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                                dragOffset = value.translation.width > 0 ? cardWidth : -cardWidth
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                                                onAdvance()
+                                                withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+                                                    dragOffset = 0
+                                                }
                                             }
                                         }
                                     } else {
-                                        withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                                        withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.84)) {
                                             dragOffset = 0
                                         }
                                     }

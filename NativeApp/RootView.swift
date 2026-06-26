@@ -14,6 +14,7 @@ enum AppRoute: Hashable {
 }
 
 struct RootView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var path: [AppRoute]
     @State private var session: AppSession
     @State private var answerPollTask: Task<Void, Never>?
@@ -34,6 +35,9 @@ struct RootView: View {
     @GestureState private var drawerDragTranslation: CGFloat = 0
 
     private let drawerAnimation = Animation.spring(response: 0.34, dampingFraction: 0.88)
+    private var activeDrawerAnimation: Animation? {
+        reduceMotion ? nil : drawerAnimation
+    }
 
     init() {
         let demoScreen = DocumentationDemoScreen.current
@@ -50,10 +54,10 @@ struct RootView: View {
 
             ZStack(alignment: .leading) {
                 chatStack
-                    .scaleEffect(1 - 0.015 * drawerProgress)
-                    .offset(x: drawerWidth * 0.12 * drawerProgress)
+                    .scaleEffect(reduceMotion ? 1 : 1 - 0.015 * drawerProgress)
+                    .offset(x: reduceMotion ? 0 : drawerWidth * 0.12 * drawerProgress)
                     .allowsHitTesting(!showsDrawer)
-                    .animation(drawerAnimation, value: showsDrawer)
+                    .animation(activeDrawerAnimation, value: showsDrawer)
 
                 Color.black.opacity(0.18 * drawerProgress)
                     .ignoresSafeArea()
@@ -92,7 +96,7 @@ struct RootView: View {
                 )
                 .frame(width: drawerWidth)
                 .offset(x: drawerOffset(for: drawerWidth, progress: drawerProgress))
-                .animation(drawerAnimation, value: showsDrawer)
+                .animation(activeDrawerAnimation, value: showsDrawer)
             }
             .contentShape(Rectangle())
             .simultaneousGesture(drawerGesture(edgeWidth: 28))
@@ -221,7 +225,7 @@ struct RootView: View {
     private func openDrawer() {
         guard !showsDrawer else { return }
         AppHaptics.selection()
-        withAnimation(drawerAnimation) {
+        withAnimation(activeDrawerAnimation) {
             showsDrawer = true
         }
     }
@@ -231,7 +235,7 @@ struct RootView: View {
         if haptic {
             AppHaptics.selection()
         }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9)) {
             showsDrawer = false
         }
     }
