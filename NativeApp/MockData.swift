@@ -306,11 +306,11 @@ struct BackendRecommendationService: RecommendationService {
                     let payload = try await submitChatTurn(query: query, conversationId: nil, locationContext: locationContext)
                     return payload.result(for: query)
                 } catch {
-                    print("BackendRecommendationService.submit retry failed: \(error)")
+                    debugLog("submit retry failed")
                 }
             }
 
-            print("BackendRecommendationService.submit failed: \(error)")
+            debugLog("submit failed")
             return RecommendationResult(
                 sessionId: sessionId,
                 questionId: nil,
@@ -544,7 +544,7 @@ struct BackendRecommendationService: RecommendationService {
                 }
             }
             let body = String(data: data, encoding: .utf8) ?? ""
-            print("BackendRecommendationService HTTP \(status) for \(request.url?.absoluteString ?? "<nil>"): \(body)")
+            debugLog("HTTP \(status)")
             throw BackendServiceError.httpStatus(status, body)
         }
 
@@ -552,9 +552,15 @@ struct BackendRecommendationService: RecommendationService {
             return try JSONDecoder().decode(Response.self, from: data)
         } catch {
             let body = String(data: data, encoding: .utf8) ?? ""
-            print("BackendRecommendationService decode failed for \(request.url?.absoluteString ?? "<nil>"): \(error). Body: \(body)")
+            debugLog("decode failed")
             throw BackendServiceError.decoding(String(describing: error), body)
         }
+    }
+
+    private func debugLog(_ message: String) {
+        #if DEBUG
+        NSLog("BackendRecommendationService: %@", message)
+        #endif
     }
 
     private func publishedFallback(_ helpRequest: HelpRequest) -> HelpRequest {
