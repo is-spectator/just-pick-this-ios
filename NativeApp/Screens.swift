@@ -623,7 +623,7 @@ private struct LocationPickerSheet: View {
         return !filteredSuggestions.contains { $0.localizedCaseInsensitiveCompare(manualQuery) == .orderedSame }
     }
 
-    private var showsSettingsAction: Bool {
+    private var showsLocationRecoveryActions: Bool {
         message?.contains("没拿到当前位置") == true
     }
 
@@ -774,7 +774,21 @@ private struct LocationPickerSheet: View {
 
                         Spacer(minLength: 8)
 
-                        if showsSettingsAction {
+                        if showsLocationRecoveryActions {
+                            Button(action: onUseCurrent) {
+                                Text("重试")
+                                    .font(AppTheme.Typography.caption.weight(.semibold))
+                                    .foregroundStyle(AppTheme.text)
+                                    .padding(.horizontal, 12)
+                                    .frame(height: 32)
+                                    .background(AppTheme.bubble)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isLocating)
+                            .accessibilityLabel("重新获取定位")
+                            .accessibilityHint("再次尝试使用当前定位作为决策地点")
+
                             Button(action: onOpenSettings) {
                                 Text("去设置")
                                     .font(AppTheme.Typography.caption.weight(.semibold))
