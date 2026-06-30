@@ -2996,8 +2996,9 @@ struct ProfileScreen: View {
         guard !isLoading else { return }
         isLoading = true
         let result = await ProfileAPIService().fetchSnapshotResult()
+        let answersNotice = await session.loadSubmittedAnswers()
         snapshot = result.snapshot
-        snapshotNotice = result.notice
+        snapshotNotice = result.notice ?? answersNotice
         isLoading = false
     }
 

@@ -56,6 +56,11 @@ struct MyHelpRequestsResult: Sendable {
     let notice: ServiceNotice?
 }
 
+struct MySubmittedAnswersResult: Sendable {
+    let answers: [SubmittedAnswerRecord]
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -299,6 +304,7 @@ protocol RecommendationService: Sendable {
     func refresh(_ request: HelpRequest) async -> HelpRequest
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
     func myHelpRequests(limit: Int) async -> MyHelpRequestsResult
+    func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
     func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult
     func skip(_ request: HelpRequest, reason: String) async -> Bool
@@ -448,6 +454,25 @@ struct BackendRecommendationService: RecommendationService {
             )
         } catch {
             return MyHelpRequestsResult(requests: [], notice: MockData.myHelpUnavailableNotice())
+        }
+    }
+
+    func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult {
+        do {
+            var components = URLComponents(url: endpoint("/v1/help-answers/mine"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceUid),
+                URLQueryItem(name: "limit", value: "\(max(1, min(limit, 100)))")
+            ]
+
+            guard let url = components.url else { throw BackendServiceError.decoding("invalid help answers URL", "") }
+            let response: V1HelpAnswerListResponse = try await perform(URLRequest(url: url))
+            return MySubmittedAnswersResult(
+                answers: response.items.compactMap(\.record),
+                notice: nil
+            )
+        } catch {
+            return MySubmittedAnswersResult(answers: [], notice: MockData.profileSnapshotUnavailableNotice(error: error))
         }
     }
 
@@ -1902,6 +1927,59 @@ private struct V1HelpFeedResponse: Decodable {
     let items: [V1HelpCardSummary]
 }
 
+private struct V1HelpAnswerListResponse: Decodable {
+    let items: [V1HelpAnswerSummary]
+}
+
+private struct V1HelpAnswerSummary: Decodable {
+    let id: String
+    let helpCardId: String
+    let rawText: String
+    let status: String
+    let rewardStatus: String
+    let questionTitle: String
+    let questionContext: String?
+    let reward: V1RewardPayload?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case helpCardId = "help_card_id"
+        case rawText = "raw_text"
+        case status
+        case rewardStatus = "reward_status"
+        case questionTitle = "question_title"
+        case questionContext = "question_context"
+        case reward
+        case createdAt = "created_at"
+    }
+
+    var record: SubmittedAnswerRecord? {
+        guard let answerId = UUID(uuidString: id),
+              let helpRequestId = UUID(uuidString: helpCardId) else { return nil }
+        return SubmittedAnswerRecord(
+            id: answerId,
+            helpRequestId: helpRequestId,
+            questionTitle: questionTitle,
+            questionContext: questionContext ?? "",
+            text: rawText,
+            rewardLabel: reward?.label ?? "+10",
+            status: submittedStatus,
+            timeLabel: createdAt ?? "刚刚"
+        )
+    }
+
+    private var submittedStatus: SubmittedAnswerStatus {
+        if rewardStatus == "granted" || status == "used" {
+            return .accepted
+        }
+        if rewardStatus == "rejected" || status == "rejected" {
+            return .rejected
+        }
+        return .pending
+    }
+}
+
 private struct V1HelpCardOneLinerRequest: Encodable {
     let text: String
     let deviceId: String
@@ -2092,6 +2170,10 @@ struct MockCloudRecommendationService: RecommendationService {
 
     func myHelpRequests(limit: Int) async -> MyHelpRequestsResult {
         MyHelpRequestsResult(requests: [MockData.defaultHelpRequest], notice: nil)
+    }
+
+    func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult {
+        MySubmittedAnswersResult(answers: [], notice: nil)
     }
 
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest] {
@@ -2574,6 +2656,16 @@ final class AppSession {
         return result.notice
     }
 
+    @discardableResult
+    func loadSubmittedAnswers() async -> ServiceNotice? {
+        let result = await service.mySubmittedAnswers(limit: 100)
+        if result.notice == nil || !result.answers.isEmpty {
+            mergeSubmittedAnswersFromRemote(result.answers)
+        }
+        serviceNotice = result.notice
+        return result.notice
+    }
+
     func selectAnswerRequest(_ request: HelpRequest) {
         if !answerQueue.contains(where: { $0.id == request.id }) {
             answerQueue.insert(request, at: 0)
@@ -2803,6 +2895,25 @@ final class AppSession {
         if let data = try? JSONEncoder().encode(answers) {
             UserDefaults.standard.set(data, forKey: Self.submittedAnswersKey)
         }
+    }
+
+    private func mergeSubmittedAnswersFromRemote(_ remoteAnswers: [SubmittedAnswerRecord]) {
+        var merged: [SubmittedAnswerRecord] = []
+        var seenIds: Set<UUID> = []
+        var seenKeys: Set<String> = []
+
+        func appendIfNeeded(_ answer: SubmittedAnswerRecord) {
+            let key = "\(answer.helpRequestId.uuidString)|\(answer.text.trimmingCharacters(in: .whitespacesAndNewlines))"
+            guard !seenIds.contains(answer.id), !seenKeys.contains(key) else { return }
+            merged.append(answer)
+            seenIds.insert(answer.id)
+            seenKeys.insert(key)
+        }
+
+        remoteAnswers.forEach(appendIfNeeded)
+        submittedAnswers.forEach(appendIfNeeded)
+        submittedAnswers = Array(merged.prefix(80))
+        persistSubmittedAnswers()
     }
 
     private func upsertLocalHistory(query: String, status: String, helpRequestId: UUID?, topPick: TopPick?) {

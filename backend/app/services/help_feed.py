@@ -145,6 +145,38 @@ def list_my_help_cards(
         }
 
 
+def list_my_help_answers(
+    *,
+    user_id: str | None = None,
+    device_uid: str | None = None,
+    limit: int = 50,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    resolved_limit = max(1, min(int(limit or 50), 100))
+    try:
+        offset = max(0, int(cursor or 0))
+    except ValueError:
+        offset = 0
+
+    with session_scope() as session:
+        user = ensure_user(session, user_id=user_id, device_uid=device_uid)
+        rows = list(
+            session.scalars(
+                select(HelpAnswer)
+                .where(HelpAnswer.answer_user_id == user.id)
+                .order_by(HelpAnswer.created_at.desc())
+                .offset(offset)
+                .limit(resolved_limit + 1)
+            )
+        )
+        items = rows[:resolved_limit]
+        next_cursor = str(offset + resolved_limit) if len(rows) > resolved_limit else None
+        return {
+            "items": [_serialize_help_answer(answer) for answer in items],
+            "next_cursor": next_cursor,
+        }
+
+
 def help_feed_conversion_summary(
     session: Session,
     *,
@@ -725,6 +757,24 @@ def _serialize_ranked_help_card(
     return item
 
 
+def _serialize_help_answer(answer: HelpAnswer) -> dict[str, Any]:
+    help_card = answer.help_card
+    reward = dict((answer.evidence_json or {}).get("reward") or {})
+    if not reward and help_card is not None:
+        reward = _reward_payload(help_card)
+    return {
+        "id": str(answer.id),
+        "help_card_id": str(answer.help_card_id),
+        "raw_text": answer.raw_text,
+        "status": answer.status,
+        "reward_status": answer.reward_status,
+        "question_title": str(getattr(help_card, "title", None) or "求一个"),
+        "question_context": str(getattr(help_card, "context_text", None) or ""),
+        "reward": reward,
+        "created_at": answer.created_at,
+    }
+
+
 def help_feed_rank_payload(
     help_card: HelpCard,
     *,
@@ -960,6 +1010,7 @@ __all__ = [
     "help_feed_rank_payload",
     "help_feed_sort_key",
     "list_help_feed",
+    "list_my_help_answers",
     "list_my_help_cards",
     "publish_help_card",
     "accept_final_recommendation",

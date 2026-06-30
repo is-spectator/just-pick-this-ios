@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 from app.api._service import call_service, dump_model, resolve_service_handler
 from app.schemas.cards import (
     AnswererQualityResponse,
+    HelpAnswerListResponse,
     HelpCardDetail,
     HelpCardFinalAcceptRequest,
     HelpCardFinalAcceptResponse,
@@ -51,6 +52,24 @@ async def my_help_cards(
     cursor: str | None = None,
 ) -> HelpFeedResponse:
     handler = resolve_service_handler("app.services.help_feed", "list_my_help_cards")
+    return await call_service(
+        handler,
+        user_id=user_id,
+        device_uid=device_uid or device_id,
+        limit=limit,
+        cursor=cursor,
+    )
+
+
+@router.get("/help-answers/mine", response_model=HelpAnswerListResponse)
+async def my_help_answers(
+    user_id: str | None = None,
+    device_uid: str | None = None,
+    device_id: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+) -> HelpAnswerListResponse:
+    handler = resolve_service_handler("app.services.help_feed", "list_my_help_answers")
     return await call_service(
         handler,
         user_id=user_id,

@@ -341,6 +341,44 @@ def test_my_help_cards_returns_owner_cards(run_async: Any, async_client: AsyncCl
     run_async(scenario)
 
 
+def test_my_help_answers_returns_answerer_records(run_async: Any, async_client: AsyncClient) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        owner_device = f"pytest-my-answer-owner-{suffix}"
+        answer_device = f"pytest-my-answer-answerer-{suffix}"
+        help_card_id = _seed_help_card(
+            owner_device=owner_device,
+            title="五道口韩餐怎么选，求一句",
+            context_text="想吃韩餐，不想排太久。",
+            status="published",
+            reward_value=20,
+        )
+
+        submitted = await async_client.post(
+            f"/v1/help-cards/{help_card_id}/one-liner",
+            json={"device_id": answer_device, "text": "我会选那家离地铁近的韩餐，别排太久。"},
+        )
+        assert submitted.status_code == 200, submitted.text
+        answer_id = submitted.json()["answer_id"]
+
+        mine = await async_client.get(
+            "/v1/help-answers/mine",
+            params={"device_id": answer_device, "limit": 20},
+        )
+        assert mine.status_code == 200, mine.text
+        items = mine.json()["items"]
+        answer = next(item for item in items if item["id"] == answer_id)
+        assert answer["help_card_id"] == help_card_id
+        assert answer["question_title"] == "五道口韩餐怎么选，求一句"
+        assert answer["question_context"] == "想吃韩餐，不想排太久。"
+        assert answer["raw_text"] == "我会选那家离地铁近的韩餐，别排太久。"
+        assert answer["status"] == "submitted"
+        assert answer["reward_status"] == "pending"
+        assert answer["reward"]["label"] == "+20"
+
+    run_async(scenario)
+
+
 def test_help_feed_records_impressions_for_visible_cards(
     run_async: Any,
     async_client: AsyncClient,

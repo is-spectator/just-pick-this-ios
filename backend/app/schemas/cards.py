@@ -144,6 +144,23 @@ class HelpFeedResponse(ApiModel):
     next_cursor: str | None = None
 
 
+class HelpAnswerSummary(ApiModel):
+    id: str
+    help_card_id: str
+    raw_text: str
+    status: str
+    reward_status: str
+    question_title: str
+    question_context: str | None = None
+    reward: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class HelpAnswerListResponse(ApiModel):
+    items: list[HelpAnswerSummary] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
 class HelpCardDetail(HelpCardSummary):
     pass
 
