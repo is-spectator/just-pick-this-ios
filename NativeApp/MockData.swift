@@ -48,7 +48,20 @@ struct SubmitHelpAnswerResult: Sendable {
 struct CompleteQuestionResult: Sendable {
     let didComplete: Bool
     let history: [QuestionHistory]
+    let finalRecommendationCardId: UUID?
     let notice: ServiceNotice?
+
+    init(
+        didComplete: Bool,
+        history: [QuestionHistory],
+        finalRecommendationCardId: UUID? = nil,
+        notice: ServiceNotice?
+    ) {
+        self.didComplete = didComplete
+        self.history = history
+        self.finalRecommendationCardId = finalRecommendationCardId
+        self.notice = notice
+    }
 }
 
 struct MyHelpRequestsResult: Sendable {
@@ -686,7 +699,12 @@ struct BackendRecommendationService: RecommendationService {
                     notice: MockData.acceptUnavailableNotice()
                 )
             }
-            return CompleteQuestionResult(didComplete: true, history: [], notice: nil)
+            return CompleteQuestionResult(
+                didComplete: true,
+                history: [],
+                finalRecommendationCardId: response.cardId.flatMap(UUID.init(uuidString:)),
+                notice: nil
+            )
         } catch {
             return CompleteQuestionResult(
                 didComplete: false,
@@ -2188,6 +2206,7 @@ private struct V1FavoriteChoiceSummary: Decodable {
     let status: String?
     let helpRequestId: UUID?
     let topPick: TopPickResponse?
+    let finalRecommendationCardId: String?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -2196,6 +2215,7 @@ private struct V1FavoriteChoiceSummary: Decodable {
         case status
         case helpRequestId = "help_request_id"
         case topPick = "top_pick"
+        case finalRecommendationCardId = "final_recommendation_card_id"
         case createdAt = "created_at"
     }
 
@@ -2207,6 +2227,7 @@ private struct V1FavoriteChoiceSummary: Decodable {
             status: status ?? "saved",
             helpRequestId: helpRequestId,
             topPick: topPick?.model(query: query),
+            finalRecommendationCardId: finalRecommendationCardId.flatMap(UUID.init(uuidString:)),
             createdAt: createdAt
         )
     }
@@ -2630,6 +2651,7 @@ private struct QuestionHistoryResponse: Decodable {
     let status: String?
     let helpRequestId: UUID?
     let topPick: TopPickResponse?
+    let finalRecommendationCardId: String?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -2638,6 +2660,7 @@ private struct QuestionHistoryResponse: Decodable {
         case status
         case helpRequestId = "help_request_id"
         case topPick = "top_pick"
+        case finalRecommendationCardId = "final_recommendation_card_id"
         case createdAt = "created_at"
     }
 
@@ -2649,6 +2672,7 @@ private struct QuestionHistoryResponse: Decodable {
             status: status,
             helpRequestId: helpRequestId,
             topPick: topPick?.model(query: query),
+            finalRecommendationCardId: finalRecommendationCardId.flatMap(UUID.init(uuidString:)),
             createdAt: createdAt
         )
     }
@@ -2970,7 +2994,8 @@ final class AppSession {
                 query: refreshed.title,
                 status: refreshed.finalPick == nil ? "answer_received" : "completed",
                 helpRequestId: refreshed.id,
-                topPick: refreshed.finalPick ?? currentTopPick
+                topPick: refreshed.finalPick ?? currentTopPick,
+                finalRecommendationCardId: refreshed.finalPick?.cardId
             )
             return true
         }
@@ -3229,7 +3254,12 @@ final class AppSession {
         serviceNotice = result.notice
         guard result.didComplete else { return false }
 
-        markCurrentQuestionCompleted(remoteHistory: result.history)
+        let finalPick = await finalPickForCompletedHelpRequest(cardId: result.finalRecommendationCardId)
+        markCurrentQuestionCompleted(
+            remoteHistory: result.history,
+            finalRecommendationCardId: result.finalRecommendationCardId,
+            finalPick: finalPick
+        )
         currentHelpRequest = nil
         currentQuery = ""
         return true
@@ -3340,7 +3370,13 @@ final class AppSession {
         persistSubmittedAnswers()
     }
 
-    private func upsertLocalHistory(query: String, status: String, helpRequestId: UUID?, topPick: TopPick?) {
+    private func upsertLocalHistory(
+        query: String,
+        status: String,
+        helpRequestId: UUID?,
+        topPick: TopPick?,
+        finalRecommendationCardId: UUID? = nil
+    ) {
         if let currentQuestionId,
            let index = history.firstIndex(where: { $0.id == currentQuestionId }) {
             let existing = history[index]
@@ -3350,6 +3386,7 @@ final class AppSession {
                 status: status,
                 helpRequestId: helpRequestId,
                 topPick: topPick ?? existing.topPick,
+                finalRecommendationCardId: finalRecommendationCardId ?? existing.finalRecommendationCardId,
                 createdAt: existing.createdAt
             )
             persistHistory()
@@ -3365,6 +3402,7 @@ final class AppSession {
                 status: status,
                 helpRequestId: helpRequestId,
                 topPick: topPick,
+                finalRecommendationCardId: finalRecommendationCardId,
                 createdAt: ISO8601DateFormatter().string(from: Date())
             ),
             at: 0
@@ -3485,15 +3523,56 @@ final class AppSession {
         }
     }
 
-    private func markCurrentQuestionCompleted(remoteHistory: [QuestionHistory]) {
+    private func markCurrentQuestionCompleted(
+        remoteHistory: [QuestionHistory],
+        finalRecommendationCardId: UUID? = nil,
+        finalPick: TopPick? = nil
+    ) {
         if !remoteHistory.isEmpty {
-            history = remoteHistory
+            history = remoteHistory.map { item in
+                guard item.helpRequestId == currentHelpRequest?.id || item.id == currentQuestionId else {
+                    return item
+                }
+                return historyItemByAddingFinalPick(
+                    item,
+                    finalRecommendationCardId: finalRecommendationCardId,
+                    finalPick: finalPick
+                )
+            }
             persistHistory()
             return
         }
 
         let query = currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery
-        upsertLocalHistory(query: query, status: "completed", helpRequestId: currentHelpRequest?.id, topPick: currentTopPick)
+        upsertLocalHistory(
+            query: query,
+            status: "completed",
+            helpRequestId: currentHelpRequest?.id,
+            topPick: finalPick ?? currentTopPick,
+            finalRecommendationCardId: finalRecommendationCardId
+        )
+    }
+
+    private func finalPickForCompletedHelpRequest(cardId: UUID?) async -> TopPick? {
+        guard let cardId else { return nil }
+        let fallbackQuery = currentHelpRequest?.title ?? currentQuery
+        return await service.fetchRecommendationCard(id: cardId, query: fallbackQuery)
+    }
+
+    private func historyItemByAddingFinalPick(
+        _ item: QuestionHistory,
+        finalRecommendationCardId: UUID?,
+        finalPick: TopPick?
+    ) -> QuestionHistory {
+        QuestionHistory(
+            id: item.id,
+            query: item.query,
+            status: item.status,
+            helpRequestId: item.helpRequestId,
+            topPick: finalPick ?? item.topPick,
+            finalRecommendationCardId: finalRecommendationCardId ?? item.finalRecommendationCardId,
+            createdAt: item.createdAt
+        )
     }
 
     #if DEBUG
