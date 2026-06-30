@@ -3292,7 +3292,8 @@ struct HelpResultDetailScreen: View {
             title: historyItem.query,
             context: historyItem.topPick?.reason ?? historyItem.statusLabel,
             status: status(from: historyItem.status),
-            answers: []
+            answers: [],
+            finalPick: historyItem.topPick
         )
     }
 
@@ -3326,7 +3327,7 @@ struct HelpResultDetailScreen: View {
             }
 
             ProductSection(title: "皮皮最终推荐") {
-                if let pick = historyItem.topPick {
+                if let pick = displayRequest.finalPick ?? historyItem.topPick {
                     HelpFinalRecommendationPanel(pick: pick)
                 } else if let pipiAnswer {
                     HelpFinalTextPanel(answer: pipiAnswer)

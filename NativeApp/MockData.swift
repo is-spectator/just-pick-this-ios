@@ -136,6 +136,7 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
     var answerCount: Int
     var status: HelpRequestStatus
     var answers: [HumanAnswer]
+    var finalPick: TopPick?
 
     init(
         id: UUID = UUID(),
@@ -144,7 +145,8 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
         rewardLabel: String = "+10",
         answerCount: Int = 0,
         status: HelpRequestStatus = .draft,
-        answers: [HumanAnswer] = []
+        answers: [HumanAnswer] = [],
+        finalPick: TopPick? = nil
     ) {
         self.id = id
         self.title = title
@@ -153,6 +155,7 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
         self.answerCount = answerCount
         self.status = status
         self.answers = answers
+        self.finalPick = finalPick
     }
 }
 
@@ -380,6 +383,10 @@ struct BackendRecommendationService: RecommendationService {
             let response: V1LightEventsResponse = try await perform(URLRequest(url: url))
             guard response.items.contains(where: { $0.helpCardId == helpRequest.id.uuidString }) else {
                 return helpRequest
+            }
+
+            if let refreshed = await fetchHelpRequest(id: helpRequest.id) {
+                return refreshed
             }
 
             var refreshed = helpRequest
@@ -1655,19 +1662,18 @@ private struct V1HelpCardSummary: Decodable {
     }
 
     func model(fallbackTitle: String) -> HelpRequest {
-        var answers: [HumanAnswer] = []
-        if let card {
-            answers.append(HumanAnswer(text: clean(card.oneLiner, fallback: card.title), nickname: "皮皮", timeLabel: "刚刚"))
-        }
+        let resolvedTitle = clean(title, fallback: clean(prompt, fallback: fallbackTitle))
+        let finalPick = card?.model(query: resolvedTitle)
 
         return HelpRequest(
             id: id ?? UUID(),
-            title: clean(title, fallback: clean(prompt, fallback: fallbackTitle)),
+            title: resolvedTitle,
             context: clean(contextText, fallback: clean(oneLiner, fallback: "这题不硬选 · 等懂的人来一句")),
             rewardLabel: reward?.label ?? "+10",
-            answerCount: answerCount ?? metadata?.answerCount ?? answers.count,
+            answerCount: answerCount ?? metadata?.answerCount ?? 0,
             status: helpRequestStatus(from: status),
-            answers: answers
+            answers: [],
+            finalPick: finalPick
         )
     }
 
@@ -2322,9 +2328,15 @@ final class AppSession {
         guard let request = currentHelpRequest else { return false }
         let previousAnswerCount = request.answers.count
         let refreshed = await service.refresh(request)
+        let receivedFinalPick = request.finalPick == nil && refreshed.finalPick != nil
         currentHelpRequest = refreshed
-        if refreshed.answers.count > previousAnswerCount {
-            upsertLocalHistory(query: refreshed.title, status: "answer_received", helpRequestId: refreshed.id, topPick: currentTopPick)
+        if refreshed.answers.count > previousAnswerCount || receivedFinalPick {
+            upsertLocalHistory(
+                query: refreshed.title,
+                status: refreshed.finalPick == nil ? "answer_received" : "completed",
+                helpRequestId: refreshed.id,
+                topPick: refreshed.finalPick ?? currentTopPick
+            )
             return true
         }
         return false
@@ -2638,7 +2650,8 @@ final class AppSession {
                 ? "这题已经完成。"
                 : "这题不硬选 · 等懂的人来一句",
             status: helpRequestStatus(for: item),
-            answers: []
+            answers: [],
+            finalPick: item.topPick
         )
         return mergedLocalHelpAnswers(into: request, historyItem: item)
     }
