@@ -175,6 +175,13 @@ class FavoriteChoiceListResponse(ApiModel):
     next_cursor: str | None = None
 
 
+class DrawerHistoryStateResponse(ApiModel):
+    pinned_history_ids: list[str] = Field(default_factory=list)
+    hidden_history_ids: list[str] = Field(default_factory=list)
+    renamed_history_titles: dict[str, str] = Field(default_factory=dict)
+    updated_at: datetime | None = None
+
+
 class HelpCardDetail(HelpCardSummary):
     pass
 

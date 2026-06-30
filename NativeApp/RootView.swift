@@ -225,6 +225,9 @@ struct RootView: View {
     private func openDrawer() {
         guard !showsDrawer else { return }
         AppHaptics.selection()
+        Task { @MainActor in
+            await loadRemoteDrawerHistoryState()
+        }
         withAnimation(activeDrawerAnimation) {
             showsDrawer = true
         }
@@ -402,6 +405,7 @@ struct RootView: View {
 
         _ = await session.refreshCurrentHelpRequest()
         await session.loadAnswerQueue()
+        await loadRemoteDrawerHistoryState()
         await loadMessageBadge()
     }
 
@@ -443,6 +447,17 @@ struct RootView: View {
         pinnedHistoryIDs = decodeUUIDSet(pinnedHistoryIDsRaw)
         hiddenHistoryIDs = decodeUUIDSet(hiddenHistoryIDsRaw)
         renamedHistoryTitles = decodeRenamedHistoryTitles(renamedHistoryTitlesRaw)
+    }
+
+    @MainActor
+    private func loadRemoteDrawerHistoryState() async {
+        guard let remote = await UserBehaviorEventService().drawerHistoryState() else { return }
+        pinnedHistoryIDs.formUnion(remote.pinnedHistoryIds)
+        hiddenHistoryIDs.formUnion(remote.hiddenHistoryIds)
+        remote.renamedHistoryTitles.forEach { id, title in
+            renamedHistoryTitles[id] = title
+        }
+        pinnedHistoryIDs.subtract(hiddenHistoryIDs)
     }
 }
 

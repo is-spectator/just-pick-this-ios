@@ -259,6 +259,57 @@ def test_my_favorites_reconstructs_saved_removed_and_restored_events(
     run_async(scenario)
 
 
+def test_my_drawer_history_state_reconstructs_pin_hide_restore_and_rename(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-drawer-state-{uuid.uuid4()}"
+        pinned_id = str(uuid.uuid4())
+        hidden_id = str(uuid.uuid4())
+        renamed_id = str(uuid.uuid4())
+
+        async def event(event_type: str, history_id: str, **metadata: str) -> None:
+            response = await async_client.post(
+                "/v1/events",
+                json={
+                    "device_id": device_id,
+                    "event_type": event_type,
+                    "metadata": {
+                        "history_id": history_id,
+                        "query": "历史会话",
+                        "status": "top1",
+                        "surface": "drawer",
+                        **metadata,
+                    },
+                },
+            )
+            assert response.status_code == 200, response.text
+
+        await event("drawer_history_pinned", pinned_id)
+        await event("drawer_history_pinned", hidden_id)
+        await event("drawer_history_hidden", hidden_id)
+        await event("drawer_history_renamed", renamed_id, title="改名后的会话")
+
+        state = await async_client.get("/v1/drawer/history-state/mine", params={"device_id": device_id})
+        assert state.status_code == 200, state.text
+        body = state.json()
+        assert body["pinned_history_ids"] == [pinned_id]
+        assert body["hidden_history_ids"] == [hidden_id]
+        assert body["renamed_history_titles"] == {renamed_id: "改名后的会话"}
+
+        await event("drawer_history_restored", hidden_id)
+        await event("drawer_history_renamed", renamed_id, title="")
+        restored = await async_client.get("/v1/drawer/history-state/mine", params={"device_id": device_id})
+        assert restored.status_code == 200, restored.text
+        restored_body = restored.json()
+        assert restored_body["pinned_history_ids"] == [pinned_id]
+        assert restored_body["hidden_history_ids"] == []
+        assert restored_body["renamed_history_titles"] == {}
+
+    run_async(scenario)
+
+
 def test_behavior_event_updates_user_preference_memory(
     run_async: Any,
     async_client: AsyncClient,

@@ -48,6 +48,13 @@ FAVORITE_ACTIVE_EVENT_TYPES = {
 }
 FAVORITE_REMOVED_EVENT_TYPES = {"favorite_choice_removed"}
 FAVORITE_EVENT_TYPES = FAVORITE_ACTIVE_EVENT_TYPES | FAVORITE_REMOVED_EVENT_TYPES
+DRAWER_HISTORY_EVENT_TYPES = {
+    "drawer_history_pinned",
+    "drawer_history_unpinned",
+    "drawer_history_hidden",
+    "drawer_history_restored",
+    "drawer_history_renamed",
+}
 
 
 def create_user_event(payload: dict[str, Any]) -> dict[str, Any]:
@@ -116,6 +123,29 @@ def list_user_favorites(
             if state["active"] and (item := _serialize_favorite_choice(session, state)) is not None
         ]
         return {"items": items[:resolved_limit], "next_cursor": None}
+
+
+def get_drawer_history_state(
+    *,
+    user_id: str | None = None,
+    device_uid: str | None = None,
+    limit: int = 500,
+) -> dict[str, Any]:
+    event_limit = max(1, min(int(limit or 500), 1000))
+    with session_scope() as session:
+        user = ensure_user(session, user_id=user_id, device_uid=device_uid)
+        events = list(
+            session.scalars(
+                select(UserBehaviorEvent)
+                .where(
+                    UserBehaviorEvent.user_id == user.id,
+                    UserBehaviorEvent.event_type.in_(sorted(DRAWER_HISTORY_EVENT_TYPES)),
+                )
+                .order_by(UserBehaviorEvent.created_at.asc())
+                .limit(event_limit)
+            )
+        )
+        return _drawer_history_state_from_events(events)
 
 
 def record_user_behavior_event(
@@ -291,6 +321,44 @@ def _card_query(card: RecommendationCard | None) -> str | None:
         if value:
             return value
     return card.title
+
+
+def _drawer_history_state_from_events(events: list[UserBehaviorEvent]) -> dict[str, Any]:
+    pinned: set[str] = set()
+    hidden: set[str] = set()
+    renamed: dict[str, str] = {}
+    updated_at = None
+
+    for event in events:
+        metadata = dict(event.payload_json or {})
+        history_id = str(metadata.get("history_id") or "").strip()
+        if not history_id:
+            continue
+        updated_at = event.created_at
+        if event.event_type == "drawer_history_pinned":
+            pinned.add(history_id)
+            hidden.discard(history_id)
+        elif event.event_type == "drawer_history_unpinned":
+            pinned.discard(history_id)
+        elif event.event_type == "drawer_history_hidden":
+            hidden.add(history_id)
+            pinned.discard(history_id)
+            renamed.pop(history_id, None)
+        elif event.event_type == "drawer_history_restored":
+            hidden.discard(history_id)
+        elif event.event_type == "drawer_history_renamed":
+            title = str(metadata.get("title") or "").strip()
+            if title:
+                renamed[history_id] = title
+            else:
+                renamed.pop(history_id, None)
+
+    return {
+        "pinned_history_ids": sorted(pinned),
+        "hidden_history_ids": sorted(hidden),
+        "renamed_history_titles": dict(sorted(renamed.items())),
+        "updated_at": updated_at,
+    }
 
 
 def _lenient_optional_uuid(value: Any) -> uuid.UUID | None:

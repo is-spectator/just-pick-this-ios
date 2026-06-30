@@ -739,8 +739,54 @@ struct UserBehaviorEventService: Sendable {
         }
     }
 
+    func drawerHistoryState() async -> DrawerHistoryRemoteState? {
+        do {
+            var components = URLComponents(url: endpoint("/v1/drawer/history-state/mine"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceUid),
+                URLQueryItem(name: "limit", value: "500")
+            ]
+            guard let url = components.url else { return nil }
+            let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url))
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                return nil
+            }
+            return try JSONDecoder().decode(DrawerHistoryRemoteState.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+
     private func endpoint(_ path: String) -> URL {
         URL(string: path, relativeTo: baseURL)!.absoluteURL
+    }
+}
+
+struct DrawerHistoryRemoteState: Decodable, Sendable {
+    let pinnedHistoryIds: [UUID]
+    let hiddenHistoryIds: [UUID]
+    let renamedHistoryTitles: [UUID: String]
+
+    enum CodingKeys: String, CodingKey {
+        case pinnedHistoryIds = "pinned_history_ids"
+        case hiddenHistoryIds = "hidden_history_ids"
+        case renamedHistoryTitles = "renamed_history_titles"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pinnedHistoryIds = try container.decodeIfPresent([String].self, forKey: .pinnedHistoryIds)?
+            .compactMap(UUID.init(uuidString:)) ?? []
+        hiddenHistoryIds = try container.decodeIfPresent([String].self, forKey: .hiddenHistoryIds)?
+            .compactMap(UUID.init(uuidString:)) ?? []
+        let rawTitles = try container.decodeIfPresent([String: String].self, forKey: .renamedHistoryTitles) ?? [:]
+        renamedHistoryTitles = rawTitles.reduce(into: [:]) { result, item in
+            guard let id = UUID(uuidString: item.key) else { return }
+            let title = item.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { return }
+            result[id] = title
+        }
     }
 }
 
