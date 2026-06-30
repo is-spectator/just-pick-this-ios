@@ -310,9 +310,17 @@ struct InputScreen: View {
 
     private func favoritePick() {
         dismissKeyboard()
-        AppHaptics.success()
-        session.saveCurrentTopPickToFavorites()
-        entries.append(.notice(UUID(), ServiceNotice(title: "已收藏", detail: "这张推荐已经放进 Drawer 里的收藏。")))
+        AppHaptics.selection()
+        Task { @MainActor in
+            let didSave = await session.saveCurrentTopPickToFavorites()
+            if didSave {
+                AppHaptics.success()
+                entries.append(.notice(UUID(), ServiceNotice(title: "已收藏", detail: "这张推荐已经放进 Drawer 里的收藏。")))
+            } else {
+                AppHaptics.warning()
+                entries.append(.notice(UUID(), session.serviceNotice ?? MockData.favoriteSyncUnavailableNotice(action: "收藏")))
+            }
+        }
     }
 
     private func changePick() {
@@ -1748,9 +1756,18 @@ struct ResultScreen: View {
 
     private func favoritePick() {
         dismissKeyboard()
-        AppHaptics.success()
-        session.saveCurrentTopPickToFavorites()
-        localNotice = ServiceNotice(title: "已收藏", detail: "这张推荐已经放进 Drawer 里的收藏。")
+        AppHaptics.selection()
+        localNotice = nil
+        Task { @MainActor in
+            let didSave = await session.saveCurrentTopPickToFavorites()
+            if didSave {
+                AppHaptics.success()
+                localNotice = ServiceNotice(title: "已收藏", detail: "这张推荐已经放进 Drawer 里的收藏。")
+            } else {
+                AppHaptics.warning()
+                localNotice = session.serviceNotice ?? MockData.favoriteSyncUnavailableNotice(action: "收藏")
+            }
+        }
     }
 
     private func changePick() {
@@ -3417,6 +3434,7 @@ struct HelpResultDetailScreen: View {
 
     @State private var request: HelpRequest?
     @State private var isLoading = false
+    @State private var localNotice: ServiceNotice?
 
     private var displayRequest: HelpRequest {
         request ?? initialRequest
@@ -3450,6 +3468,10 @@ struct HelpResultDetailScreen: View {
             emptyMessage: "这条求助还在同步。",
             isEmpty: false
         ) {
+            if let localNotice {
+                ServiceNoticePill(notice: localNotice)
+            }
+
             ProductSection(title: "求助内容") {
                 HelpDetailSummaryPanel(request: displayRequest, isLoading: isLoading)
             }
@@ -3512,7 +3534,14 @@ struct HelpResultDetailScreen: View {
     private func loadDetail() async {
         guard !isLoading else { return }
         isLoading = true
-        request = await session.helpRequestDetail(for: historyItem)
+        let result = await session.helpRequestDetail(for: historyItem)
+        if let detail = result.request {
+            request = detail
+            localNotice = nil
+        } else {
+            localNotice = result.notice ?? MockData.helpDetailUnavailableNotice()
+            AppHaptics.warning()
+        }
         isLoading = false
     }
 
@@ -3860,34 +3889,52 @@ struct FavoritesScreen: View {
     }
 
     private func removeFavorite(_ item: QuestionHistory) {
-        removedFavoriteSnapshot = FavoriteRemovalSnapshot(
-            item: item,
-            wasExplicitFavorite: session.favoriteChoices.contains(where: { $0.id == item.id })
-        )
-        session.removeFavoriteChoice(id: item.id)
-        localNotice = ServiceNotice(
-            title: "已取消收藏",
-            detail: "\(item.topPick?.title ?? item.query) 已从收藏里移除。"
-        )
         AppHaptics.selection()
-        scheduleNoticeClear(for: "已取消收藏")
+        Task { @MainActor in
+            let snapshot = FavoriteRemovalSnapshot(
+                item: item,
+                wasExplicitFavorite: session.favoriteChoices.contains(where: { $0.id == item.id })
+            )
+            let didRemove = await session.removeFavoriteChoice(id: item.id)
+            guard didRemove else {
+                AppHaptics.warning()
+                localNotice = session.serviceNotice ?? MockData.favoriteSyncUnavailableNotice(action: "取消收藏")
+                scheduleNoticeClear(for: localNotice?.title ?? "同步失败")
+                return
+            }
+            removedFavoriteSnapshot = snapshot
+            localNotice = ServiceNotice(
+                title: "已取消收藏",
+                detail: "\(item.topPick?.title ?? item.query) 已从收藏里移除。"
+            )
+            scheduleNoticeClear(for: "已取消收藏")
+        }
     }
 
     private func undoRemoveFavorite() {
         guard let snapshot = removedFavoriteSnapshot else { return }
         noticeTask?.cancel()
-        if snapshot.wasExplicitFavorite {
-            session.restoreFavoriteChoice(snapshot.item)
-        } else {
-            session.unhideFavoriteChoice(id: snapshot.item.id)
+        AppHaptics.selection()
+        Task { @MainActor in
+            let didRestore = if snapshot.wasExplicitFavorite {
+                await session.restoreFavoriteChoice(snapshot.item)
+            } else {
+                await session.unhideFavoriteChoice(id: snapshot.item.id)
+            }
+            guard didRestore else {
+                AppHaptics.warning()
+                localNotice = session.serviceNotice ?? MockData.favoriteSyncUnavailableNotice(action: "恢复收藏")
+                scheduleNoticeClear(for: localNotice?.title ?? "同步失败")
+                return
+            }
+            removedFavoriteSnapshot = nil
+            localNotice = ServiceNotice(
+                title: "已恢复收藏",
+                detail: "\(snapshot.item.topPick?.title ?? snapshot.item.query) 已回到收藏。"
+            )
+            AppHaptics.success()
+            scheduleNoticeClear(for: "已恢复收藏")
         }
-        removedFavoriteSnapshot = nil
-        localNotice = ServiceNotice(
-            title: "已恢复收藏",
-            detail: "\(snapshot.item.topPick?.title ?? snapshot.item.query) 已回到收藏。"
-        )
-        AppHaptics.success()
-        scheduleNoticeClear(for: "已恢复收藏")
     }
 
     private func scheduleNoticeClear(for title: String) {

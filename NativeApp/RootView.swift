@@ -640,16 +640,7 @@ private struct ChatDrawer: View {
             Button("保存") {
                 if let item = renamingItem {
                     let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if trimmed.isEmpty {
-                        renamedHistoryTitles[item.id] = nil
-                        showDrawerNotice("已恢复原会话名")
-                        recordDrawerEvent("drawer_history_renamed", item: item, extra: ["title": ""])
-                    } else {
-                        renamedHistoryTitles[item.id] = trimmed
-                        showDrawerNotice("已重命名会话")
-                        recordDrawerEvent("drawer_history_renamed", item: item, extra: ["title": trimmed])
-                    }
-                    AppHaptics.success()
+                    renameHistory(item, title: trimmed)
                 }
                 renamingItem = nil
                 renameText = ""
@@ -1010,14 +1001,48 @@ private struct ChatDrawer: View {
 
     private func togglePinned(_ item: QuestionHistory) {
         AppHaptics.selection()
-        if pinnedHistoryIDs.contains(item.id) {
-            pinnedHistoryIDs.remove(item.id)
-            showDrawerNotice("已取消置顶")
-            recordDrawerEvent("drawer_history_unpinned", item: item)
-        } else {
-            pinnedHistoryIDs.insert(item.id)
-            showDrawerNotice("已置顶会话")
-            recordDrawerEvent("drawer_history_pinned", item: item)
+        let isPinned = pinnedHistoryIDs.contains(item.id)
+        Task { @MainActor in
+            let action = isPinned ? "取消置顶" : "置顶"
+            let didRecord = await recordDrawerEvent(isPinned ? "drawer_history_unpinned" : "drawer_history_pinned", item: item)
+            guard didRecord else {
+                AppHaptics.warning()
+                showDrawerNotice(MockData.drawerSyncUnavailableNotice(action: action).detail)
+                return
+            }
+            if isPinned {
+                pinnedHistoryIDs.remove(item.id)
+                showDrawerNotice("已取消置顶")
+            } else {
+                pinnedHistoryIDs.insert(item.id)
+                showDrawerNotice("已置顶会话")
+            }
+            AppHaptics.success()
+        }
+    }
+
+    private func renameHistory(_ item: QuestionHistory, title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let action = trimmed.isEmpty ? "恢复原会话名" : "重命名会话"
+        Task { @MainActor in
+            let didRecord = await recordDrawerEvent(
+                "drawer_history_renamed",
+                item: item,
+                extra: ["title": trimmed]
+            )
+            guard didRecord else {
+                AppHaptics.warning()
+                showDrawerNotice(MockData.drawerSyncUnavailableNotice(action: action).detail)
+                return
+            }
+            if trimmed.isEmpty {
+                renamedHistoryTitles[item.id] = nil
+                showDrawerNotice("已恢复原会话名")
+            } else {
+                renamedHistoryTitles[item.id] = trimmed
+                showDrawerNotice("已重命名会话")
+            }
+            AppHaptics.success()
         }
     }
 
@@ -1027,35 +1052,50 @@ private struct ChatDrawer: View {
     }
 
     private func hideHistory(_ item: QuestionHistory) {
-        deletedHistorySnapshot = DeletedHistorySnapshot(
-            item: item,
-            wasPinned: pinnedHistoryIDs.contains(item.id),
-            renamedTitle: renamedHistoryTitles[item.id]
-        )
-        hiddenHistoryIDs.insert(item.id)
-        pinnedHistoryIDs.remove(item.id)
-        renamedHistoryTitles[item.id] = nil
-        onDeleteHistory(item)
-        AppHaptics.success()
-        showDrawerNotice("已删除会话")
-        recordDrawerEvent("drawer_history_hidden", item: item)
+        Task { @MainActor in
+            let didRecord = await recordDrawerEvent("drawer_history_hidden", item: item)
+            guard didRecord else {
+                AppHaptics.warning()
+                showDrawerNotice(MockData.drawerSyncUnavailableNotice(action: "删除会话").detail)
+                return
+            }
+            deletedHistorySnapshot = DeletedHistorySnapshot(
+                item: item,
+                wasPinned: pinnedHistoryIDs.contains(item.id),
+                renamedTitle: renamedHistoryTitles[item.id]
+            )
+            hiddenHistoryIDs.insert(item.id)
+            pinnedHistoryIDs.remove(item.id)
+            renamedHistoryTitles[item.id] = nil
+            onDeleteHistory(item)
+            AppHaptics.success()
+            showDrawerNotice("已删除会话")
+        }
     }
 
     private func undoDeletedHistory() {
         guard let snapshot = deletedHistorySnapshot else { return }
         drawerNoticeTask?.cancel()
-        hiddenHistoryIDs.remove(snapshot.item.id)
-        if snapshot.wasPinned {
-            pinnedHistoryIDs.insert(snapshot.item.id)
+        AppHaptics.selection()
+        Task { @MainActor in
+            let didRecord = await recordDrawerEvent("drawer_history_restored", item: snapshot.item)
+            guard didRecord else {
+                AppHaptics.warning()
+                showDrawerNotice(MockData.drawerSyncUnavailableNotice(action: "恢复会话").detail)
+                return
+            }
+            hiddenHistoryIDs.remove(snapshot.item.id)
+            if snapshot.wasPinned {
+                pinnedHistoryIDs.insert(snapshot.item.id)
+            }
+            if let renamedTitle = snapshot.renamedTitle {
+                renamedHistoryTitles[snapshot.item.id] = renamedTitle
+            }
+            onRestoreHistory(snapshot.item)
+            deletedHistorySnapshot = nil
+            AppHaptics.success()
+            showDrawerNotice("已恢复会话")
         }
-        if let renamedTitle = snapshot.renamedTitle {
-            renamedHistoryTitles[snapshot.item.id] = renamedTitle
-        }
-        onRestoreHistory(snapshot.item)
-        deletedHistorySnapshot = nil
-        AppHaptics.success()
-        showDrawerNotice("已恢复会话")
-        recordDrawerEvent("drawer_history_restored", item: snapshot.item)
     }
 
     private func showDrawerNotice(_ text: String) {
@@ -1075,11 +1115,9 @@ private struct ChatDrawer: View {
         _ eventType: String,
         item: QuestionHistory,
         extra: [String: String] = [:]
-    ) {
+    ) async -> Bool {
         let metadata = UserBehaviorEventMetadata.history(item, extra: ["surface": "drawer"].merging(extra) { _, new in new })
-        Task {
-            await UserBehaviorEventService().record(eventType: eventType, metadata: metadata)
-        }
+        return await UserBehaviorEventService().record(eventType: eventType, metadata: metadata)
     }
 }
 

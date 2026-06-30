@@ -76,6 +76,11 @@ struct SkipHelpRequestResult: Sendable {
     let notice: ServiceNotice?
 }
 
+struct HelpRequestDetailResult: Sendable {
+    let request: HelpRequest?
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -317,6 +322,7 @@ protocol RecommendationService: Sendable {
     func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult
     func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult
     func refresh(_ request: HelpRequest) async -> HelpRequest
+    func fetchHelpRequestDetail(id: UUID) async -> HelpRequestDetailResult
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
     func myHelpRequests(limit: Int) async -> MyHelpRequestsResult
     func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult
@@ -440,22 +446,29 @@ struct BackendRecommendationService: RecommendationService {
                 return refreshed
             }
 
-            var refreshed = helpRequest
-            refreshed.status = .answered
-            refreshed.answers.append(HumanAnswer(text: "皮皮已经根据来一句汇总出结果。", nickname: "皮皮", timeLabel: "刚刚"))
-            return refreshed
+            return helpRequest
         } catch {
             return helpRequest
         }
     }
 
-    func fetchHelpRequest(id: UUID) async -> HelpRequest? {
+    func fetchHelpRequestDetail(id: UUID) async -> HelpRequestDetailResult {
         do {
             let response: V1HelpCardDetailEnvelope = try await perform(URLRequest(url: endpoint("/v1/help-cards/\(id.uuidString)")))
-            return response.summary.model(fallbackTitle: "求一个")
+            return HelpRequestDetailResult(
+                request: response.summary.model(fallbackTitle: "求一个"),
+                notice: nil
+            )
         } catch {
-            return nil
+            return HelpRequestDetailResult(
+                request: nil,
+                notice: MockData.helpDetailUnavailableNotice()
+            )
         }
+    }
+
+    func fetchHelpRequest(id: UUID) async -> HelpRequest? {
+        await fetchHelpRequestDetail(id: id).request
     }
 
     func myHelpRequests(limit: Int) async -> MyHelpRequestsResult {
@@ -725,9 +738,9 @@ struct UserBehaviorEventService: Sendable {
     private let baseURL = AppAPIEnvironment.baseURL
     private let deviceUid = DeviceIdentity.uid
 
-    func record(eventType: String, metadata: [String: String] = [:]) async {
+    func record(eventType: String, metadata: [String: String] = [:]) async -> Bool {
         let trimmedType = eventType.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedType.isEmpty else { return }
+        guard !trimmedType.isEmpty else { return false }
 
         do {
             var request = URLRequest(url: endpoint("/v1/events"))
@@ -747,10 +760,11 @@ struct UserBehaviorEventService: Sendable {
             let (_, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200..<300).contains(httpResponse.statusCode) else {
-                return
+                return false
             }
+            return true
         } catch {
-            return
+            return false
         }
     }
 
@@ -2287,6 +2301,10 @@ struct MockCloudRecommendationService: RecommendationService {
         request
     }
 
+    func fetchHelpRequestDetail(id: UUID) async -> HelpRequestDetailResult {
+        HelpRequestDetailResult(request: nil, notice: MockData.helpDetailUnavailableNotice())
+    }
+
     func fetchHelpRequest(id: UUID) async -> HelpRequest? {
         nil
     }
@@ -2583,10 +2601,8 @@ final class AppSession {
         #endif
     }
 
-    private func recordBehaviorEvent(_ eventType: String, metadata: [String: String]) {
-        Task {
-            await UserBehaviorEventService().record(eventType: eventType, metadata: metadata)
-        }
+    private func recordBehaviorEvent(_ eventType: String, metadata: [String: String]) async -> Bool {
+        await UserBehaviorEventService().record(eventType: eventType, metadata: metadata)
     }
 
     var isSubmitting: Bool {
@@ -2680,9 +2696,15 @@ final class AppSession {
 
         if shouldOpenHelpRequest(for: item) {
             currentTopPick = nil
-            if let helpRequestId = item.helpRequestId,
-               let request = await service.fetchHelpRequest(id: helpRequestId) {
-                currentHelpRequest = request
+            if let helpRequestId = item.helpRequestId {
+                let result = await service.fetchHelpRequestDetail(id: helpRequestId)
+                if let request = result.request {
+                    currentHelpRequest = request
+                    serviceNotice = nil
+                } else {
+                    currentHelpRequest = fallbackHelpRequest(for: item)
+                    serviceNotice = result.notice
+                }
             } else {
                 currentHelpRequest = fallbackHelpRequest(for: item)
             }
@@ -2694,17 +2716,31 @@ final class AppSession {
         return .result
     }
 
-    func helpRequestDetail(for item: QuestionHistory) async -> HelpRequest {
+    func helpRequestDetail(for item: QuestionHistory) async -> HelpRequestDetailResult {
         if currentHelpRequest?.id == item.helpRequestId {
-            return currentHelpRequest ?? fallbackHelpRequest(for: item)
+            return HelpRequestDetailResult(
+                request: currentHelpRequest ?? fallbackHelpRequest(for: item),
+                notice: nil
+            )
         }
 
-        if let helpRequestId = item.helpRequestId,
-           let request = await service.fetchHelpRequest(id: helpRequestId) {
-            return mergedLocalHelpAnswers(into: request, historyItem: item)
+        guard let helpRequestId = item.helpRequestId else {
+            return HelpRequestDetailResult(
+                request: fallbackHelpRequest(for: item),
+                notice: nil
+            )
         }
 
-        return fallbackHelpRequest(for: item)
+        let result = await service.fetchHelpRequestDetail(id: helpRequestId)
+        guard let request = result.request else {
+            serviceNotice = result.notice
+            return HelpRequestDetailResult(request: nil, notice: result.notice)
+        }
+
+        let merged = mergedLocalHelpAnswers(into: request, historyItem: item)
+        currentHelpRequest = merged
+        serviceNotice = nil
+        return HelpRequestDetailResult(request: merged, notice: nil)
     }
 
     func makeHelpRequestFromCurrentTopPick() {
@@ -2890,7 +2926,7 @@ final class AppSession {
         return true
     }
 
-    func saveCurrentTopPickToFavorites() {
+    func saveCurrentTopPickToFavorites() async -> Bool {
         let query = currentQuery.isEmpty ? topPick.query : currentQuery
         let item = QuestionHistory(
             id: currentQuestionId ?? UUID(),
@@ -2900,14 +2936,20 @@ final class AppSession {
             topPick: currentTopPick ?? topPick,
             createdAt: ISO8601DateFormatter().string(from: Date())
         )
+        let didRecord = await recordBehaviorEvent(
+            "favorite_choice_saved",
+            metadata: UserBehaviorEventMetadata.history(item, extra: ["surface": "favorites"])
+        )
+        guard didRecord else {
+            serviceNotice = MockData.favoriteSyncUnavailableNotice(action: "收藏")
+            return false
+        }
         favoriteChoices.removeAll { $0.id == item.id }
         hiddenFavoriteChoiceIds.remove(item.id)
         favoriteChoices.insert(item, at: 0)
         persistFavoriteState()
-        recordBehaviorEvent(
-            "favorite_choice_saved",
-            metadata: UserBehaviorEventMetadata.history(item, extra: ["surface": "favorites"])
-        )
+        serviceNotice = nil
+        return true
     }
 
     @discardableResult
@@ -2920,35 +2962,53 @@ final class AppSession {
         return result.notice
     }
 
-    func removeFavoriteChoice(id: UUID) {
+    func removeFavoriteChoice(id: UUID) async -> Bool {
         let existing = favoriteChoices.first { $0.id == id }
-        favoriteChoices.removeAll { $0.id == id }
-        hiddenFavoriteChoiceIds.insert(id)
-        persistFavoriteState()
         let metadata = existing.map {
             UserBehaviorEventMetadata.history($0, extra: ["surface": "favorites"])
         } ?? ["history_id": id.uuidString, "surface": "favorites"]
-        recordBehaviorEvent("favorite_choice_removed", metadata: metadata)
+        let didRecord = await recordBehaviorEvent("favorite_choice_removed", metadata: metadata)
+        guard didRecord else {
+            serviceNotice = MockData.favoriteSyncUnavailableNotice(action: "取消收藏")
+            return false
+        }
+        favoriteChoices.removeAll { $0.id == id }
+        hiddenFavoriteChoiceIds.insert(id)
+        persistFavoriteState()
+        serviceNotice = nil
+        return true
     }
 
-    func restoreFavoriteChoice(_ item: QuestionHistory) {
+    func restoreFavoriteChoice(_ item: QuestionHistory) async -> Bool {
+        let didRecord = await recordBehaviorEvent(
+            "favorite_choice_restored",
+            metadata: UserBehaviorEventMetadata.history(item, extra: ["surface": "favorites"])
+        )
+        guard didRecord else {
+            serviceNotice = MockData.favoriteSyncUnavailableNotice(action: "恢复收藏")
+            return false
+        }
         favoriteChoices.removeAll { $0.id == item.id }
         hiddenFavoriteChoiceIds.remove(item.id)
         favoriteChoices.insert(item, at: 0)
         persistFavoriteState()
-        recordBehaviorEvent(
-            "favorite_choice_restored",
-            metadata: UserBehaviorEventMetadata.history(item, extra: ["surface": "favorites"])
-        )
+        serviceNotice = nil
+        return true
     }
 
-    func unhideFavoriteChoice(id: UUID) {
-        hiddenFavoriteChoiceIds.remove(id)
-        persistFavoriteState()
-        recordBehaviorEvent(
+    func unhideFavoriteChoice(id: UUID) async -> Bool {
+        let didRecord = await recordBehaviorEvent(
             "favorite_choice_unhidden",
             metadata: ["history_id": id.uuidString, "surface": "favorites"]
         )
+        guard didRecord else {
+            serviceNotice = MockData.favoriteSyncUnavailableNotice(action: "恢复收藏")
+            return false
+        }
+        hiddenFavoriteChoiceIds.remove(id)
+        persistFavoriteState()
+        serviceNotice = nil
+        return true
     }
 
     func deleteHistoryItem(id: UUID) {
@@ -3328,6 +3388,20 @@ enum MockData {
         )
     }
 
+    static func favoriteSyncUnavailableNotice(action: String) -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "这次还没\(action)成功，收藏状态先保留。你可以重试。"
+        )
+    }
+
+    static func drawerSyncUnavailableNotice(action: String) -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "这次还没\(action)成功，抽屉状态先保留。你可以重试。"
+        )
+    }
+
     static func profileSnapshotUnavailableNotice(error _: Error) -> ServiceNotice {
         ServiceNotice(
             title: "同步失败",
@@ -3339,6 +3413,13 @@ enum MockData {
         ServiceNotice(
             title: "同步失败",
             detail: "我的求一个这次没同步完整，下面会先显示本地记录。你可以重试。"
+        )
+    }
+
+    static func helpDetailUnavailableNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "求助详情这次没同步成功，当前内容先保留。你可以重试。"
         )
     }
 
