@@ -71,6 +71,11 @@ struct AnswerQueueResult: Sendable {
     let notice: ServiceNotice?
 }
 
+struct SkipHelpRequestResult: Sendable {
+    let didSkip: Bool
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -2854,11 +2859,21 @@ final class AppSession {
         answerTarget = answerQueue.first
     }
 
-    func skipAnswerRequest(reason: String) async {
-        guard let request = answerRequest else { return }
-        _ = await service.skip(request, reason: reason)
+    @discardableResult
+    func skipAnswerRequest(reason: String) async -> SkipHelpRequestResult {
+        guard let request = answerRequest else {
+            return SkipHelpRequestResult(didSkip: false, notice: nil)
+        }
+        let didSkip = await service.skip(request, reason: reason)
+        guard didSkip else {
+            let notice = MockData.skipAnswerUnavailableNotice(reason: reason)
+            serviceNotice = notice
+            return SkipHelpRequestResult(didSkip: false, notice: notice)
+        }
         answerQueue.removeAll { $0.id == request.id }
         answerTarget = answerQueue.first
+        serviceNotice = nil
+        return SkipHelpRequestResult(didSkip: true, notice: nil)
     }
 
     func acceptCurrentTopPick() async -> Bool {
@@ -3306,6 +3321,14 @@ enum MockData {
         ServiceNotice(
             title: "同步失败",
             detail: "来一句队列这次没同步成功，当前卡片先保留。你可以重试。"
+        )
+    }
+
+    static func skipAnswerUnavailableNotice(reason: String) -> ServiceNotice {
+        let action = reason == "reported" ? "举报" : "屏蔽"
+        return ServiceNotice(
+            title: "同步失败",
+            detail: "这张还没\(action)成功，卡片先保留。你可以重试。"
         )
     }
 

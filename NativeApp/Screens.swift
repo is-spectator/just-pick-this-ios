@@ -2055,7 +2055,13 @@ struct AnswerScreen: View {
                                 },
                                 onHideCurrent: {
                                     Task { @MainActor in
-                                        await session.skipAnswerRequest(reason: "hidden")
+                                        let result = await session.skipAnswerRequest(reason: "hidden")
+                                        guard result.didSkip else {
+                                            AppHaptics.warning()
+                                            toastMessage = result.notice?.detail ?? "这张还没屏蔽成功，卡片先保留。你可以重试。"
+                                            flashToast()
+                                            return
+                                        }
                                         toastMessage = session.answerRequest == nil
                                             ? "已屏蔽这张。暂时没有下一张。"
                                             : "已屏蔽这张，已切到下一张。"
@@ -2064,7 +2070,13 @@ struct AnswerScreen: View {
                                 },
                                 onReportCurrent: {
                                     Task { @MainActor in
-                                        await session.skipAnswerRequest(reason: "reported")
+                                        let result = await session.skipAnswerRequest(reason: "reported")
+                                        guard result.didSkip else {
+                                            AppHaptics.warning()
+                                            toastMessage = result.notice?.detail ?? "这张还没举报成功，卡片先保留。你可以重试。"
+                                            flashToast()
+                                            return
+                                        }
                                         AppHaptics.warning()
                                         toastMessage = session.answerRequest == nil
                                             ? "收到，已标记这张求一个。暂时没有下一张。"
