@@ -42,6 +42,24 @@ async def help_feed(
     )
 
 
+@router.get("/help-cards/mine", response_model=HelpFeedResponse)
+async def my_help_cards(
+    user_id: str | None = None,
+    device_uid: str | None = None,
+    device_id: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+) -> HelpFeedResponse:
+    handler = resolve_service_handler("app.services.help_feed", "list_my_help_cards")
+    return await call_service(
+        handler,
+        user_id=user_id,
+        device_uid=device_uid or device_id,
+        limit=limit,
+        cursor=cursor,
+    )
+
+
 @router.get("/help-cards/{help_card_id}", response_model=HelpCardDetail)
 async def get_help_card(help_card_id: str) -> HelpCardDetail:
     handler = resolve_service_handler("app.services.help_feed", "get_help_card")

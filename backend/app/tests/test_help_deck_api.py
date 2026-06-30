@@ -301,6 +301,46 @@ def test_help_feed_filters_owner_and_answered_cards(run_async: Any, async_client
     run_async(scenario)
 
 
+def test_my_help_cards_returns_owner_cards(run_async: Any, async_client: AsyncClient) -> None:
+    async def scenario() -> None:
+        suffix = uuid.uuid4()
+        owner_device = f"pytest-my-help-owner-{suffix}"
+        reader_device = f"pytest-my-help-reader-{suffix}"
+        published_card_id = _seed_help_card(
+            owner_device=owner_device,
+            title="我在三里屯想吃川菜，求一个",
+            context_text="想近一点，别排太久。",
+            status="published",
+        )
+        draft_card_id = _seed_help_card(
+            owner_device=owner_device,
+            title="韩国逛街不去明洞，求一个",
+            context_text="想小众一点。",
+            status="draft",
+        )
+
+        mine = await async_client.get(
+            "/v1/help-cards/mine",
+            params={"device_id": owner_device, "limit": 20},
+        )
+        assert mine.status_code == 200, mine.text
+        my_ids = {item["id"] for item in mine.json()["items"]}
+        assert published_card_id in my_ids
+        assert draft_card_id in my_ids
+
+        owner_feed = await _get_feed(async_client, device_id=owner_device, limit=100)
+        owner_feed_ids = {item["id"] for item in owner_feed["items"]}
+        assert published_card_id not in owner_feed_ids
+        assert draft_card_id not in owner_feed_ids
+
+        reader_feed = await _get_feed(async_client, device_id=reader_device, limit=100)
+        reader_feed_ids = {item["id"] for item in reader_feed["items"]}
+        assert published_card_id in reader_feed_ids
+        assert draft_card_id not in reader_feed_ids
+
+    run_async(scenario)
+
+
 def test_help_feed_records_impressions_for_visible_cards(
     run_async: Any,
     async_client: AsyncClient,

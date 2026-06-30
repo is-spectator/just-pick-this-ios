@@ -3082,14 +3082,33 @@ struct MyHelpScreen: View {
     let onSelectHelpDetail: (QuestionHistory) -> Void
 
     @State private var selectedStatusFilter: HelpStatusFilter = .all
+    @State private var isLoading = false
+    @State private var syncNotice: ServiceNotice?
 
     private var helpItems: [QuestionHistory] {
-        session.history.filter { item in
+        var seenHelpRequestIDs = Set<UUID>()
+        var items: [QuestionHistory] = []
+
+        for request in session.myHelpRequests {
+            guard seenHelpRequestIDs.insert(request.id).inserted else { continue }
+            items.append(historyItem(for: request))
+        }
+
+        let localItems = session.history.filter { item in
             item.helpRequestId != nil
+            || item.status == "draft"
             || item.status == "waiting_for_human"
             || item.status == "answer_received"
             || item.status == "closed"
         }
+
+        for item in localItems {
+            let dedupeID = item.helpRequestId ?? item.id
+            guard seenHelpRequestIDs.insert(dedupeID).inserted else { continue }
+            items.append(item)
+        }
+
+        return items
     }
 
     private var filteredHelpItems: [QuestionHistory] {
@@ -3097,7 +3116,7 @@ struct MyHelpScreen: View {
         case .all:
             helpItems
         case .draft:
-            []
+            helpItems.filter { $0.status == "draft" }
         case .collecting:
             helpItems.filter { $0.status == "waiting_for_human" }
         case .answered:
@@ -3115,6 +3134,14 @@ struct MyHelpScreen: View {
     }
 
     private var draftCount: Int {
+        let currentDraftID = currentDraft?.id
+        let remoteDraftCount = helpItems.filter { item in
+            item.status == "draft" && item.helpRequestId != currentDraftID
+        }.count
+        return activeDraftCount + remoteDraftCount
+    }
+
+    private var activeDraftCount: Int {
         currentDraft == nil ? 0 : 1
     }
 
@@ -3136,7 +3163,7 @@ struct MyHelpScreen: View {
 
     private var statusSummaries: [(filter: HelpStatusFilter, value: Int, secondary: String?)] {
         [
-            (.all, draftCount + helpItems.count, nil),
+            (.all, activeDraftCount + helpItems.count, nil),
             (.draft, draftCount, draftCount > 0 ? "待发布" : nil),
             (.collecting, collectingCount, collectingCount > 0 ? "等来一句" : nil),
             (.answered, answeredCount, answeredCount > 0 ? "可查看" : nil),
@@ -3160,8 +3187,15 @@ struct MyHelpScreen: View {
             systemImage: "questionmark.bubble",
             emptyTitle: "还没有求一个",
             emptyMessage: "在聊天里点“求一个”，发出去后就会出现在这里。",
-            isEmpty: currentDraft == nil && helpItems.isEmpty
+            isEmpty: currentDraft == nil && helpItems.isEmpty,
+            isLoading: isLoading
         ) {
+            if let syncNotice {
+                ProductSection(title: "同步状态") {
+                    ServiceNoticePill(notice: syncNotice)
+                }
+            }
+
             ProductSection(title: "状态") {
                 LazyVGrid(columns: statusColumns, spacing: 10) {
                     ForEach(statusSummaries, id: \.filter) { summary in
@@ -3184,7 +3218,7 @@ struct MyHelpScreen: View {
                 }
             }
 
-            if selectedStatusFilter != .draft {
+            if selectedStatusFilter != .draft || !filteredHelpItems.isEmpty {
                 ProductSection(title: selectedStatusFilter == .all ? "求助记录" : "\(selectedStatusFilter.label)记录") {
                     if filteredHelpItems.isEmpty {
                         ProductEmptyInline(
@@ -3196,6 +3230,9 @@ struct MyHelpScreen: View {
                     }
                 }
             }
+        }
+        .task {
+            await loadMyHelpRequests()
         }
     }
 
@@ -3216,6 +3253,39 @@ struct MyHelpScreen: View {
             }
         }
         .productPanel()
+    }
+
+    private func loadMyHelpRequests() async {
+        guard !isLoading else { return }
+        isLoading = true
+        syncNotice = await session.loadMyHelpRequests()
+        isLoading = false
+    }
+
+    private func historyItem(for request: HelpRequest) -> QuestionHistory {
+        QuestionHistory(
+            id: request.id,
+            query: request.title,
+            status: historyStatus(for: request.status),
+            helpRequestId: request.id,
+            topPick: request.finalPick,
+            createdAt: request.createdAt
+        )
+    }
+
+    private func historyStatus(for status: HelpRequestStatus) -> String {
+        switch status {
+        case .draft:
+            "draft"
+        case .published:
+            "waiting_for_human"
+        case .answered:
+            "answer_received"
+        case .completed:
+            "completed"
+        case .closed:
+            "closed"
+        }
     }
 }
 

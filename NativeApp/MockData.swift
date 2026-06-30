@@ -51,6 +51,11 @@ struct CompleteQuestionResult: Sendable {
     let notice: ServiceNotice?
 }
 
+struct MyHelpRequestsResult: Sendable {
+    let requests: [HelpRequest]
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -69,6 +74,8 @@ struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
             "等人来一句"
         case "answer_received":
             "已收到一句"
+        case "draft":
+            "待发布"
         case "closed":
             "已关闭"
         default:
@@ -149,6 +156,7 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
     var status: HelpRequestStatus
     var answers: [HumanAnswer]
     var finalPick: TopPick?
+    var createdAt: String?
 
     init(
         id: UUID = UUID(),
@@ -158,7 +166,8 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
         answerCount: Int = 0,
         status: HelpRequestStatus = .draft,
         answers: [HumanAnswer] = [],
-        finalPick: TopPick? = nil
+        finalPick: TopPick? = nil,
+        createdAt: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -168,6 +177,7 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
         self.status = status
         self.answers = answers
         self.finalPick = finalPick
+        self.createdAt = createdAt
     }
 }
 
@@ -288,6 +298,7 @@ protocol RecommendationService: Sendable {
     func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult
     func refresh(_ request: HelpRequest) async -> HelpRequest
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
+    func myHelpRequests(limit: Int) async -> MyHelpRequestsResult
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
     func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult
     func skip(_ request: HelpRequest, reason: String) async -> Bool
@@ -416,6 +427,27 @@ struct BackendRecommendationService: RecommendationService {
             return response.summary.model(fallbackTitle: "求一个")
         } catch {
             return nil
+        }
+    }
+
+    func myHelpRequests(limit: Int) async -> MyHelpRequestsResult {
+        do {
+            var components = URLComponents(url: endpoint("/v1/help-cards/mine"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceUid),
+                URLQueryItem(name: "limit", value: "\(max(1, min(limit, 100)))")
+            ]
+
+            guard let url = components.url else {
+                return MyHelpRequestsResult(requests: [], notice: MockData.myHelpUnavailableNotice())
+            }
+            let response: V1HelpFeedResponse = try await perform(URLRequest(url: url))
+            return MyHelpRequestsResult(
+                requests: response.items.map { $0.model(fallbackTitle: "求一个") },
+                notice: nil
+            )
+        } catch {
+            return MyHelpRequestsResult(requests: [], notice: MockData.myHelpUnavailableNotice())
         }
     }
 
@@ -1711,6 +1743,7 @@ private struct V1HelpCardSummary: Decodable {
     let answerCount: Int?
     let card: V1CardSummary?
     let metadata: V1HelpCardMetadata?
+    let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -1723,6 +1756,7 @@ private struct V1HelpCardSummary: Decodable {
         case answerCount = "answer_count"
         case card
         case metadata
+        case createdAt = "created_at"
     }
 
     func model(fallbackTitle: String) -> HelpRequest {
@@ -1737,7 +1771,8 @@ private struct V1HelpCardSummary: Decodable {
             answerCount: answerCount ?? metadata?.answerCount ?? 0,
             status: helpRequestStatus(from: status),
             answers: [],
-            finalPick: finalPick
+            finalPick: finalPick,
+            createdAt: createdAt
         )
     }
 
@@ -1970,6 +2005,10 @@ struct MockCloudRecommendationService: RecommendationService {
 
     func fetchHelpRequest(id: UUID) async -> HelpRequest? {
         nil
+    }
+
+    func myHelpRequests(limit: Int) async -> MyHelpRequestsResult {
+        MyHelpRequestsResult(requests: [MockData.defaultHelpRequest], notice: nil)
     }
 
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest] {
@@ -2216,6 +2255,7 @@ final class AppSession {
     private(set) var favoriteChoices: [QuestionHistory] = []
     private(set) var hiddenFavoriteChoiceIds: Set<UUID> = []
     private(set) var submittedAnswers: [SubmittedAnswerRecord] = []
+    private(set) var myHelpRequests: [HelpRequest] = []
     private(set) var answerQueue: [HelpRequest] = []
     private(set) var answerTarget: HelpRequest?
     private(set) var submitState: SubmitState = .idle
@@ -2279,6 +2319,7 @@ final class AppSession {
         favoriteChoices = []
         hiddenFavoriteChoiceIds = []
         submittedAnswers = []
+        myHelpRequests = []
         answerQueue = []
         answerTarget = nil
         serviceNotice = nil
@@ -2384,6 +2425,7 @@ final class AppSession {
         currentHelpRequest = result.request
         serviceNotice = result.notice
         guard result.didPublish else { return false }
+        upsertMyHelpRequest(result.request)
         upsertLocalHistory(query: result.request.title, status: "waiting_for_human", helpRequestId: result.request.id, topPick: currentTopPick)
         return true
     }
@@ -2394,6 +2436,7 @@ final class AppSession {
         let refreshed = await service.refresh(request)
         let receivedFinalPick = request.finalPick == nil && refreshed.finalPick != nil
         currentHelpRequest = refreshed
+        upsertMyHelpRequest(refreshed)
         if refreshed.answers.count > previousAnswerCount || receivedFinalPick {
             upsertLocalHistory(
                 query: refreshed.title,
@@ -2410,6 +2453,7 @@ final class AppSession {
         guard currentHelpRequest != nil else { return }
         currentHelpRequest?.status = .closed
         let request = helpRequest
+        upsertMyHelpRequest(request)
         upsertLocalHistory(
             query: request.title,
             status: "closed",
@@ -2429,6 +2473,16 @@ final class AppSession {
         let requests = await service.answerQueue(excluding: sessionId)
         answerQueue = requests
         answerTarget = requests.first
+    }
+
+    @discardableResult
+    func loadMyHelpRequests() async -> ServiceNotice? {
+        let result = await service.myHelpRequests(limit: 100)
+        if result.notice == nil || !result.requests.isEmpty {
+            myHelpRequests = result.requests
+        }
+        serviceNotice = result.notice
+        return result.notice
     }
 
     func selectAnswerRequest(_ request: HelpRequest) {
@@ -2677,6 +2731,14 @@ final class AppSession {
         persistHistory()
     }
 
+    private func upsertMyHelpRequest(_ request: HelpRequest) {
+        if let index = myHelpRequests.firstIndex(where: { $0.id == request.id }) {
+            myHelpRequests[index] = request
+        } else {
+            myHelpRequests.insert(request, at: 0)
+        }
+    }
+
     private func status(for decision: RecommendationDecision) -> String {
         switch decision {
         case .none:
@@ -2715,7 +2777,10 @@ final class AppSession {
             return true
         }
 
-        return item.status == "waiting_for_human" || item.status == "answer_received" || item.status == "closed"
+        return item.status == "draft"
+            || item.status == "waiting_for_human"
+            || item.status == "answer_received"
+            || item.status == "closed"
     }
 
     private func fallbackHelpRequest(for item: QuestionHistory) -> HelpRequest {
@@ -2844,6 +2909,13 @@ enum MockData {
         ServiceNotice(
             title: "同步失败",
             detail: "个人数据这次没同步完整，下面可能不是最新状态。你可以重试。"
+        )
+    }
+
+    static func myHelpUnavailableNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "我的求一个这次没同步完整，下面会先显示本地记录。你可以重试。"
         )
     }
 

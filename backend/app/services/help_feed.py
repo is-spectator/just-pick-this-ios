@@ -113,6 +113,38 @@ def list_help_feed(
         }
 
 
+def list_my_help_cards(
+    *,
+    user_id: str | None = None,
+    device_uid: str | None = None,
+    limit: int = 50,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    resolved_limit = max(1, min(int(limit or 50), 100))
+    try:
+        offset = max(0, int(cursor or 0))
+    except ValueError:
+        offset = 0
+
+    with session_scope() as session:
+        user = ensure_user(session, user_id=user_id, device_uid=device_uid)
+        rows = list(
+            session.scalars(
+                select(HelpCard)
+                .where(HelpCard.owner_user_id == user.id)
+                .order_by(HelpCard.created_at.desc())
+                .offset(offset)
+                .limit(resolved_limit + 1)
+            )
+        )
+        items = rows[:resolved_limit]
+        next_cursor = str(offset + resolved_limit) if len(rows) > resolved_limit else None
+        return {
+            "items": [serialize_help_card(card) for card in items],
+            "next_cursor": next_cursor,
+        }
+
+
 def help_feed_conversion_summary(
     session: Session,
     *,
@@ -928,6 +960,7 @@ __all__ = [
     "help_feed_rank_payload",
     "help_feed_sort_key",
     "list_help_feed",
+    "list_my_help_cards",
     "publish_help_card",
     "accept_final_recommendation",
     "skip_help_card",
