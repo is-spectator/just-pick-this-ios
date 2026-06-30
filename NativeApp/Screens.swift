@@ -3816,6 +3816,7 @@ struct MyAnswersScreen: View {
             status: historyStatus(for: answer.status),
             helpRequestId: answer.helpRequestId,
             topPick: nil,
+            finalRecommendationCardId: answer.finalRecommendationCardId,
             createdAt: answer.timeLabel
         )
     }
@@ -4200,6 +4201,7 @@ struct RewardsScreen: View {
             status: historyStatus(for: item.status),
             helpRequestId: helpRequestId,
             topPick: nil,
+            finalRecommendationCardId: item.finalRecommendationCardId,
             createdAt: item.createdAt
         )
     }

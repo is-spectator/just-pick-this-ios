@@ -87,7 +87,26 @@ struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let status: String
     let helpRequestId: UUID?
     let topPick: TopPick?
+    let finalRecommendationCardId: UUID?
     let createdAt: String?
+
+    init(
+        id: UUID,
+        query: String,
+        status: String,
+        helpRequestId: UUID?,
+        topPick: TopPick?,
+        finalRecommendationCardId: UUID? = nil,
+        createdAt: String?
+    ) {
+        self.id = id
+        self.query = query
+        self.status = status
+        self.helpRequestId = helpRequestId
+        self.topPick = topPick
+        self.finalRecommendationCardId = finalRecommendationCardId
+        self.createdAt = createdAt
+    }
 
     var statusLabel: String {
         switch status {
@@ -322,6 +341,7 @@ protocol RecommendationService: Sendable {
     func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult
     func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult
     func refresh(_ request: HelpRequest) async -> HelpRequest
+    func fetchRecommendationCard(id: UUID, query: String) async -> TopPick?
     func fetchHelpRequestDetail(id: UUID) async -> HelpRequestDetailResult
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
     func myHelpRequests(limit: Int) async -> MyHelpRequestsResult
@@ -449,6 +469,15 @@ struct BackendRecommendationService: RecommendationService {
             return helpRequest
         } catch {
             return helpRequest
+        }
+    }
+
+    func fetchRecommendationCard(id: UUID, query: String) async -> TopPick? {
+        do {
+            let response: V1CardDetailEnvelope = try await perform(URLRequest(url: endpoint("/v1/cards/\(id.uuidString)")))
+            return response.card.model(query: query)
+        } catch {
+            return nil
         }
     }
 
@@ -1988,6 +2017,23 @@ private struct V1CardSummary: Decodable {
     }
 }
 
+private struct V1CardDetailEnvelope: Decodable {
+    let card: V1CardSummary
+
+    enum CodingKeys: String, CodingKey {
+        case card
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        if let card = try container?.decodeIfPresent(V1CardSummary.self, forKey: .card) {
+            self.card = card
+        } else {
+            self.card = try V1CardSummary(from: decoder)
+        }
+    }
+}
+
 private struct V1CardMetadata: Decodable {
     let questionId: UUID?
 
@@ -2424,6 +2470,10 @@ struct MockCloudRecommendationService: RecommendationService {
         request
     }
 
+    func fetchRecommendationCard(id: UUID, query: String) async -> TopPick? {
+        nil
+    }
+
     func fetchHelpRequestDetail(id: UUID) async -> HelpRequestDetailResult {
         HelpRequestDetailResult(request: nil, notice: MockData.helpDetailUnavailableNotice())
     }
@@ -2841,15 +2891,20 @@ final class AppSession {
 
     func helpRequestDetail(for item: QuestionHistory) async -> HelpRequestDetailResult {
         if currentHelpRequest?.id == item.helpRequestId {
+            let request = await requestWithFinalPick(
+                currentHelpRequest ?? fallbackHelpRequest(for: item),
+                historyItem: item
+            )
             return HelpRequestDetailResult(
-                request: currentHelpRequest ?? fallbackHelpRequest(for: item),
+                request: request,
                 notice: nil
             )
         }
 
         guard let helpRequestId = item.helpRequestId else {
+            let request = await requestWithFinalPick(fallbackHelpRequest(for: item), historyItem: item)
             return HelpRequestDetailResult(
-                request: fallbackHelpRequest(for: item),
+                request: request,
                 notice: nil
             )
         }
@@ -2860,7 +2915,10 @@ final class AppSession {
             return HelpRequestDetailResult(request: nil, notice: result.notice)
         }
 
-        let merged = mergedLocalHelpAnswers(into: request, historyItem: item)
+        let merged = await requestWithFinalPick(
+            mergedLocalHelpAnswers(into: request, historyItem: item),
+            historyItem: item
+        )
         currentHelpRequest = merged
         serviceNotice = nil
         return HelpRequestDetailResult(request: merged, notice: nil)
@@ -3378,6 +3436,19 @@ final class AppSession {
             finalPick: item.topPick
         )
         return mergedLocalHelpAnswers(into: request, historyItem: item)
+    }
+
+    private func requestWithFinalPick(_ request: HelpRequest, historyItem: QuestionHistory) async -> HelpRequest {
+        guard request.finalPick == nil,
+              let cardId = historyItem.finalRecommendationCardId,
+              let finalPick = await service.fetchRecommendationCard(id: cardId, query: request.title)
+        else {
+            return request
+        }
+
+        var updated = request
+        updated.finalPick = finalPick
+        return updated
     }
 
     private func mergedLocalHelpAnswers(into request: HelpRequest, historyItem: QuestionHistory) -> HelpRequest {

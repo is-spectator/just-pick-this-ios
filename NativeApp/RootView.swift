@@ -291,13 +291,22 @@ struct RootView: View {
 
     private func openLightEvent(_ event: UserLightEvent) {
         if let helpCardId = event.helpCardId {
-            let item = session.history.first { $0.helpRequestId == helpCardId } ?? QuestionHistory(
+            let baseItem = session.history.first { $0.helpRequestId == helpCardId } ?? QuestionHistory(
                 id: helpCardId,
                 query: event.title,
                 status: "answer_received",
                 helpRequestId: helpCardId,
                 topPick: nil,
                 createdAt: event.createdAt
+            )
+            let item = QuestionHistory(
+                id: baseItem.id,
+                query: baseItem.query,
+                status: baseItem.status,
+                helpRequestId: baseItem.helpRequestId,
+                topPick: baseItem.topPick,
+                finalRecommendationCardId: baseItem.finalRecommendationCardId ?? event.cardId,
+                createdAt: baseItem.createdAt
             )
             path.append(.helpDetail(item))
             return
