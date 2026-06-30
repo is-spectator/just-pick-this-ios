@@ -187,20 +187,26 @@ struct BottomComposer: View {
     }
 
     private var inputLineLimit: ClosedRange<Int> {
-        dynamicTypeSize.isAccessibilitySize ? 1...4 : 1...3
+        dynamicTypeSize.isAccessibilitySize ? 1...4 : 1...2
     }
 
     private var composerHeight: CGFloat {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return 56 }
+        let compactHeight: CGFloat = dynamicTypeSize.isAccessibilitySize ? 56 : 50
+        guard !trimmed.isEmpty else { return compactHeight }
 
         let hardLineCount = max(1, text.components(separatedBy: .newlines).count)
-        let wrapThreshold = dynamicTypeSize.isAccessibilitySize ? 12 : 18
+        let wrapThreshold = dynamicTypeSize.isAccessibilitySize ? 14 : 24
         let estimatedWrappedLineCount = max(1, Int(ceil(Double(text.count) / Double(wrapThreshold))))
         let maxLineCount = inputLineLimit.upperBound
         let lineCount = min(maxLineCount, max(hardLineCount, estimatedWrappedLineCount))
         let extraLineHeight: CGFloat = dynamicTypeSize.isAccessibilitySize ? 24 : 22
-        return min(120, 56 + CGFloat(lineCount - 1) * extraLineHeight)
+        let maxHeight: CGFloat = dynamicTypeSize.isAccessibilitySize ? 112 : 78
+        return min(maxHeight, compactHeight + CGFloat(lineCount - 1) * extraLineHeight)
+    }
+
+    private var composerAlignment: VerticalAlignment {
+        composerHeight > (dynamicTypeSize.isAccessibilitySize ? 56 : 50) ? .bottom : .center
     }
 
     private func send() {
@@ -226,7 +232,7 @@ struct BottomComposer: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: AppTheme.Spacing.xs) {
+        HStack(alignment: composerAlignment, spacing: AppTheme.Spacing.xs) {
             TextField(placeholder, text: $text, axis: .vertical)
                 .focused($isFocused)
                 .font(AppTheme.Typography.body)
@@ -279,8 +285,8 @@ struct BottomComposer: View {
         )
         .shadow(color: AppTheme.shadowSubtle, radius: 2, x: 0, y: 1)
         .padding(.horizontal, AppTheme.Spacing.lg)
-        .padding(.top, AppTheme.Spacing.sm)
-        .padding(.bottom, AppTheme.Spacing.xs)
+        .padding(.top, AppTheme.Spacing.xs)
+        .padding(.bottom, AppTheme.Spacing.xxs)
         .background(AppTheme.background)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
