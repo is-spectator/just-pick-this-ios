@@ -319,8 +319,13 @@ struct InputScreen: View {
         dismissKeyboard()
         AppHaptics.selection()
         Task { @MainActor in
-            _ = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
-            entries.append(.notice(UUID(), ServiceNotice(title: "收到", detail: "我记下了：这张不合适。你可以补一句想换的方向。")))
+            let didRecord = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
+            if didRecord {
+                entries.append(.notice(UUID(), ServiceNotice(title: "收到", detail: "我记下了：这张不合适。你可以补一句想换的方向。")))
+            } else {
+                AppHaptics.warning()
+                entries.append(.notice(UUID(), session.serviceNotice ?? MockData.cardFeedbackUnavailableNotice(action: .change)))
+            }
         }
     }
 
@@ -328,8 +333,12 @@ struct InputScreen: View {
         dismissKeyboard()
         AppHaptics.warning()
         Task { @MainActor in
-            _ = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
-            entries.append(.notice(UUID(), ServiceNotice(title: "收到", detail: "这张卡已标记为信息有误，我会避开这类错误。")))
+            let didRecord = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
+            if didRecord {
+                entries.append(.notice(UUID(), ServiceNotice(title: "收到", detail: "这张卡已标记为信息有误，我会避开这类错误。")))
+            } else {
+                entries.append(.notice(UUID(), session.serviceNotice ?? MockData.cardFeedbackUnavailableNotice(action: .reject)))
+            }
         }
     }
 
@@ -1748,18 +1757,26 @@ struct ResultScreen: View {
         dismissKeyboard()
         AppHaptics.selection()
         localNotice = nil
-        Task {
-            _ = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
+        Task { @MainActor in
+            let didRecord = await session.sendCurrentTopPickFeedback(action: .change, reason: "不合适，想换一个")
+            guard didRecord else {
+                AppHaptics.warning()
+                localNotice = session.serviceNotice ?? MockData.cardFeedbackUnavailableNotice(action: .change)
+                return
+            }
+            followUp("不合适，换一个")
         }
-        followUp("不合适，换一个")
     }
 
     private func reportPickIssue() {
         dismissKeyboard()
         AppHaptics.warning()
-        localNotice = ServiceNotice(title: "收到", detail: "这张卡已标记为信息有误，我会避开这类错误。")
-        Task {
-            _ = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
+        localNotice = nil
+        Task { @MainActor in
+            let didRecord = await session.sendCurrentTopPickFeedback(action: .reject, reason: "信息有误")
+            localNotice = didRecord
+                ? ServiceNotice(title: "收到", detail: "这张卡已标记为信息有误，我会避开这类错误。")
+                : (session.serviceNotice ?? MockData.cardFeedbackUnavailableNotice(action: .reject))
         }
     }
 

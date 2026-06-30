@@ -2972,7 +2972,9 @@ final class AppSession {
 
     @discardableResult
     func sendCurrentTopPickFeedback(action: CardFeedbackAction, reason: String) async -> Bool {
-        await service.sendCardFeedback(id: currentTopPick?.cardId, action: action, reason: reason)
+        let didSend = await service.sendCardFeedback(id: currentTopPick?.cardId, action: action, reason: reason)
+        serviceNotice = didSend ? nil : MockData.cardFeedbackUnavailableNotice(action: action)
+        return didSend
     }
 
     func acceptCurrentHelpAnswer() async -> Bool {
@@ -3307,6 +3309,22 @@ enum MockData {
         ServiceNotice(
             title: "皮皮",
             detail: "这次还没采纳成功，当前结果我先留着。你可以重试。"
+        )
+    }
+
+    static func cardFeedbackUnavailableNotice(action: CardFeedbackAction) -> ServiceNotice {
+        let actionText: String
+        switch action {
+        case .change:
+            actionText = "换一个"
+        case .reject:
+            actionText = "信息有误"
+        case .askHuman:
+            actionText = "求一个"
+        }
+        return ServiceNotice(
+            title: "同步失败",
+            detail: "这次还没记录“\(actionText)”，当前结果先保留。你可以重试。"
         )
     }
 
