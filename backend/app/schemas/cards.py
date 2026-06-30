@@ -153,6 +153,9 @@ class HelpAnswerSummary(ApiModel):
     question_title: str
     question_context: str | None = None
     reward: dict[str, Any] = Field(default_factory=dict)
+    final_recommendation_card_id: str | None = None
+    settlement_reason: str | None = None
+    used_as_final_evidence: bool = False
     created_at: datetime | None = None
 
 

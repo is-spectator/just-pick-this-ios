@@ -4668,6 +4668,16 @@ private struct SubmittedAnswerRow: View {
                             .font(AppTheme.Typography.productStatus)
                             .foregroundStyle(AppTheme.textSecondary)
 
+                        if answer.usedAsFinalEvidence == true {
+                            Text("用于最终推荐")
+                                .font(AppTheme.Typography.productStatus)
+                                .foregroundStyle(AppTheme.green)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(AppTheme.green.opacity(0.10))
+                                .clipShape(Capsule())
+                        }
+
                         Spacer(minLength: 0)
 
                         Text(answer.timeLabel)

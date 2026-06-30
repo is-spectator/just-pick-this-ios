@@ -1123,6 +1123,31 @@ struct RewardLedgerItem: Identifiable, Hashable, Sendable {
     let valueLabel: String
     let status: RewardLedgerStatus
     let createdAt: String?
+    let finalRecommendationCardId: UUID?
+    let settlementReason: String?
+    let usedAsFinalEvidence: Bool
+
+    init(
+        id: String,
+        title: String,
+        subtitle: String,
+        valueLabel: String,
+        status: RewardLedgerStatus,
+        createdAt: String?,
+        finalRecommendationCardId: UUID? = nil,
+        settlementReason: String? = nil,
+        usedAsFinalEvidence: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.valueLabel = valueLabel
+        self.status = status
+        self.createdAt = createdAt
+        self.finalRecommendationCardId = finalRecommendationCardId
+        self.settlementReason = settlementReason
+        self.usedAsFinalEvidence = usedAsFinalEvidence
+    }
 }
 
 enum SubmittedAnswerStatus: String, Codable, Hashable, Sendable {
@@ -1151,6 +1176,9 @@ struct SubmittedAnswerRecord: Identifiable, Hashable, Codable, Sendable {
     let rewardLabel: String
     let status: SubmittedAnswerStatus
     let timeLabel: String
+    let finalRecommendationCardId: UUID?
+    let settlementReason: String?
+    let usedAsFinalEvidence: Bool?
 
     init(
         id: UUID = UUID(),
@@ -1160,7 +1188,10 @@ struct SubmittedAnswerRecord: Identifiable, Hashable, Codable, Sendable {
         text: String,
         rewardLabel: String,
         status: SubmittedAnswerStatus = .pending,
-        timeLabel: String = "刚刚"
+        timeLabel: String = "刚刚",
+        finalRecommendationCardId: UUID? = nil,
+        settlementReason: String? = nil,
+        usedAsFinalEvidence: Bool? = nil
     ) {
         self.id = id
         self.helpRequestId = helpRequestId
@@ -1170,6 +1201,9 @@ struct SubmittedAnswerRecord: Identifiable, Hashable, Codable, Sendable {
         self.rewardLabel = rewardLabel
         self.status = status
         self.timeLabel = timeLabel
+        self.finalRecommendationCardId = finalRecommendationCardId
+        self.settlementReason = settlementReason
+        self.usedAsFinalEvidence = usedAsFinalEvidence
     }
 }
 
@@ -1321,6 +1355,9 @@ private struct V1ProfileRewardItem: Decodable {
     let status: String
     let helpCardId: String?
     let helpAnswerId: String?
+    let finalRecommendationCardId: String?
+    let settlementReason: String?
+    let usedAsFinalEvidence: Bool
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -1331,7 +1368,25 @@ private struct V1ProfileRewardItem: Decodable {
         case status
         case helpCardId = "help_card_id"
         case helpAnswerId = "help_answer_id"
+        case finalRecommendationCardId = "final_recommendation_card_id"
+        case settlementReason = "settlement_reason"
+        case usedAsFinalEvidence = "used_as_final_evidence"
         case createdAt = "created_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        value = try container.decodeIfPresent(Int.self, forKey: .value) ?? 0
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "pending"
+        helpCardId = try container.decodeIfPresent(String.self, forKey: .helpCardId)
+        helpAnswerId = try container.decodeIfPresent(String.self, forKey: .helpAnswerId)
+        finalRecommendationCardId = try container.decodeIfPresent(String.self, forKey: .finalRecommendationCardId)
+        settlementReason = try container.decodeIfPresent(String.self, forKey: .settlementReason)
+        usedAsFinalEvidence = try container.decodeIfPresent(Bool.self, forKey: .usedAsFinalEvidence) ?? false
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     }
 
     var ledgerItem: RewardLedgerItem {
@@ -1340,11 +1395,24 @@ private struct V1ProfileRewardItem: Decodable {
         return RewardLedgerItem(
             id: helpCardId ?? helpAnswerId ?? id,
             title: "来一句奖励",
-            subtitle: normalizedStatus == .pending ? "等待对方采纳" : "来自一次来一句回答",
+            subtitle: rewardSubtitle(for: normalizedStatus),
             valueLabel: rewardLabel,
             status: normalizedStatus,
-            createdAt: createdAt
+            createdAt: createdAt,
+            finalRecommendationCardId: finalRecommendationCardId.flatMap(UUID.init(uuidString:)),
+            settlementReason: settlementReason,
+            usedAsFinalEvidence: usedAsFinalEvidence
         )
+    }
+
+    private func rewardSubtitle(for status: RewardLedgerStatus) -> String {
+        if usedAsFinalEvidence || settlementReason == "used_as_final_evidence" {
+            return "被用于最终推荐"
+        }
+        if settlementReason == "not_selected_for_final_answer" {
+            return "未被最终采用"
+        }
+        return status == .pending ? "等待对方采纳" : "来自一次来一句回答"
     }
 }
 
@@ -2107,6 +2175,9 @@ private struct V1HelpAnswerSummary: Decodable {
     let questionTitle: String
     let questionContext: String?
     let reward: V1RewardPayload?
+    let finalRecommendationCardId: String?
+    let settlementReason: String?
+    let usedAsFinalEvidence: Bool
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -2118,7 +2189,26 @@ private struct V1HelpAnswerSummary: Decodable {
         case questionTitle = "question_title"
         case questionContext = "question_context"
         case reward
+        case finalRecommendationCardId = "final_recommendation_card_id"
+        case settlementReason = "settlement_reason"
+        case usedAsFinalEvidence = "used_as_final_evidence"
         case createdAt = "created_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        helpCardId = try container.decode(String.self, forKey: .helpCardId)
+        rawText = try container.decodeIfPresent(String.self, forKey: .rawText) ?? ""
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "submitted"
+        rewardStatus = try container.decodeIfPresent(String.self, forKey: .rewardStatus) ?? "pending"
+        questionTitle = try container.decodeIfPresent(String.self, forKey: .questionTitle) ?? "求一个"
+        questionContext = try container.decodeIfPresent(String.self, forKey: .questionContext)
+        reward = try container.decodeIfPresent(V1RewardPayload.self, forKey: .reward)
+        finalRecommendationCardId = try container.decodeIfPresent(String.self, forKey: .finalRecommendationCardId)
+        settlementReason = try container.decodeIfPresent(String.self, forKey: .settlementReason)
+        usedAsFinalEvidence = try container.decodeIfPresent(Bool.self, forKey: .usedAsFinalEvidence) ?? false
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
     }
 
     var record: SubmittedAnswerRecord? {
@@ -2132,7 +2222,10 @@ private struct V1HelpAnswerSummary: Decodable {
             text: rawText,
             rewardLabel: reward?.label ?? "+10",
             status: submittedStatus,
-            timeLabel: createdAt ?? "刚刚"
+            timeLabel: createdAt ?? "刚刚",
+            finalRecommendationCardId: finalRecommendationCardId.flatMap(UUID.init(uuidString:)),
+            settlementReason: settlementReason,
+            usedAsFinalEvidence: usedAsFinalEvidence
         )
     }
 

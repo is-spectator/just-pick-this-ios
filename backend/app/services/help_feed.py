@@ -598,19 +598,7 @@ def get_my_rewards(*, user_id: str | None = None, device_uid: str | None = None)
             "pending_value": pending_value,
             "granted_value": granted_value,
             "rejected_value": rejected_value,
-            "items": [
-                {
-                    "id": str(event.id),
-                    "type": event.event_type,
-                    "label": event.label,
-                    "value": event.value,
-                    "status": event.status,
-                    "help_card_id": str(event.help_card_id) if event.help_card_id else None,
-                    "help_answer_id": str(event.help_answer_id) if event.help_answer_id else None,
-                    "created_at": event.created_at,
-                }
-                for event in rows
-            ],
+            "items": [_serialize_reward_event(event) for event in rows],
         }
 
 
@@ -742,6 +730,93 @@ def _reward_payload(help_card: HelpCard) -> dict[str, Any]:
     }
 
 
+def _serialize_reward_event(event: RewardEvent) -> dict[str, Any]:
+    payload = dict(event.payload_json or {})
+    settlement_reason = _non_empty_string(payload.get("settlement_reason"))
+    final_card_id = _non_empty_string(payload.get("final_recommendation_card_id"))
+    return {
+        "id": str(event.id),
+        "type": event.event_type,
+        "label": event.label,
+        "value": event.value,
+        "status": event.status,
+        "help_card_id": str(event.help_card_id) if event.help_card_id else None,
+        "help_answer_id": str(event.help_answer_id) if event.help_answer_id else None,
+        "final_recommendation_card_id": final_card_id,
+        "settlement_reason": settlement_reason,
+        "used_as_final_evidence": _is_used_as_final_evidence(
+            reward_status=event.status,
+            settlement_reason=settlement_reason,
+        ),
+        "created_at": event.created_at,
+    }
+
+
+def _help_answer_settlement_payload(answer: HelpAnswer) -> dict[str, Any]:
+    reward_events = sorted(
+        list(answer.reward_events or []),
+        key=lambda event: event.created_at,
+        reverse=True,
+    )
+    for event in reward_events:
+        payload = dict(event.payload_json or {})
+        final_card_id = _non_empty_string(payload.get("final_recommendation_card_id"))
+        settlement_reason = _non_empty_string(payload.get("settlement_reason"))
+        if final_card_id or settlement_reason:
+            return {
+                "final_recommendation_card_id": final_card_id,
+                "settlement_reason": settlement_reason,
+                "used_as_final_evidence": _is_used_as_final_evidence(
+                    reward_status=answer.reward_status,
+                    answer_status=answer.status,
+                    settlement_reason=settlement_reason,
+                ),
+            }
+
+    help_card = answer.help_card
+    final_card_id = (
+        str(help_card.final_recommendation_card_id)
+        if help_card is not None and help_card.final_recommendation_card_id
+        else None
+    )
+    fallback_reason = _settlement_reason_from_answer_status(answer) if final_card_id else None
+    return {
+        "final_recommendation_card_id": final_card_id,
+        "settlement_reason": fallback_reason,
+        "used_as_final_evidence": _is_used_as_final_evidence(
+            reward_status=answer.reward_status,
+            answer_status=answer.status,
+            settlement_reason=fallback_reason,
+        ),
+    }
+
+
+def _settlement_reason_from_answer_status(answer: HelpAnswer) -> str | None:
+    if answer.reward_status == "granted" or answer.status == "used":
+        return "used_as_final_evidence"
+    if answer.reward_status == "rejected" or answer.status == "rejected":
+        return "not_selected_for_final_answer"
+    return None
+
+
+def _is_used_as_final_evidence(
+    *,
+    reward_status: str | None = None,
+    answer_status: str | None = None,
+    settlement_reason: str | None = None,
+) -> bool:
+    return (
+        settlement_reason == "used_as_final_evidence"
+        or reward_status == "granted"
+        or answer_status == "used"
+    )
+
+
+def _non_empty_string(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
 def _serialize_ranked_help_card(
     help_card: HelpCard,
     *,
@@ -762,6 +837,7 @@ def _serialize_help_answer(answer: HelpAnswer) -> dict[str, Any]:
     reward = dict((answer.evidence_json or {}).get("reward") or {})
     if not reward and help_card is not None:
         reward = _reward_payload(help_card)
+    settlement = _help_answer_settlement_payload(answer)
     return {
         "id": str(answer.id),
         "help_card_id": str(answer.help_card_id),
@@ -771,6 +847,7 @@ def _serialize_help_answer(answer: HelpAnswer) -> dict[str, Any]:
         "question_title": str(getattr(help_card, "title", None) or "求一个"),
         "question_context": str(getattr(help_card, "context_text", None) or ""),
         "reward": reward,
+        **settlement,
         "created_at": answer.created_at,
     }
 

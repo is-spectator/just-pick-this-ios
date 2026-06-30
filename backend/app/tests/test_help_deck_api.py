@@ -665,6 +665,12 @@ def test_one_liner_reward_becomes_granted_after_finalization(
             last_body = response.json()
 
         assert last_body["metadata"]["finalization_ready"] is True
+        with session_scope() as session:
+            help_card = session.get(HelpCard, uuid.UUID(help_card_id))
+            assert help_card is not None
+            assert help_card.final_recommendation_card_id is not None
+            final_card_id = str(help_card.final_recommendation_card_id)
+
         rewards = await async_client.get("/v1/rewards/me", params={"device_id": answer_devices[0]})
         assert rewards.status_code == 200, rewards.text
         body = rewards.json()
@@ -672,6 +678,16 @@ def test_one_liner_reward_becomes_granted_after_finalization(
         assert body["granted_value"] == 10
         assert body["rejected_value"] == 0
         assert body["items"][0]["status"] == "granted"
+        assert body["items"][0]["final_recommendation_card_id"] == final_card_id
+        assert body["items"][0]["settlement_reason"] == "used_as_final_evidence"
+        assert body["items"][0]["used_as_final_evidence"] is True
+
+        mine = await async_client.get("/v1/help-answers/mine", params={"device_id": answer_devices[0]})
+        assert mine.status_code == 200, mine.text
+        answer = mine.json()["items"][0]
+        assert answer["final_recommendation_card_id"] == final_card_id
+        assert answer["settlement_reason"] == "used_as_final_evidence"
+        assert answer["used_as_final_evidence"] is True
 
     run_async(scenario)
 
@@ -775,6 +791,24 @@ def test_finalizer_rejects_pending_rewards_not_selected_as_evidence(
         assert body["granted_value"] == 0
         assert body["rejected_value"] == 10
         assert body["items"][0]["status"] == "rejected"
+        with session_scope() as session:
+            help_card = session.get(HelpCard, uuid.UUID(help_card_id))
+            assert help_card is not None
+            assert help_card.final_recommendation_card_id is not None
+            final_card_id = str(help_card.final_recommendation_card_id)
+        assert body["items"][0]["final_recommendation_card_id"] == final_card_id
+        assert body["items"][0]["settlement_reason"] == "not_selected_for_final_answer"
+        assert body["items"][0]["used_as_final_evidence"] is False
+
+        rejected_answers = await async_client.get(
+            "/v1/help-answers/mine",
+            params={"device_id": rejected_device},
+        )
+        assert rejected_answers.status_code == 200, rejected_answers.text
+        rejected_answer = rejected_answers.json()["items"][0]
+        assert rejected_answer["final_recommendation_card_id"] == final_card_id
+        assert rejected_answer["settlement_reason"] == "not_selected_for_final_answer"
+        assert rejected_answer["used_as_final_evidence"] is False
 
         rejected_quality = await async_client.get(
             "/v1/answerers/me/quality",
