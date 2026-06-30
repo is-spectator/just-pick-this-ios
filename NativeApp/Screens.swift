@@ -660,11 +660,11 @@ private struct LocationPickerSheet: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("决策地点")
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(AppTheme.Typography.productHeroTitle)
                         .foregroundStyle(AppTheme.text)
 
                     Text("皮皮会把这里当作附近推荐和步行距离的依据。")
-                        .font(.system(size: 14))
+                        .font(AppTheme.Typography.productHeroSubtitle)
                         .lineSpacing(4)
                         .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -672,7 +672,7 @@ private struct LocationPickerSheet: View {
                 if let currentLocation {
                     HStack(spacing: 10) {
                         Image(systemName: currentLocation.source == "current" ? "location.fill" : "mappin.and.ellipse")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(AppTheme.Icon.action)
                             .foregroundStyle(AppTheme.green)
                             .frame(width: 34, height: 34)
                             .background(AppTheme.bubble)
@@ -680,7 +680,7 @@ private struct LocationPickerSheet: View {
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(currentLocation.displayLabel)
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(AppTheme.Typography.productRowTitle)
                                 .foregroundStyle(AppTheme.text)
                                 .lineLimit(1)
                             Text(currentLocation.detailLabel)
@@ -694,7 +694,7 @@ private struct LocationPickerSheet: View {
                 Button(action: onUseCurrent) {
                     HStack(spacing: 12) {
                         Image(systemName: "location.circle.fill")
-                            .font(.system(size: 21, weight: .semibold))
+                            .font(AppTheme.Icon.productAction)
                             .foregroundStyle(AppTheme.onPrimaryAction)
                             .frame(width: 42, height: 42)
                             .background(AppTheme.primaryAction)
@@ -702,7 +702,7 @@ private struct LocationPickerSheet: View {
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text("使用当前定位")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(AppTheme.Typography.productRowTitle)
                                 .foregroundStyle(AppTheme.text)
                             Text("需要系统定位授权，只用于这次决策。")
                                 .font(AppTheme.Typography.caption)
@@ -739,9 +739,9 @@ private struct LocationPickerSheet: View {
                                 manualText = ""
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(AppTheme.Icon.clear)
                                     .foregroundStyle(AppTheme.textMuted)
-                                    .frame(width: 32, height: 32)
+                                    .frame(width: 44, height: 44)
                                     .contentShape(Circle())
                             }
                             .buttonStyle(.plain)
@@ -2178,6 +2178,12 @@ struct HelpDeckStack: View {
     @State private var dragOffset: CGFloat = 0
     @State private var committedSwipeCount = 0
 
+    private func advanceFromAccessibility() {
+        committedSwipeCount += 1
+        dragOffset = 0
+        onAdvance()
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let cardWidth = min(proxy.size.width - 30, 390)
@@ -2237,6 +2243,9 @@ struct HelpDeckStack: View {
                                     }
                                 }
                         )
+                        .accessibilityAction(named: "下一张求助") {
+                            advanceFromAccessibility()
+                        }
                 } else {
                     EmptyAnswerQueueCard(onRefresh: onRefresh, onBackToChat: onBackToChat)
                         .frame(width: cardWidth)

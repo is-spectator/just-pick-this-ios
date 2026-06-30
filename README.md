@@ -527,3 +527,5 @@ xcodebuild \
 - `HELP-001`/`HELP-006`/`DS-002`: 来一句 Deck 标题、奖励、说明和空状态操作接入语义 Typography token，空 Deck 的刷新/回聊天操作补充轻触感反馈。
 - `CARD-005`/`CARD-006`/`DS-002`/`STATE-005`: 求一个卡、状态摘要、结构化信息和来一句方卡接入语义 Typography token，主按钮补充轻触感反馈。
 - `UI-005`/`STATE-006`: Composer 空态固定回 56pt，只有输入变多时才逐步增长到 120pt，避免聊天首页被空输入框占掉大块空间。
+- `DS-002`/`DS-006`/`POLISH-007`: Composer 增加稳定无障碍标识和值描述，地点选择 Sheet 的清空按钮补齐 44pt 并接入语义字级/图标 token。
+- `HELP-001`/`HELP-003`/`DS-006`/`POLISH-007`: 来一句 Deck 的左右滑动补充 VoiceOver「下一张求助」操作，保证无障碍用户不依赖拖拽手势也能切换卡片。

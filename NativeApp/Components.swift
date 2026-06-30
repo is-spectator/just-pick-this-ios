@@ -239,6 +239,9 @@ struct BottomComposer: View {
                 .onSubmit {
                     send()
                 }
+                .accessibilityLabel("输入给皮皮的消息")
+                .accessibilityHint("输入你的位置和想做的事")
+                .accessibilityIdentifier("bottom-composer-input")
 
             Button(action: send) {
                 ZStack {
@@ -261,6 +264,8 @@ struct BottomComposer: View {
             .disabled(!canSend)
             .accessibilityLabel("发送")
             .accessibilityHint(canSend ? "发送当前输入" : "输入内容后可以发送")
+            .accessibilityValue(isSending ? "发送中" : (canSend ? "可发送" : "不可发送"))
+            .accessibilityIdentifier("bottom-composer-send")
         }
         .padding(.leading, AppTheme.Spacing.lg)
         .padding(.trailing, AppTheme.Spacing.xs)
