@@ -2107,15 +2107,24 @@ struct AnswerScreen: View {
             flashToast()
             return
         }
-        draft = ""
-        dismissKeyboard()
         toastTask?.cancel()
         isSending = true
-        toastMessage = "收到了，\(request.rewardLabel) 等她采纳。"
         toastTask = Task { @MainActor in
-            await session.addAnswer(answer)
-            AppHaptics.success()
+            let result = await session.addAnswer(answer)
             isSending = false
+            guard result.didSubmit else {
+                AppHaptics.warning()
+                toastMessage = result.notice?.detail ?? "这句还没提交成功，内容还在。你可以重试。"
+                showsToast = true
+                try? await Task.sleep(for: .milliseconds(1_600))
+                guard !Task.isCancelled else { return }
+                showsToast = false
+                return
+            }
+
+            draft = ""
+            dismissKeyboard()
+            AppHaptics.success()
             if session.answerRequest == nil {
                 toastMessage = "收到了，\(request.rewardLabel) 等她采纳。暂时没有下一张。"
             } else {

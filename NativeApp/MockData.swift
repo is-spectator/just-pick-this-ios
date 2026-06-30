@@ -39,6 +39,12 @@ struct PublishHelpResult: Sendable {
     let notice: ServiceNotice?
 }
 
+struct SubmitHelpAnswerResult: Sendable {
+    let request: HelpRequest?
+    let didSubmit: Bool
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -277,7 +283,7 @@ protocol RecommendationService: Sendable {
     func refresh(_ request: HelpRequest) async -> HelpRequest
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
-    func answer(_ text: String, for request: HelpRequest) async -> HelpRequest
+    func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult
     func skip(_ request: HelpRequest, reason: String) async -> Bool
     func acceptCard(id: UUID?) async -> Bool
     func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool
@@ -424,7 +430,7 @@ struct BackendRecommendationService: RecommendationService {
         }
     }
 
-    func answer(_ text: String, for helpRequest: HelpRequest) async -> HelpRequest {
+    func answer(_ text: String, for helpRequest: HelpRequest) async -> SubmitHelpAnswerResult {
         do {
             let response: V1HelpCardOneLinerResponse = try await perform(makeRequest(
                 path: "/v1/help-cards/\(helpRequest.id.uuidString)/one-liner",
@@ -436,13 +442,13 @@ struct BackendRecommendationService: RecommendationService {
             updated.rewardLabel = response.reward?.label ?? updated.rewardLabel
             updated.answerCount += 1
             updated.status = response.isFinalReady ? .answered : .published
-            return updated
+            return SubmitHelpAnswerResult(request: updated, didSubmit: true, notice: nil)
         } catch {
-            var fallback = helpRequest
-            fallback.answers.append(HumanAnswer(text: text, nickname: "路过的人", timeLabel: "刚刚"))
-            fallback.answerCount += 1
-            fallback.status = .answered
-            return fallback
+            return SubmitHelpAnswerResult(
+                request: helpRequest,
+                didSubmit: false,
+                notice: MockData.answerUnavailableNotice(error: error)
+            )
         }
     }
 
@@ -1912,12 +1918,12 @@ struct MockCloudRecommendationService: RecommendationService {
         [MockData.defaultHelpRequest]
     }
 
-    func answer(_ text: String, for request: HelpRequest) async -> HelpRequest {
+    func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult {
         var updated = request
         updated.answers.append(HumanAnswer(text: text, nickname: "路过的人", timeLabel: "刚刚"))
         updated.answerCount += 1
         updated.status = .answered
-        return updated
+        return SubmitHelpAnswerResult(request: updated, didSubmit: true, notice: nil)
     }
 
     func skip(_ request: HelpRequest, reason: String) async -> Bool {
@@ -2374,12 +2380,21 @@ final class AppSession {
         answerTarget = request
     }
 
-    func addAnswer(_ text: String) async {
+    @discardableResult
+    func addAnswer(_ text: String) async -> SubmitHelpAnswerResult {
         let answer = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !answer.isEmpty else { return }
+        guard !answer.isEmpty else {
+            return SubmitHelpAnswerResult(request: nil, didSubmit: false, notice: nil)
+        }
 
-        guard let request = answerRequest else { return }
-        let updated = await service.answer(answer, for: request)
+        guard let request = answerRequest else {
+            return SubmitHelpAnswerResult(request: nil, didSubmit: false, notice: nil)
+        }
+        let result = await service.answer(answer, for: request)
+        guard result.didSubmit, let updated = result.request else {
+            serviceNotice = result.notice
+            return result
+        }
         let record = SubmittedAnswerRecord(
             helpRequestId: request.id,
             questionTitle: request.title,
@@ -2396,6 +2411,8 @@ final class AppSession {
         }
         answerQueue.removeAll { $0.id == request.id }
         answerTarget = answerQueue.first
+        serviceNotice = nil
+        return result
     }
 
     func advanceAnswerRequest() {
@@ -2747,6 +2764,13 @@ enum MockData {
         ServiceNotice(
             title: "皮皮",
             detail: "这次没发出去，草稿还在。你可以重试。"
+        )
+    }
+
+    static func answerUnavailableNotice(error _: Error) -> ServiceNotice {
+        ServiceNotice(
+            title: "皮皮",
+            detail: "这句还没提交成功，内容我留在输入框里。你可以重试。"
         )
     }
 
