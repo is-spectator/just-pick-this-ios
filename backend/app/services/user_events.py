@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import HelpAnswer, HelpCard, RecommendationCard, UserBehaviorEvent
@@ -40,6 +41,14 @@ CORE_USER_EVENT_TYPES = {
     "drawer_history_renamed",
 }
 
+FAVORITE_ACTIVE_EVENT_TYPES = {
+    "favorite_choice_saved",
+    "favorite_choice_restored",
+    "favorite_choice_unhidden",
+}
+FAVORITE_REMOVED_EVENT_TYPES = {"favorite_choice_removed"}
+FAVORITE_EVENT_TYPES = FAVORITE_ACTIVE_EVENT_TYPES | FAVORITE_REMOVED_EVENT_TYPES
+
 
 def create_user_event(payload: dict[str, Any]) -> dict[str, Any]:
     with session_scope() as session:
@@ -68,6 +77,45 @@ def get_user_preferences(payload: dict[str, Any]) -> dict[str, Any]:
     with session_scope() as session:
         user = ensure_user(session, device_uid=device_uid or str(user_id), user_id=user_id)
         return serialize_user_preference_memory(user)
+
+
+def list_user_favorites(
+    *,
+    user_id: str | None = None,
+    device_uid: str | None = None,
+    limit: int = 80,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    resolved_limit = max(1, min(int(limit or 80), 100))
+    # Favorite state is reconstructed from recent behavior events. Fetch a wider
+    # window than the display limit so remove/restore events can settle locally.
+    event_limit = max(250, resolved_limit * 8)
+    try:
+        offset = max(0, int(cursor or 0))
+    except ValueError:
+        offset = 0
+
+    with session_scope() as session:
+        user = ensure_user(session, user_id=user_id, device_uid=device_uid)
+        events = list(
+            session.scalars(
+                select(UserBehaviorEvent)
+                .where(
+                    UserBehaviorEvent.user_id == user.id,
+                    UserBehaviorEvent.event_type.in_(sorted(FAVORITE_EVENT_TYPES)),
+                )
+                .order_by(UserBehaviorEvent.created_at.desc())
+                .offset(offset)
+                .limit(event_limit)
+            )
+        )
+        states = _favorite_states_from_events(events)
+        items = [
+            item
+            for state in states
+            if state["active"] and (item := _serialize_favorite_choice(session, state)) is not None
+        ]
+        return {"items": items[:resolved_limit], "next_cursor": None}
 
 
 def record_user_behavior_event(
@@ -143,6 +191,113 @@ def serialize_user_behavior_event(event: UserBehaviorEvent) -> dict[str, Any]:
         "metadata": event.payload_json or {},
         "created_at": event.created_at,
     }
+
+
+def _favorite_states_from_events(events: list[UserBehaviorEvent]) -> list[dict[str, Any]]:
+    states: dict[str, dict[str, Any]] = {}
+    for event in events:
+        metadata = dict(event.payload_json or {})
+        key = _favorite_state_key(event, metadata)
+        if not key:
+            continue
+        if key not in states:
+            states[key] = {
+                "key": key,
+                "active": event.event_type in FAVORITE_ACTIVE_EVENT_TYPES,
+                "metadata": metadata,
+                "created_at": event.created_at,
+            }
+            continue
+        existing = states[key]
+        existing["metadata"] = _merge_missing_metadata(existing["metadata"], metadata)
+    return list(states.values())
+
+
+def _favorite_state_key(event: UserBehaviorEvent, metadata: dict[str, Any]) -> str | None:
+    for field in ("history_id", "card_id", "recommendation_card_id"):
+        value = str(metadata.get(field) or "").strip()
+        if value:
+            return value
+    if event.recommendation_card_id:
+        return str(event.recommendation_card_id)
+    return None
+
+
+def _merge_missing_metadata(primary: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(primary)
+    for key, value in fallback.items():
+        if key not in merged or merged.get(key) in (None, ""):
+            merged[key] = value
+    return merged
+
+
+def _serialize_favorite_choice(session: Session, state: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = dict(state.get("metadata") or {})
+    card = _favorite_card_from_metadata(session, metadata)
+    history_id = str(metadata.get("history_id") or metadata.get("card_id") or state.get("key") or "").strip()
+    query = str(metadata.get("query") or _card_query(card) or "").strip()
+    title = str(metadata.get("title") or getattr(card, "title", "") or query).strip()
+    if not history_id or not (query or title):
+        return None
+    top_pick = _favorite_top_pick_payload(metadata, card=card, query=query or title)
+    return {
+        "id": history_id,
+        "query": query or title,
+        "status": str(metadata.get("status") or "saved"),
+        "help_request_id": metadata.get("help_request_id"),
+        "top_pick": top_pick,
+        "created_at": state.get("created_at"),
+    }
+
+
+def _favorite_card_from_metadata(session: Session, metadata: dict[str, Any]) -> RecommendationCard | None:
+    card_id = _lenient_optional_uuid(metadata.get("card_id") or metadata.get("recommendation_card_id"))
+    if not card_id:
+        return None
+    return session.get(RecommendationCard, card_id)
+
+
+def _favorite_top_pick_payload(
+    metadata: dict[str, Any],
+    *,
+    card: RecommendationCard | None,
+    query: str,
+) -> dict[str, Any] | None:
+    title = str(metadata.get("title") or getattr(card, "title", "") or "").strip()
+    if not title:
+        return None
+    subtitle = str(metadata.get("subtitle") or getattr(card, "subtitle", "") or "").strip()
+    reason = str(metadata.get("reason") or getattr(card, "reason", "") or "").strip()
+    card_id = str(metadata.get("card_id") or metadata.get("recommendation_card_id") or getattr(card, "id", "") or "").strip()
+    return {
+        "card_id": card_id or None,
+        "query": query,
+        "preface": str(metadata.get("preface") or "别查了,就这个。"),
+        "title": title,
+        "subtitle": subtitle or "保存过的选择",
+        "reason": reason or subtitle or "你保存过这个选择，可以继续回看。",
+        "bullets": [],
+        "warning": "",
+        "followups": [],
+    }
+
+
+def _card_query(card: RecommendationCard | None) -> str | None:
+    if card is None:
+        return None
+    metadata = card.payload_json or {}
+    for key in ("query", "original_query", "intent_text"):
+        value = str(metadata.get(key) or "").strip()
+        if value:
+            return value
+    return card.title
+
+
+def _lenient_optional_uuid(value: Any) -> uuid.UUID | None:
+    try:
+        return _optional_uuid(value)
+    except HTTPException:
+        return None
 
 
 def _inherit_experiment_metadata(

@@ -3810,8 +3810,19 @@ struct FavoritesScreen: View {
                 }
             }
         }
+        .task {
+            await loadFavorites()
+        }
         .onDisappear {
             noticeTask?.cancel()
+        }
+    }
+
+    private func loadFavorites() async {
+        guard removedFavoriteSnapshot == nil else { return }
+        if let notice = await session.loadFavoriteChoices() {
+            localNotice = notice
+            scheduleNoticeClear(for: notice.title)
         }
     }
 

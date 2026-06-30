@@ -61,6 +61,11 @@ struct MySubmittedAnswersResult: Sendable {
     let notice: ServiceNotice?
 }
 
+struct MyFavoriteChoicesResult: Sendable {
+    let choices: [QuestionHistory]
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -305,6 +310,7 @@ protocol RecommendationService: Sendable {
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
     func myHelpRequests(limit: Int) async -> MyHelpRequestsResult
     func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult
+    func myFavoriteChoices(limit: Int) async -> MyFavoriteChoicesResult
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
     func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult
     func skip(_ request: HelpRequest, reason: String) async -> Bool
@@ -473,6 +479,25 @@ struct BackendRecommendationService: RecommendationService {
             )
         } catch {
             return MySubmittedAnswersResult(answers: [], notice: MockData.profileSnapshotUnavailableNotice(error: error))
+        }
+    }
+
+    func myFavoriteChoices(limit: Int) async -> MyFavoriteChoicesResult {
+        do {
+            var components = URLComponents(url: endpoint("/v1/favorites/mine"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceUid),
+                URLQueryItem(name: "limit", value: "\(max(1, min(limit, 100)))")
+            ]
+
+            guard let url = components.url else { throw BackendServiceError.decoding("invalid favorites URL", "") }
+            let response: V1FavoriteChoiceListResponse = try await perform(URLRequest(url: url))
+            return MyFavoriteChoicesResult(
+                choices: response.items.compactMap(\.model),
+                notice: nil
+            )
+        } catch {
+            return MyFavoriteChoicesResult(choices: [], notice: MockData.profileSnapshotUnavailableNotice(error: error))
         }
     }
 
@@ -731,6 +756,9 @@ enum UserBehaviorEventMetadata {
         }
         if let topPick = item.topPick {
             payload["title"] = topPick.title
+            payload["subtitle"] = topPick.subtitle
+            payload["reason"] = topPick.reason
+            payload["preface"] = topPick.preface
             if let cardId = topPick.cardId {
                 payload["card_id"] = cardId.uuidString
             }
@@ -1931,6 +1959,40 @@ private struct V1HelpAnswerListResponse: Decodable {
     let items: [V1HelpAnswerSummary]
 }
 
+private struct V1FavoriteChoiceListResponse: Decodable {
+    let items: [V1FavoriteChoiceSummary]
+}
+
+private struct V1FavoriteChoiceSummary: Decodable {
+    let id: UUID?
+    let query: String?
+    let status: String?
+    let helpRequestId: UUID?
+    let topPick: TopPickResponse?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case query
+        case status
+        case helpRequestId = "help_request_id"
+        case topPick = "top_pick"
+        case createdAt = "created_at"
+    }
+
+    var model: QuestionHistory? {
+        guard let id, let query else { return nil }
+        return QuestionHistory(
+            id: id,
+            query: query,
+            status: status ?? "saved",
+            helpRequestId: helpRequestId,
+            topPick: topPick?.model(query: query),
+            createdAt: createdAt
+        )
+    }
+}
+
 private struct V1HelpAnswerSummary: Decodable {
     let id: String
     let helpCardId: String
@@ -2176,6 +2238,10 @@ struct MockCloudRecommendationService: RecommendationService {
         MySubmittedAnswersResult(answers: [], notice: nil)
     }
 
+    func myFavoriteChoices(limit: Int) async -> MyFavoriteChoicesResult {
+        MyFavoriteChoicesResult(choices: [], notice: nil)
+    }
+
     func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest] {
         [MockData.defaultHelpRequest]
     }
@@ -2345,6 +2411,7 @@ private struct HelpRequestListEnvelope: Decodable {
 }
 
 private struct TopPickResponse: Decodable {
+    let cardId: UUID?
     let query: String?
     let preface: String?
     let title: String?
@@ -2354,13 +2421,25 @@ private struct TopPickResponse: Decodable {
     let warning: String?
     let followups: [String]?
 
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case query
+        case preface
+        case title
+        case subtitle
+        case reason
+        case bullets
+        case warning
+        case followups
+    }
+
     func model(query fallbackQuery: String) -> TopPick {
         let resolvedFollowups = removeAskHuman(
             from: cleanArray(followups, fallback: ["为什么?", "换个小众的"])
         )
 
         return TopPick(
-            cardId: nil,
+            cardId: cardId,
             query: clean(query, fallback: fallbackQuery),
             preface: clean(preface, fallback: "别查了,就这个。"),
             title: clean(title, fallback: "先选一个最稳的"),
@@ -2755,6 +2834,16 @@ final class AppSession {
         )
     }
 
+    @discardableResult
+    func loadFavoriteChoices() async -> ServiceNotice? {
+        let result = await service.myFavoriteChoices(limit: 100)
+        if result.notice == nil || !result.choices.isEmpty {
+            mergeFavoriteChoicesFromRemote(result.choices)
+        }
+        serviceNotice = result.notice
+        return result.notice
+    }
+
     func removeFavoriteChoice(id: UUID) {
         let existing = favoriteChoices.first { $0.id == id }
         favoriteChoices.removeAll { $0.id == id }
@@ -2885,6 +2974,22 @@ final class AppSession {
         if let data = try? JSONEncoder().encode(Array(hiddenFavoriteChoiceIds)) {
             defaults.set(data, forKey: Self.hiddenFavoriteChoiceIDsKey)
         }
+    }
+
+    private func mergeFavoriteChoicesFromRemote(_ remoteChoices: [QuestionHistory]) {
+        var merged: [QuestionHistory] = []
+        var seenIds: Set<UUID> = []
+
+        func appendIfNeeded(_ item: QuestionHistory) {
+            guard !hiddenFavoriteChoiceIds.contains(item.id), !seenIds.contains(item.id) else { return }
+            merged.append(item)
+            seenIds.insert(item.id)
+        }
+
+        remoteChoices.forEach(appendIfNeeded)
+        favoriteChoices.forEach(appendIfNeeded)
+        favoriteChoices = Array(merged.prefix(80))
+        persistFavoriteState()
     }
 
     private func persistSubmittedAnswers() {

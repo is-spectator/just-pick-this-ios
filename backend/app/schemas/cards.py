@@ -161,6 +161,20 @@ class HelpAnswerListResponse(ApiModel):
     next_cursor: str | None = None
 
 
+class FavoriteChoiceSummary(ApiModel):
+    id: str
+    query: str
+    status: str = "saved"
+    help_request_id: str | None = None
+    top_pick: dict[str, Any] | None = None
+    created_at: datetime | None = None
+
+
+class FavoriteChoiceListResponse(ApiModel):
+    items: list[FavoriteChoiceSummary] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
 class HelpCardDetail(HelpCardSummary):
     pass
 
