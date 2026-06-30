@@ -407,8 +407,9 @@ struct RootView: View {
 
     @MainActor
     private func loadMessageBadge() async {
-        let snapshot = await ProfileAPIService().fetchSnapshot()
-        let ids = Set(snapshot.lightEvents.map(\.id))
+        let result = await ProfileAPIService().fetchSnapshotResult()
+        guard result.notice == nil else { return }
+        let ids = Set(result.snapshot.lightEvents.map(\.id))
         latestLightEventIDs = ids
         unreadLightCount = ids.subtracting(seenLightEventIDs()).count
     }

@@ -2539,6 +2539,7 @@ struct ProfileScreen: View {
     let onOpenAnswerDeck: () -> Void
 
     @State private var snapshot = UserDashboardSnapshot.empty
+    @State private var snapshotNotice: ServiceNotice?
     @State private var isLoading = false
     @State private var isAccountActionRunning = false
     @State private var accountActionMessage: String?
@@ -2576,6 +2577,9 @@ struct ProfileScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 accountCard
+                if let snapshotNotice {
+                    ServiceNoticePill(notice: snapshotNotice)
+                }
                 metricGrid
                 answerCallout
 
@@ -2966,7 +2970,9 @@ struct ProfileScreen: View {
     private func loadSnapshot() async {
         guard !isLoading else { return }
         isLoading = true
-        snapshot = await ProfileAPIService().fetchSnapshot()
+        let result = await ProfileAPIService().fetchSnapshotResult()
+        snapshot = result.snapshot
+        snapshotNotice = result.notice
         isLoading = false
     }
 
@@ -3438,6 +3444,7 @@ struct MyAnswersScreen: View {
     let onSelectHelpDetail: (QuestionHistory) -> Void
 
     @State private var snapshot = UserDashboardSnapshot.empty
+    @State private var snapshotNotice: ServiceNotice?
     @State private var isLoading = false
     @State private var selectedStatus: AnswerStatusFilter = .all
 
@@ -3487,6 +3494,12 @@ struct MyAnswersScreen: View {
             emptyMessage: "去来一句 Deck，写完后待采纳和奖励会显示在这里。",
             isEmpty: false
         ) {
+            if let snapshotNotice {
+                ProductSection(title: "同步状态") {
+                    ServiceNoticePill(notice: snapshotNotice)
+                }
+            }
+
             ProductSection(title: "状态") {
                 HStack(spacing: 10) {
                     AnswerStatusFilterTile(
@@ -3621,7 +3634,9 @@ struct MyAnswersScreen: View {
     private func loadSnapshot() async {
         guard !isLoading else { return }
         isLoading = true
-        snapshot = await ProfileAPIService().fetchSnapshot()
+        let result = await ProfileAPIService().fetchSnapshotResult()
+        snapshot = result.snapshot
+        snapshotNotice = result.notice
         isLoading = false
     }
 
@@ -3820,6 +3835,7 @@ struct RewardsScreen: View {
     let onSelectHelpDetail: (QuestionHistory) -> Void
 
     @State private var snapshot = UserDashboardSnapshot.empty
+    @State private var snapshotNotice: ServiceNotice?
     @State private var isLoading = false
     @State private var selectedStatus: RewardStatusFilter = .all
 
@@ -3870,6 +3886,12 @@ struct RewardsScreen: View {
             emptyMessage: "帮别人来一句，被采纳后奖励会出现在这里。",
             isEmpty: false
         ) {
+            if let snapshotNotice {
+                ProductSection(title: "同步状态") {
+                    ServiceNoticePill(notice: snapshotNotice)
+                }
+            }
+
             ProductSection(title: "积分") {
                 HStack(spacing: 10) {
                     RewardStatusFilterTile(
@@ -4005,7 +4027,9 @@ struct RewardsScreen: View {
     private func loadSnapshot() async {
         guard !isLoading else { return }
         isLoading = true
-        snapshot = await ProfileAPIService().fetchSnapshot()
+        let result = await ProfileAPIService().fetchSnapshotResult()
+        snapshot = result.snapshot
+        snapshotNotice = result.notice
         isLoading = false
     }
 }
@@ -4060,6 +4084,7 @@ struct MessagesScreen: View {
     let onOpenEvent: (UserLightEvent) -> Void
 
     @State private var snapshot = UserDashboardSnapshot.empty
+    @State private var snapshotNotice: ServiceNotice?
     @State private var isLoading = false
 
     var body: some View {
@@ -4069,9 +4094,15 @@ struct MessagesScreen: View {
             systemImage: "bell",
             emptyTitle: "暂时没有新消息",
             emptyMessage: "有新的来一句、最终结果或奖励变化时，皮皮会放在这里。",
-            isEmpty: snapshot.lightEvents.isEmpty,
+            isEmpty: snapshot.lightEvents.isEmpty && snapshotNotice == nil,
             isLoading: isLoading
         ) {
+            if let snapshotNotice {
+                ProductSection(title: "同步状态") {
+                    ServiceNoticePill(notice: snapshotNotice)
+                }
+            }
+
             if !snapshot.lightEvents.isEmpty {
                 ProductSection(title: "最新") {
                     VStack(spacing: 0) {
@@ -4134,9 +4165,13 @@ struct MessagesScreen: View {
     private func loadSnapshot() async {
         guard !isLoading else { return }
         isLoading = true
-        snapshot = await ProfileAPIService().fetchSnapshot()
+        let result = await ProfileAPIService().fetchSnapshotResult()
+        snapshot = result.snapshot
+        snapshotNotice = result.notice
         isLoading = false
-        onEventsLoaded(snapshot.lightEvents)
+        if result.notice == nil {
+            onEventsLoaded(snapshot.lightEvents)
+        }
     }
 }
 

@@ -791,6 +791,11 @@ struct UserDashboardSnapshot: Equatable, Sendable {
     )
 }
 
+struct UserDashboardSnapshotResult: Sendable {
+    let snapshot: UserDashboardSnapshot
+    let notice: ServiceNotice?
+}
+
 enum RewardLedgerStatus: String, Codable, Hashable, Sendable {
     case pending
     case granted
@@ -892,11 +897,37 @@ struct ProfileAPIService: Sendable {
     private let deviceUid = DeviceIdentity.uid
 
     func fetchSnapshot() async -> UserDashboardSnapshot {
-        let rewards = try? await fetchRewards()
-        let quality = try? await fetchAnswererQuality()
-        let lights = try? await fetchLightEvents()
+        await fetchSnapshotResult().snapshot
+    }
 
-        return UserDashboardSnapshot(
+    func fetchSnapshotResult() async -> UserDashboardSnapshotResult {
+        var firstError: Error?
+        let rewards: V1ProfileRewardsResponse?
+        let quality: V1ProfileAnswererQualityResponse?
+        let lights: V1ProfileLightEventsResponse?
+
+        do {
+            rewards = try await fetchRewards()
+        } catch {
+            firstError = firstError ?? error
+            rewards = nil
+        }
+
+        do {
+            quality = try await fetchAnswererQuality()
+        } catch {
+            firstError = firstError ?? error
+            quality = nil
+        }
+
+        do {
+            lights = try await fetchLightEvents()
+        } catch {
+            firstError = firstError ?? error
+            lights = nil
+        }
+
+        let snapshot = UserDashboardSnapshot(
             pendingReward: rewards?.pendingValue ?? 0,
             grantedReward: rewards?.grantedValue ?? 0,
             rejectedReward: rewards?.rejectedValue ?? 0,
@@ -916,6 +947,11 @@ struct ProfileAPIService: Sendable {
                     createdAt: item.createdAt
                 )
             }
+        )
+
+        return UserDashboardSnapshotResult(
+            snapshot: snapshot,
+            notice: firstError.map(MockData.profileSnapshotUnavailableNotice(error:))
         )
     }
 
@@ -2771,6 +2807,13 @@ enum MockData {
         ServiceNotice(
             title: "皮皮",
             detail: "这句还没提交成功，内容我留在输入框里。你可以重试。"
+        )
+    }
+
+    static func profileSnapshotUnavailableNotice(error _: Error) -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "个人数据这次没同步完整，下面可能不是最新状态。你可以重试。"
         )
     }
 
