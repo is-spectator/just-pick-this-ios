@@ -373,7 +373,7 @@ class PipiFinalizeGraph:
         self,
         state: PipiFinalizeGraphState,
     ) -> PipiFinalizeGraphState:
-        """Backward-compatible alias; audit tool_name stays standardized."""
+        """Deprecated alias; audit tool_name stays standardized."""
 
         return self.create_recommendation_card(state)
 
@@ -569,6 +569,8 @@ def create_recommendation_card(
 def create_final_recommendation_card(
     state: PipiFinalizeGraphState,
 ) -> PipiFinalizeGraphState:
+    """Deprecated module-level alias for legacy imports."""
+
     return PipiFinalizeGraph().create_final_recommendation_card(state)
 
 

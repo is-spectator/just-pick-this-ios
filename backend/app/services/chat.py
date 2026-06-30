@@ -43,9 +43,7 @@ from app.services.runtime import (
     create_turn,
     ensure_datong_assets,
     ensure_seongsu_assets,
-    ensure_seongsu_image,
     ensure_sijiminfu_assets,
-    ensure_shopping_intent,
     ensure_user,
     finish_tool_call,
     get_or_create_conversation,
@@ -2125,89 +2123,34 @@ def finalize_help_card_now(
     agent_run: AgentRun | None = None,
     tool_call: Any | None = None,
 ) -> RecommendationCard:
+    """Deprecated compatibility wrapper around PipiFinalizeGraph.
+
+    Product finalization must flow through ``run_finalize_graph_for_help_card`` so
+    ToolCall, IntentAnswer, LightEvent, and RewardEvent side effects stay on the
+    audited PipiFinalizeGraph path. Keep this function only for old imports.
+    """
+
     if help_card.final_recommendation_card is not None:
         return help_card.final_recommendation_card
     if help_card.answer_count < help_card.min_answers_required:
         raise ValueError("not enough answers to finalize")
 
-    image = ensure_seongsu_image(session)
-    intent = ensure_shopping_intent(session)
-    card = RecommendationCard(
-        question_id=help_card.question_id,
-        conversation_id=help_card.conversation_id,
-        user_id=help_card.owner_user_id,
-        agent_run_id=agent_run.id if agent_run else None,
-        tool_call_id=tool_call.id if tool_call else None,
-        image_asset_id=image.id,
-        image_required=False,
-        image_status="attached",
-        source="pipi_finalized_from_help",
-        title="去圣水",
-        subtitle=None,
-        reason="比明洞更生活方式，也更适合买小众品牌和美妆。",
-        bullets_json=[],
-        warning=None,
-        confidence=0.86,
-        status="active",
-        payload_json={
-            "source_help_card_id": str(help_card.id),
-            "item": {"title": "去圣水"},
-            "decision_factor": {"text": "比明洞更生活方式，也更适合买小众品牌和美妆。"},
-            "followups": [],
-        },
-    )
-    session.add(card)
-    session.flush()
+    from app.jobs.finalizer_job import run_finalize_graph_for_help_card
 
-    intent_answer = IntentAnswer(
-        intent_id=intent.id,
-        image_asset_id=image.id,
-        answer_text=card.reason,
-        intent_key=intent.key,
-        intent_text=help_card.title,
-        answer_title=card.title,
-        answer_summary=card.reason,
-        constraints_json={
-            "help_card_id": str(help_card.id),
-            "title": help_card.title,
-            "context": help_card.context_text,
-            **(help_card.payload_json or {}),
-        },
-        source_type="help_final",
-        source_ref_id=str(help_card.id),
-        confidence=card.confidence,
-        success_count=0,
-        rejection_count=0,
-        locale="zh-CN",
-        tags_json=["help_final", "korea", "seongsu"],
-        evidence_json={"source_type": "help_final", "help_card_id": str(help_card.id)},
-        priority=30,
-        is_active=True,
-    )
-    session.add(intent_answer)
+    final_state = run_finalize_graph_for_help_card(session, help_card.id)
+    if final_state.get("status") == "needs_more_answers":
+        raise ValueError("not enough answers to finalize")
+    if final_state.get("status") == "failed":
+        raise ValueError("finalize graph failed")
 
-    help_card.final_recommendation_card_id = card.id
-    help_card.status = "final_ready"
-    help_card.final_ready_at = utcnow()
-    help_card.question.current_recommendation_card_id = card.id
-    help_card.question.status = "final_ready"
-    for answer in help_card.answers:
-        answer.status = "used"
-        answer.reward_status = "granted"
-
-    light = LightEvent(
-        user_id=help_card.owner_user_id,
-        conversation_id=help_card.conversation_id,
-        question_id=help_card.question_id,
-        help_card_id=help_card.id,
-        recommendation_card_id=card.id,
-        type="final_ready",
-        title="有人帮你选好了",
-        body=f"{help_card.title} 有结果了。",
-        payload_json={"card_id": str(card.id)},
-    )
-    session.add(light)
-    session.flush()
+    card = help_card.final_recommendation_card
+    if card is None:
+        final_card = final_state.get("final_recommendation_card") or {}
+        card_id = final_card.get("id") or final_card.get("card_id")
+        if card_id:
+            card = session.get(RecommendationCard, uuid.UUID(str(card_id)))
+    if card is None:
+        raise ValueError("final recommendation card was not created")
     return card
 
 

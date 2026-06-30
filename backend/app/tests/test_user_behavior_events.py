@@ -6,7 +6,7 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.models import AgentRun, RecommendationCard, RewardEvent, UserBehaviorEvent
+from app.models import AgentRun, HelpCard, RecommendationCard, RewardEvent, ToolCall, UserBehaviorEvent
 from app.services.runtime import session_scope
 
 from .conftest import bootstrap, chat_turn, require_ready_response
@@ -28,6 +28,29 @@ def _reward_event_count(**filters: Any) -> int:
             column = getattr(RewardEvent, field)
             query = query.where(column == value)
         return int(session.scalar(query) or 0)
+
+
+def _finalizer_tool_names_for_help_card(help_card_id: str) -> list[str]:
+    with session_scope() as session:
+        help_card = session.get(HelpCard, uuid.UUID(help_card_id))
+        assert help_card is not None
+        finalizer_run_ids = list(
+            session.scalars(
+                select(AgentRun.id).where(
+                    AgentRun.conversation_id == help_card.conversation_id,
+                    AgentRun.run_type == "pipi_finalize",
+                    AgentRun.graph_name == "PipiFinalizeGraph",
+                )
+            )
+        )
+        assert finalizer_run_ids, "chat one-liner threshold should create a PipiFinalizeGraph AgentRun"
+        return list(
+            session.scalars(
+                select(ToolCall.tool_name)
+                .where(ToolCall.agent_run_id.in_(finalizer_run_ids))
+                .order_by(ToolCall.sequence_index.asc(), ToolCall.created_at.asc())
+            )
+        )
 
 
 async def _draft_help_card(client: AsyncClient, *, device_id: str) -> tuple[str, str]:
@@ -195,6 +218,63 @@ def test_chat_one_liner_writes_pending_reward_and_user_behavior_event(
         assert body["metadata"]["loop"]["tool_calls"] == ["submit_one_liner_answer"]
         assert _event_count(event_type="one_liner_submitted", help_card_id=uuid.UUID(help_card_id)) == 1
         assert _reward_event_count(help_card_id=uuid.UUID(help_card_id), status="pending") == 1
+
+    run_async(scenario)
+
+
+def test_chat_one_liner_threshold_runs_finalize_graph_tool_chain(
+    run_async: Any,
+    async_client: AsyncClient,
+    monkeypatch: Any,
+) -> None:
+    async def scenario() -> None:
+        def forbid_legacy_finalize_helper(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("chat one-liner threshold must not call finalize_help_card_now")
+
+        monkeypatch.setattr(
+            "app.services.chat.finalize_help_card_now",
+            forbid_legacy_finalize_helper,
+        )
+
+        owner_device = f"pytest-chat-finalize-owner-{uuid.uuid4()}"
+        owner_conversation_id, help_card_id = await _draft_help_card(async_client, device_id=owner_device)
+        await chat_turn(
+            async_client,
+            conversation_id=owner_conversation_id,
+            message="发出去",
+            metadata={"help_card_id": help_card_id},
+        )
+
+        latest_body: dict[str, Any] = {}
+        for index, text in enumerate(
+            [
+                "来一句：别去明洞，去圣水更小众。",
+                "来一句：圣水咖啡和小店密度高。",
+                "来一句：预算不高也能逛圣水。",
+            ],
+            start=1,
+        ):
+            answer_boot = await bootstrap(
+                async_client,
+                device_id=f"pytest-chat-finalize-answer-{index}-{uuid.uuid4()}",
+            )
+            latest_body = await chat_turn(
+                async_client,
+                conversation_id=answer_boot["conversation_id"],
+                message=text,
+                metadata={"help_card_id": help_card_id, "answer_context": True},
+            )
+            assert latest_body["metadata"]["loop"]["tool_calls"] == ["submit_one_liner_answer"]
+
+        assert latest_body["metadata"]["tool_results"][0]["output"]["finalization_ready"] is True
+        assert latest_body["metadata"]["tool_results"][0]["output"]["final_card_id"]
+
+        tool_names = _finalizer_tool_names_for_help_card(help_card_id)
+        tool_name_set = set(tool_names)
+        assert {"finalize_help_card", "create_recommendation_card", "save_intent_answer", "light_user"} <= tool_name_set
+        assert "finalize_recommendation" not in tool_name_set
+        assert "create_final_recommendation_card" not in tool_name_set
+        assert _reward_event_count(help_card_id=uuid.UUID(help_card_id), status="granted") >= 1
 
     run_async(scenario)
 
