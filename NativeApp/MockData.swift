@@ -45,6 +45,12 @@ struct SubmitHelpAnswerResult: Sendable {
     let notice: ServiceNotice?
 }
 
+struct CompleteQuestionResult: Sendable {
+    let didComplete: Bool
+    let history: [QuestionHistory]
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -287,7 +293,7 @@ protocol RecommendationService: Sendable {
     func skip(_ request: HelpRequest, reason: String) async -> Bool
     func acceptCard(id: UUID?) async -> Bool
     func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool
-    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory]
+    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> CompleteQuestionResult
 }
 
 enum AppAPIEnvironment {
@@ -473,12 +479,12 @@ struct BackendRecommendationService: RecommendationService {
         guard let id else { return false }
 
         do {
-            let _: V1CardAcceptResponse = try await perform(makeRequest(
+            let response: V1CardAcceptResponse = try await perform(makeRequest(
                 path: "/v1/cards/\(id.uuidString)/accept",
                 method: "POST",
                 body: V1CardAcceptRequest(metadata: ["source": "ios"])
             ))
-            return true
+            return response.accepted
         } catch {
             return false
         }
@@ -504,11 +510,17 @@ struct BackendRecommendationService: RecommendationService {
         }
     }
 
-    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory] {
-        guard let helpRequestId else { return [] }
+    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> CompleteQuestionResult {
+        guard let helpRequestId else {
+            return CompleteQuestionResult(
+                didComplete: false,
+                history: [],
+                notice: MockData.acceptUnavailableNotice()
+            )
+        }
 
         do {
-            let _: V1HelpCardFinalAcceptResponse = try await perform(makeRequest(
+            let response: V1HelpCardFinalAcceptResponse = try await perform(makeRequest(
                 path: "/v1/help-cards/\(helpRequestId.uuidString)/accept-final",
                 method: "POST",
                 body: V1HelpCardFinalAcceptRequest(
@@ -522,11 +534,21 @@ struct BackendRecommendationService: RecommendationService {
                     ].compactMapValues { $0.isEmpty ? nil : $0 }
                 )
             ))
+            guard response.accepted else {
+                return CompleteQuestionResult(
+                    didComplete: false,
+                    history: [],
+                    notice: MockData.acceptUnavailableNotice()
+                )
+            }
+            return CompleteQuestionResult(didComplete: true, history: [], notice: nil)
         } catch {
-            // Keep the existing local completion fallback; the user should not lose the chosen result.
+            return CompleteQuestionResult(
+                didComplete: false,
+                history: [],
+                notice: MockData.acceptUnavailableNotice()
+            )
         }
-
-        return []
     }
 
     private func makeRequest<Body: Encodable>(path: String, method: String, body: Body) throws -> URLRequest {
@@ -1974,8 +1996,8 @@ struct MockCloudRecommendationService: RecommendationService {
         id != nil && !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory] {
-        []
+    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> CompleteQuestionResult {
+        CompleteQuestionResult(didComplete: helpRequestId != nil, history: [], notice: nil)
     }
 
     private func shouldAskHuman(for query: String) -> Bool {
@@ -2464,22 +2486,18 @@ final class AppSession {
         answerTarget = answerQueue.first
     }
 
-    func acceptCurrentTopPick() async {
+    func acceptCurrentTopPick() async -> Bool {
         let accepted = await service.acceptCard(id: currentTopPick?.cardId)
-        let remoteHistory: [QuestionHistory]
-        if accepted {
-            remoteHistory = []
-        } else {
-            remoteHistory = await service.complete(
-                sessionId: sessionId,
-                questionId: currentQuestionId,
-                helpRequestId: nil,
-                source: "top1"
-            )
+        guard accepted else {
+            serviceNotice = MockData.acceptUnavailableNotice()
+            return false
         }
-        markCurrentQuestionCompleted(remoteHistory: remoteHistory)
+
+        serviceNotice = nil
+        markCurrentQuestionCompleted(remoteHistory: [])
         currentTopPick = nil
         currentQuery = ""
+        return true
     }
 
     func saveCurrentTopPickToFavorites() {
@@ -2540,16 +2558,21 @@ final class AppSession {
         await service.sendCardFeedback(id: currentTopPick?.cardId, action: action, reason: reason)
     }
 
-    func acceptCurrentHelpAnswer() async {
-        let remoteHistory = await service.complete(
+    func acceptCurrentHelpAnswer() async -> Bool {
+        let result = await service.complete(
             sessionId: sessionId,
             questionId: currentQuestionId,
             helpRequestId: currentHelpRequest?.id,
             source: "human_answer"
         )
-        markCurrentQuestionCompleted(remoteHistory: remoteHistory)
+
+        serviceNotice = result.notice
+        guard result.didComplete else { return false }
+
+        markCurrentQuestionCompleted(remoteHistory: result.history)
         currentHelpRequest = nil
         currentQuery = ""
+        return true
     }
 
     private func apply(_ decision: RecommendationDecision) {
@@ -2807,6 +2830,13 @@ enum MockData {
         ServiceNotice(
             title: "皮皮",
             detail: "这句还没提交成功，内容我留在输入框里。你可以重试。"
+        )
+    }
+
+    static func acceptUnavailableNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "皮皮",
+            detail: "这次还没采纳成功，当前结果我先留着。你可以重试。"
         )
     }
 

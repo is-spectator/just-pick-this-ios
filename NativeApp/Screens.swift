@@ -368,10 +368,15 @@ struct InputScreen: View {
         dismissKeyboard()
         isAcceptingPick = true
         Task { @MainActor in
-            await session.acceptCurrentTopPick()
-            AppHaptics.success()
+            let didAccept = await session.acceptCurrentTopPick()
             isAcceptingPick = false
-            entries.append(.notice(UUID(), ServiceNotice(title: "皮皮", detail: "就这个。")))
+            if didAccept {
+                AppHaptics.success()
+                entries.append(.notice(UUID(), ServiceNotice(title: "皮皮", detail: "就这个。")))
+            } else if let notice = session.serviceNotice {
+                AppHaptics.warning()
+                entries.append(.notice(UUID(), notice))
+            }
         }
     }
 
@@ -1714,10 +1719,15 @@ struct ResultScreen: View {
         dismissKeyboard()
         isAccepting = true
         Task { @MainActor in
-            await session.acceptCurrentTopPick()
-            AppHaptics.success()
+            let didAccept = await session.acceptCurrentTopPick()
             isAccepting = false
-            onAccepted()
+            if didAccept {
+                AppHaptics.success()
+                onAccepted()
+            } else {
+                AppHaptics.warning()
+                localNotice = session.serviceNotice ?? MockData.acceptUnavailableNotice()
+            }
         }
     }
 
@@ -1782,6 +1792,7 @@ struct AskScreen: View {
     @State private var showsToast = false
     @State private var showsCloseConfirmation = false
     @State private var publishFeedbackCount = 0
+    @State private var isAcceptingAnswer = false
     @State private var publishTask: Task<Void, Never>?
     @State private var pollTask: Task<Void, Never>?
     @State private var isComposerFocused = false
@@ -1804,9 +1815,11 @@ struct AskScreen: View {
                         }
                         RequestCard(request: session.helpRequest)
                         if !session.helpRequest.answers.isEmpty {
-                            PrimaryButton(title: "采纳这句") {
+                            PrimaryButton(title: isAcceptingAnswer ? "采纳中" : "采纳这句") {
                                 acceptAnswer()
                             }
+                            .disabled(isAcceptingAnswer)
+                            .opacity(isAcceptingAnswer ? 0.52 : 1)
                             .padding(.top, 20)
                         }
                         if session.helpRequest.status == .draft {
@@ -1975,11 +1988,23 @@ struct AskScreen: View {
     }
 
     private func acceptAnswer() {
+        guard !isAcceptingAnswer else { return }
         dismissKeyboard()
+        isAcceptingAnswer = true
         Task { @MainActor in
-            await session.acceptCurrentHelpAnswer()
-            AppHaptics.success()
-            onHome()
+            let didAccept = await session.acceptCurrentHelpAnswer()
+            isAcceptingAnswer = false
+            if didAccept {
+                AppHaptics.success()
+                onHome()
+            } else {
+                AppHaptics.warning()
+                toastMessage = session.serviceNotice?.detail ?? MockData.acceptUnavailableNotice().detail
+                showsToast = true
+                try? await Task.sleep(for: .milliseconds(1_200))
+                guard !Task.isCancelled else { return }
+                showsToast = false
+            }
         }
     }
 
