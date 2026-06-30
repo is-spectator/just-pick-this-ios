@@ -4321,7 +4321,7 @@ struct MessagesScreen: View {
                             AppHaptics.selection()
                             onMarkRead(snapshot.lightEvents)
                         } label: {
-                            Text("全部已读")
+                            Text("本机已读")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(AppTheme.text)
                                 .padding(.horizontal, 10)
@@ -4331,7 +4331,7 @@ struct MessagesScreen: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(isLoading)
-                        .accessibilityHint("清除消息中心未读红点")
+                        .accessibilityHint("在本机清除消息中心未读红点")
                     }
 
                     ProductRefreshToolbarButton(isLoading: isLoading) {
