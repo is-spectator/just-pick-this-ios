@@ -102,7 +102,7 @@ struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
         case "draft":
             "待发布"
         case "closed":
-            "已关闭"
+            "已归档"
         default:
             "处理中"
         }
@@ -153,7 +153,7 @@ enum HelpRequestStatus: String, Codable, Hashable, Sendable {
         case .completed:
             "已采纳"
         case .closed:
-            "已关闭"
+            "已归档"
         }
     }
 }

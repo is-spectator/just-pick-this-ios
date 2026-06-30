@@ -1148,7 +1148,7 @@ struct HelpRequestStatusSummary: View {
         case .completed:
             return "已经采纳，结果可回看。"
         case .closed:
-            return "已关闭，不再继续收集来一句。"
+            return "已在本机归档，远端新进展同步后仍会回到详情。"
         }
     }
 

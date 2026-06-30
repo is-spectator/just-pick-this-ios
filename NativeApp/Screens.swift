@@ -1910,13 +1910,13 @@ struct AskScreen: View {
             pollTask?.cancel()
         }
         .sensoryFeedback(.selection, trigger: publishFeedbackCount)
-        .confirmationDialog("关闭这张求一个？", isPresented: $showsCloseConfirmation, titleVisibility: .visible) {
-            Button("关闭求助", role: .destructive) {
+        .confirmationDialog("本机归档这张求一个？", isPresented: $showsCloseConfirmation, titleVisibility: .visible) {
+            Button("本机归档", role: .destructive) {
                 closeHelpRequest()
             }
             Button("继续等", role: .cancel) {}
         } message: {
-            Text("关闭后不会继续收集来一句，但你还能在“我的求一个”里回看。")
+            Text("会在这台设备上标记为已归档；如果远端仍有新进展，同步后还会出现在详情里。")
         }
     }
 
@@ -1934,7 +1934,7 @@ struct AskScreen: View {
             guard !isPublishing else { return }
             showsCloseConfirmation = true
         } label: {
-            Text("关闭求助")
+            Text("本机归档")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(AppTheme.red)
                 .frame(maxWidth: .infinity)
@@ -1947,7 +1947,7 @@ struct AskScreen: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("关闭求助")
+        .accessibilityLabel("本机归档求助")
     }
 
     private func publish() {
@@ -1983,7 +1983,7 @@ struct AskScreen: View {
         pollTask?.cancel()
         session.closeCurrentHelpRequest()
         AppHaptics.success()
-        toastMessage = "已关闭，不再继续收集来一句。"
+        toastMessage = "已在本机归档。远端有新进展时仍会同步回来。"
         showsToast = true
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(700))
@@ -3123,7 +3123,7 @@ private enum HelpStatusFilter: String, CaseIterable, Identifiable {
         case .completed:
             "已完成"
         case .closed:
-            "已关闭"
+            "已归档"
         }
     }
 }
@@ -3219,7 +3219,7 @@ struct MyHelpScreen: View {
             (.collecting, collectingCount, collectingCount > 0 ? "等来一句" : nil),
             (.answered, answeredCount, answeredCount > 0 ? "可查看" : nil),
             (.completed, completedCount, completedCount > 0 ? "已收口" : nil),
-            (.closed, closedCount, closedCount > 0 ? "不再收集" : nil),
+            (.closed, closedCount, closedCount > 0 ? "本机归档" : nil),
         ]
     }
 
@@ -3234,7 +3234,7 @@ struct MyHelpScreen: View {
     var body: some View {
         ProductListScreen(
             title: "我的求一个",
-            subtitle: "草稿、收集中、已有结果、已完成和已关闭都在这里。",
+            subtitle: "草稿、收集中、已有结果、已完成和已归档都在这里。",
             systemImage: "questionmark.bubble",
             emptyTitle: "还没有求一个",
             emptyMessage: "在聊天里点“求一个”，发出去后就会出现在这里。",
@@ -5142,7 +5142,7 @@ private struct HelpHistoryRow: View {
         case "completed", "top1":
             "已完成"
         case "closed":
-            "已关闭"
+            "已归档"
         case "waiting_for_human":
             "收集中"
         default:
@@ -5157,7 +5157,7 @@ private struct HelpHistoryRow: View {
         case "completed", "top1":
             "这题已经收口，可以回看最终选择。"
         case "closed":
-            "这张求助已关闭，不再继续收集回答。"
+            "已在本机归档；远端新进展同步后仍会回到详情。"
         case "waiting_for_human":
             "正在等懂的人来一句。"
         default:

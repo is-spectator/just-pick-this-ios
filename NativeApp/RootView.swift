@@ -821,7 +821,7 @@ private struct ChatDrawer: View {
     private var featureEntrances: some View {
         VStack(spacing: AppTheme.Spacing.xs) {
             DrawerActionRow(icon: "bubble.left.and.bubble.right", title: "来一句", subtitle: "帮别人少纠结一次", action: onOpenAnswerDeck)
-            DrawerActionRow(icon: "questionmark.bubble", title: "我的求一个", subtitle: "草稿、收集中和已关闭", action: onOpenMyHelp)
+            DrawerActionRow(icon: "questionmark.bubble", title: "我的求一个", subtitle: "草稿、收集中和已归档", action: onOpenMyHelp)
             DrawerActionRow(icon: "quote.bubble", title: "我的回答", subtitle: "待采纳、已采纳和未采用", action: onOpenMyAnswers)
             DrawerActionRow(icon: "bookmark", title: "收藏", subtitle: "保存过的选择", action: onOpenFavorites)
             DrawerActionRow(icon: "gift", title: "奖励", subtitle: "积分和采纳明细", action: onOpenRewards)
