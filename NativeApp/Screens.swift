@@ -3140,9 +3140,11 @@ struct MyHelpScreen: View {
         var seenHelpRequestIDs = Set<UUID>()
         var items: [QuestionHistory] = []
 
-        for request in session.myHelpRequests {
-            guard seenHelpRequestIDs.insert(request.id).inserted else { continue }
-            items.append(historyItem(for: request))
+        if syncNotice == nil {
+            for request in session.myHelpRequests {
+                guard seenHelpRequestIDs.insert(request.id).inserted else { continue }
+                items.append(historyItem(for: request))
+            }
         }
 
         let localItems = session.history.filter { item in
@@ -3603,19 +3605,20 @@ struct MyAnswersScreen: View {
 
     @State private var snapshot = UserDashboardSnapshot.empty
     @State private var snapshotNotice: ServiceNotice?
+    @State private var submittedAnswersNotice: ServiceNotice?
     @State private var isLoading = false
     @State private var selectedStatus: AnswerStatusFilter = .all
+
+    private var hasAnswerSyncIssue: Bool {
+        submittedAnswersNotice != nil
+    }
 
     private var localPendingAnswers: [SubmittedAnswerRecord] {
         session.submittedAnswers.filter { $0.status == .pending }
     }
 
     private var pendingAnswerCount: Int {
-        max(
-            localPendingAnswers.count,
-            snapshot.rewardStatusCounts["pending"] ?? 0,
-            snapshot.answerStatusCounts["submitted"] ?? 0
-        )
+        max(snapshot.rewardStatusCounts["pending"] ?? 0, snapshot.answerStatusCounts["submitted"] ?? 0)
     }
 
     private var acceptedAnswerCount: Int {
@@ -3627,7 +3630,7 @@ struct MyAnswersScreen: View {
     }
 
     private var submittedCount: Int {
-        max(snapshot.answeredCount, session.submittedAnswers.count)
+        hasAnswerSyncIssue ? snapshot.answeredCount : max(snapshot.answeredCount, session.submittedAnswers.count)
     }
 
     private var filteredSubmittedAnswers: [SubmittedAnswerRecord] {
@@ -3658,12 +3661,18 @@ struct MyAnswersScreen: View {
                 }
             }
 
+            if let submittedAnswersNotice {
+                ProductSection(title: "回答同步状态") {
+                    ServiceNoticePill(notice: submittedAnswersNotice)
+                }
+            }
+
             ProductSection(title: "状态") {
                 HStack(spacing: 10) {
                     AnswerStatusFilterTile(
                         value: "\(pendingAnswerCount)",
                         label: "待采纳",
-                        secondary: pendingAnswerCount > 0 ? "\(snapshot.pendingReward) 待确认" : answerTierLabel,
+                        secondary: localPendingAnswers.isEmpty ? answerTierLabel : "\(localPendingAnswers.count) 条本机记录",
                         isSelected: selectedStatus == .pending
                     ) {
                         selectedStatus = selectedStatus == .pending ? .all : .pending
@@ -3705,7 +3714,7 @@ struct MyAnswersScreen: View {
                 ProductActionCard(
                     icon: "checkmark.bubble",
                     title: "已提交 \(submittedCount) 句",
-                    subtitle: "待采纳、已采纳和未采用都会在这里归档。",
+                    subtitle: hasAnswerSyncIssue ? "这是远端已确认数量；下方本机记录可能还没同步。" : "待采纳、已采纳和未采用都会在这里归档。",
                     showsChevron: false
                 )
             }
@@ -3722,7 +3731,7 @@ struct MyAnswersScreen: View {
             }
 
             if !filteredSubmittedAnswers.isEmpty {
-                ProductSection(title: selectedStatus == .all ? "最近提交" : selectedStatus.label) {
+                ProductSection(title: hasAnswerSyncIssue ? "本机记录 / 上次同步" : (selectedStatus == .all ? "最近提交" : selectedStatus.label)) {
                     VStack(spacing: 12) {
                         ForEach(filteredSubmittedAnswers) { answer in
                             Button {
@@ -3793,8 +3802,10 @@ struct MyAnswersScreen: View {
         guard !isLoading else { return }
         isLoading = true
         let result = await ProfileAPIService().fetchSnapshotResult()
+        let answersNotice = await session.loadSubmittedAnswers()
         snapshot = result.snapshot
         snapshotNotice = result.notice
+        submittedAnswersNotice = answersNotice
         isLoading = false
     }
 
@@ -4041,26 +4052,16 @@ struct RewardsScreen: View {
             }
     }
 
-    private var rewardItems: [RewardLedgerItem] {
-        var seen = Set(snapshot.rewardItems.map(\.id))
-        var items = snapshot.rewardItems
-        for item in localPendingRewardItems where !seen.contains(item.id) {
-            items.insert(item, at: 0)
-            seen.insert(item.id)
-        }
-        return items
-    }
-
     private var filteredRewardItems: [RewardLedgerItem] {
         switch selectedStatus {
         case .all:
-            rewardItems
+            snapshot.rewardItems
         case .pending:
-            rewardItems.filter { $0.status == .pending }
+            snapshot.rewardItems.filter { $0.status == .pending }
         case .granted:
-            rewardItems.filter { $0.status == .granted }
+            snapshot.rewardItems.filter { $0.status == .granted }
         case .rejected:
-            rewardItems.filter { $0.status == .rejected }
+            snapshot.rewardItems.filter { $0.status == .rejected }
         }
     }
 
@@ -4091,9 +4092,9 @@ struct RewardsScreen: View {
                         selectedStatus = selectedStatus == .granted ? .all : .granted
                     }
                     RewardStatusFilterTile(
-                        value: "\(snapshot.pendingReward + pendingLocalRewardValue)",
+                        value: "\(snapshot.pendingReward)",
                         label: RewardStatusFilter.pending.label,
-                        secondary: pendingLocalRewardValue > 0 ? "含刚提交" : nil,
+                        secondary: localPendingRewardItems.isEmpty ? nil : "\(localPendingRewardItems.count) 条本机待同步",
                         isSelected: selectedStatus == .pending
                     ) {
                         AppHaptics.selection()
@@ -4156,6 +4157,17 @@ struct RewardsScreen: View {
                 }
             }
 
+            if !localPendingRewardItems.isEmpty {
+                ProductSection(title: "本机待同步") {
+                    VStack(spacing: 12) {
+                        ForEach(localPendingRewardItems) { item in
+                            RewardLedgerRow(item: item)
+                        }
+                    }
+                    .productPanel()
+                }
+            }
+
             ProductSection(title: "说明") {
                 VStack(alignment: .leading, spacing: 12) {
                     RewardExplanationRow(icon: "clock", title: "待确认", subtitle: "对方还没采纳，先挂起。")
@@ -4177,13 +4189,6 @@ struct RewardsScreen: View {
         }
         .task(id: authRevision) {
             await loadSnapshot()
-        }
-    }
-
-    private var pendingLocalRewardValue: Int {
-        let snapshotIds = Set(snapshot.rewardItems.map(\.id))
-        return localPendingRewardItems.filter { !snapshotIds.contains($0.id) }.reduce(0) { total, item in
-            total + (Int(item.valueLabel.replacingOccurrences(of: "+", with: "")) ?? 0)
         }
     }
 
