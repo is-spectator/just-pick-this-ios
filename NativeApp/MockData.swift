@@ -404,7 +404,13 @@ struct BackendRecommendationService: RecommendationService {
                     metadata: ["help_card_id": helpRequest.id.uuidString]
                 )
             ))
-            let published = response.helpCards?.first?.model(fallbackTitle: helpRequest.title) ?? publishedFallback(helpRequest)
+            guard let published = response.helpCards?.first?.model(fallbackTitle: helpRequest.title) else {
+                return PublishHelpResult(
+                    request: helpRequest,
+                    didPublish: false,
+                    notice: MockData.publishMissingConfirmationNotice()
+                )
+            }
             return PublishHelpResult(request: published, didPublish: true, notice: nil)
         } catch {
             return PublishHelpResult(
@@ -693,12 +699,6 @@ struct BackendRecommendationService: RecommendationService {
         #if DEBUG
         NSLog("BackendRecommendationService: %@", message)
         #endif
-    }
-
-    private func publishedFallback(_ helpRequest: HelpRequest) -> HelpRequest {
-        var fallback = helpRequest
-        fallback.status = .published
-        return fallback
     }
 
     private func shouldRetryWithFreshConversation(after error: Error, sessionId: UUID?) -> Bool {
@@ -3286,6 +3286,13 @@ enum MockData {
         ServiceNotice(
             title: "皮皮",
             detail: "这次没发出去，草稿还在。你可以重试。"
+        )
+    }
+
+    static func publishMissingConfirmationNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "皮皮",
+            detail: "后端还没确认发布成功，草稿先保留。你可以重试。"
         )
     }
 
