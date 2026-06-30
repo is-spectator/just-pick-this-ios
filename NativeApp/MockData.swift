@@ -27,14 +27,99 @@ struct RecommendationResult: Sendable {
 struct ServiceNotice: Equatable, Sendable {
     let title: String
     let detail: String
+
+    var isRetryable: Bool {
+        title == "皮皮" && detail.contains("重试")
+    }
 }
 
-struct QuestionHistory: Identifiable, Hashable, Sendable {
+struct PublishHelpResult: Sendable {
+    let request: HelpRequest
+    let didPublish: Bool
+    let notice: ServiceNotice?
+}
+
+struct SubmitHelpAnswerResult: Sendable {
+    let request: HelpRequest?
+    let didSubmit: Bool
+    let notice: ServiceNotice?
+}
+
+struct CompleteQuestionResult: Sendable {
+    let didComplete: Bool
+    let history: [QuestionHistory]
+    let finalRecommendationCardId: UUID?
+    let notice: ServiceNotice?
+
+    init(
+        didComplete: Bool,
+        history: [QuestionHistory],
+        finalRecommendationCardId: UUID? = nil,
+        notice: ServiceNotice?
+    ) {
+        self.didComplete = didComplete
+        self.history = history
+        self.finalRecommendationCardId = finalRecommendationCardId
+        self.notice = notice
+    }
+}
+
+struct MyHelpRequestsResult: Sendable {
+    let requests: [HelpRequest]
+    let notice: ServiceNotice?
+}
+
+struct MySubmittedAnswersResult: Sendable {
+    let answers: [SubmittedAnswerRecord]
+    let notice: ServiceNotice?
+}
+
+struct MyFavoriteChoicesResult: Sendable {
+    let choices: [QuestionHistory]
+    let notice: ServiceNotice?
+}
+
+struct AnswerQueueResult: Sendable {
+    let requests: [HelpRequest]
+    let notice: ServiceNotice?
+}
+
+struct SkipHelpRequestResult: Sendable {
+    let didSkip: Bool
+    let notice: ServiceNotice?
+}
+
+struct HelpRequestDetailResult: Sendable {
+    let request: HelpRequest?
+    let notice: ServiceNotice?
+}
+
+struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
     let status: String
     let helpRequestId: UUID?
     let topPick: TopPick?
+    let finalRecommendationCardId: UUID?
+    let createdAt: String?
+
+    init(
+        id: UUID,
+        query: String,
+        status: String,
+        helpRequestId: UUID?,
+        topPick: TopPick?,
+        finalRecommendationCardId: UUID? = nil,
+        createdAt: String?
+    ) {
+        self.id = id
+        self.query = query
+        self.status = status
+        self.helpRequestId = helpRequestId
+        self.topPick = topPick
+        self.finalRecommendationCardId = finalRecommendationCardId
+        self.createdAt = createdAt
+    }
 
     var statusLabel: String {
         switch status {
@@ -46,6 +131,10 @@ struct QuestionHistory: Identifiable, Hashable, Sendable {
             "等人来一句"
         case "answer_received":
             "已收到一句"
+        case "draft":
+            "待发布"
+        case "closed":
+            "已归档"
         default:
             "处理中"
         }
@@ -57,7 +146,7 @@ enum HistoryDestination {
     case ask
 }
 
-struct TopPick: Hashable, Sendable {
+struct TopPick: Hashable, Codable, Sendable {
     let cardId: UUID?
     let query: String
     let preface: String
@@ -70,7 +159,7 @@ struct TopPick: Hashable, Sendable {
     let referenceImage: ReferenceImage?
 }
 
-struct ReferenceImage: Hashable, Sendable {
+struct ReferenceImage: Hashable, Codable, Sendable {
     let url: String
     let sourceURL: String?
     let sourceDomain: String?
@@ -83,6 +172,7 @@ enum HelpRequestStatus: String, Codable, Hashable, Sendable {
     case published
     case answered
     case completed
+    case closed
 
     var label: String {
         switch self {
@@ -94,6 +184,8 @@ enum HelpRequestStatus: String, Codable, Hashable, Sendable {
             "已收到一句"
         case .completed:
             "已采纳"
+        case .closed:
+            "已归档"
         }
     }
 }
@@ -120,6 +212,8 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
     var answerCount: Int
     var status: HelpRequestStatus
     var answers: [HumanAnswer]
+    var finalPick: TopPick?
+    var createdAt: String?
 
     init(
         id: UUID = UUID(),
@@ -128,7 +222,9 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
         rewardLabel: String = "+10",
         answerCount: Int = 0,
         status: HelpRequestStatus = .draft,
-        answers: [HumanAnswer] = []
+        answers: [HumanAnswer] = [],
+        finalPick: TopPick? = nil,
+        createdAt: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -137,6 +233,8 @@ struct HelpRequest: Identifiable, Hashable, Sendable {
         self.answerCount = answerCount
         self.status = status
         self.answers = answers
+        self.finalPick = finalPick
+        self.createdAt = createdAt
     }
 }
 
@@ -145,36 +243,161 @@ enum SubmitState: Equatable {
     case loading
 }
 
+struct DecisionLocationContext: Equatable, Codable, Sendable {
+    let label: String
+    let city: String?
+    let area: String?
+    let latitude: Double?
+    let longitude: Double?
+    let source: String
+
+    var displayLabel: String {
+        label.isEmpty ? "选择地点" : label
+    }
+
+    var detailLabel: String {
+        switch source {
+        case "current":
+            "当前定位"
+        case "manual":
+            "手动地点"
+        default:
+            "决策地点"
+        }
+    }
+
+    static func manual(_ rawValue: String) -> DecisionLocationContext? {
+        let label = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty else { return nil }
+
+        return context(label: label, source: "manual")
+    }
+
+    static func inferred(from message: String) -> DecisionLocationContext? {
+        let normalized = message
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+
+        for marker in ["我到了", "我到", "我在", "现在在", "目前在"] {
+            if let label = locationLabel(after: marker, in: normalized) {
+                return context(label: label, source: "message")
+            }
+        }
+
+        let knownLocations = [
+            "上海互联网宝地",
+            "北京三里屯",
+            "北京市朝阳区",
+            "朝阳区",
+            "望京 SOHO",
+            "望京SOHO",
+            "南锣鼓巷",
+            "大同古城",
+            "五道口"
+        ]
+        if let label = knownLocations.first(where: { normalized.localizedCaseInsensitiveContains($0) }) {
+            return context(label: label, source: "message")
+        }
+
+        return nil
+    }
+
+    private static func context(label: String, source: String) -> DecisionLocationContext? {
+        let label = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty else { return nil }
+
+        let cityCandidates = ["北京", "上海", "广州", "深圳", "杭州", "成都", "重庆", "南京", "苏州", "武汉", "西安", "长沙", "厦门", "大同"]
+        let city = cityCandidates.first { label.localizedCaseInsensitiveContains($0) }
+        let area = city == label ? nil : label
+        return DecisionLocationContext(
+            label: label,
+            city: city,
+            area: area,
+            latitude: nil,
+            longitude: nil,
+            source: source
+        )
+    }
+
+    private static func locationLabel(after marker: String, in text: String) -> String? {
+        guard let markerRange = text.range(of: marker, options: [.caseInsensitive]) else { return nil }
+        let remainder = text[markerRange.upperBound...]
+        let stopCharacters = CharacterSet(charactersIn: "，,。.!！?？；;、\n")
+        let firstClause = String(remainder.prefix { scalar in
+            String(scalar).rangeOfCharacter(from: stopCharacters) == nil
+        })
+        let stopWords = ["想", "要", "帮", "给", "找", "吃", "点", "喝", "逛", "买"]
+        var label = firstClause.trimmingCharacters(in: .whitespacesAndNewlines)
+        for stopWord in stopWords {
+            if let range = label.range(of: stopWord) {
+                label = String(label[..<range.lowerBound])
+            }
+        }
+        label = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard label.count >= 2 else { return nil }
+        return label
+    }
+}
+
+enum CardFeedbackAction: String, Sendable {
+    case reject
+    case change
+    case askHuman = "ask-human"
+
+    var endpointPath: String {
+        rawValue
+    }
+}
+
 protocol RecommendationService: Sendable {
-    func submit(query: String, sessionId: UUID?) async -> RecommendationResult
-    func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest
+    func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult
+    func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult
     func refresh(_ request: HelpRequest) async -> HelpRequest
+    func fetchRecommendationCard(id: UUID, query: String) async -> TopPick?
+    func fetchHelpRequestDetail(id: UUID) async -> HelpRequestDetailResult
     func fetchHelpRequest(id: UUID) async -> HelpRequest?
-    func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
-    func answer(_ text: String, for request: HelpRequest) async -> HelpRequest
+    func myHelpRequests(limit: Int) async -> MyHelpRequestsResult
+    func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult
+    func myFavoriteChoices(limit: Int) async -> MyFavoriteChoicesResult
+    func answerQueue(excluding sessionId: UUID?) async -> AnswerQueueResult
+    func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult
+    func skip(_ request: HelpRequest, reason: String) async -> Bool
     func acceptCard(id: UUID?) async -> Bool
-    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory]
+    func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool
+    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> CompleteQuestionResult
+}
+
+enum AppAPIEnvironment {
+    static let baseURL: URL = {
+        if let configured = Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
+           let url = URL(string: configured),
+           !configured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return url
+        }
+        return URL(string: "http://67.230.169.161:8788")!
+    }()
 }
 
 struct BackendRecommendationService: RecommendationService {
-    private let baseURL = URL(string: "http://67.230.169.161:8788")!
+    private let baseURL = AppAPIEnvironment.baseURL
     private let deviceUid = DeviceIdentity.uid
 
-    func submit(query: String, sessionId: UUID?) async -> RecommendationResult {
+    func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult {
         do {
-            let payload = try await submitChatTurn(query: query, conversationId: sessionId)
+            let payload = try await submitChatTurn(query: query, conversationId: sessionId, locationContext: locationContext)
             return payload.result(for: query)
         } catch {
             if shouldRetryWithFreshConversation(after: error, sessionId: sessionId) {
                 do {
-                    let payload = try await submitChatTurn(query: query, conversationId: nil)
+                    let payload = try await submitChatTurn(query: query, conversationId: nil, locationContext: locationContext)
                     return payload.result(for: query)
                 } catch {
-                    print("BackendRecommendationService.submit retry failed: \(error)")
+                    debugLog("submit retry failed")
                 }
             }
 
-            print("BackendRecommendationService.submit failed: \(error)")
+            debugLog("submit failed")
             return RecommendationResult(
                 sessionId: sessionId,
                 questionId: nil,
@@ -185,8 +408,11 @@ struct BackendRecommendationService: RecommendationService {
         }
     }
 
-    private func submitChatTurn(query: String, conversationId: UUID?) async throws -> V1ChatTurnResponse {
-        let location = await DeviceLocationProvider.shared.currentLocationPayload()
+    private func submitChatTurn(
+        query: String,
+        conversationId: UUID?,
+        locationContext: DecisionLocationContext?
+    ) async throws -> V1ChatTurnResponse {
         return try await perform(makeRequest(
             path: "/v1/chat/turn",
             method: "POST",
@@ -196,14 +422,15 @@ struct BackendRecommendationService: RecommendationService {
                 deviceId: deviceUid,
                 clientContext: V1ClientContext(
                     source: "ios",
-                    location: location
+                    location: locationContext.flatMap(V1ClientLocation.init(context:)),
+                    decisionLocation: locationContext.map(V1DecisionLocationContext.init(context:))
                 ),
                 metadata: [:]
             )
         ))
     }
 
-    func publish(_ helpRequest: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest {
+    func publish(_ helpRequest: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult {
         do {
             let response: V1ChatTurnResponse = try await perform(makeRequest(
                 path: "/v1/chat/turn",
@@ -212,13 +439,24 @@ struct BackendRecommendationService: RecommendationService {
                     message: "发出去",
                     conversationId: sessionId?.uuidString,
                     deviceId: deviceUid,
-                    clientContext: V1ClientContext(source: "ios", location: nil),
+                    clientContext: V1ClientContext(source: "ios", location: nil, decisionLocation: nil),
                     metadata: ["help_card_id": helpRequest.id.uuidString]
                 )
             ))
-            return response.helpCards?.first?.model(fallbackTitle: helpRequest.title) ?? publishedFallback(helpRequest)
+            guard let published = response.helpCards?.first?.model(fallbackTitle: helpRequest.title) else {
+                return PublishHelpResult(
+                    request: helpRequest,
+                    didPublish: false,
+                    notice: MockData.publishMissingConfirmationNotice()
+                )
+            }
+            return PublishHelpResult(request: published, didPublish: true, notice: nil)
         } catch {
-            return publishedFallback(helpRequest)
+            return PublishHelpResult(
+                request: helpRequest,
+                didPublish: false,
+                notice: MockData.publishUnavailableNotice(error: error)
+            )
         }
     }
 
@@ -237,20 +475,104 @@ struct BackendRecommendationService: RecommendationService {
                 return helpRequest
             }
 
-            var refreshed = helpRequest
-            refreshed.status = .answered
-            refreshed.answers.append(HumanAnswer(text: "皮皮已经根据来一句汇总出结果。", nickname: "皮皮", timeLabel: "刚刚"))
-            return refreshed
+            if let refreshed = await fetchHelpRequest(id: helpRequest.id) {
+                return refreshed
+            }
+
+            return helpRequest
         } catch {
             return helpRequest
         }
     }
 
-    func fetchHelpRequest(id: UUID) async -> HelpRequest? {
-        nil
+    func fetchRecommendationCard(id: UUID, query: String) async -> TopPick? {
+        do {
+            let response: V1CardDetailEnvelope = try await perform(URLRequest(url: endpoint("/v1/cards/\(id.uuidString)")))
+            return response.card.model(query: query)
+        } catch {
+            return nil
+        }
     }
 
-    func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest] {
+    func fetchHelpRequestDetail(id: UUID) async -> HelpRequestDetailResult {
+        do {
+            let response: V1HelpCardDetailEnvelope = try await perform(URLRequest(url: endpoint("/v1/help-cards/\(id.uuidString)")))
+            return HelpRequestDetailResult(
+                request: response.summary.model(fallbackTitle: "求一个"),
+                notice: nil
+            )
+        } catch {
+            return HelpRequestDetailResult(
+                request: nil,
+                notice: MockData.helpDetailUnavailableNotice()
+            )
+        }
+    }
+
+    func fetchHelpRequest(id: UUID) async -> HelpRequest? {
+        await fetchHelpRequestDetail(id: id).request
+    }
+
+    func myHelpRequests(limit: Int) async -> MyHelpRequestsResult {
+        do {
+            var components = URLComponents(url: endpoint("/v1/help-cards/mine"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceUid),
+                URLQueryItem(name: "limit", value: "\(max(1, min(limit, 100)))")
+            ]
+
+            guard let url = components.url else {
+                return MyHelpRequestsResult(requests: [], notice: MockData.myHelpUnavailableNotice())
+            }
+            let response: V1HelpFeedResponse = try await perform(URLRequest(url: url))
+            return MyHelpRequestsResult(
+                requests: response.items.map { $0.model(fallbackTitle: "求一个") },
+                notice: nil
+            )
+        } catch {
+            return MyHelpRequestsResult(requests: [], notice: MockData.myHelpUnavailableNotice())
+        }
+    }
+
+    func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult {
+        do {
+            var components = URLComponents(url: endpoint("/v1/help-answers/mine"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceUid),
+                URLQueryItem(name: "limit", value: "\(max(1, min(limit, 100)))")
+            ]
+
+            guard let url = components.url else { throw BackendServiceError.decoding("invalid help answers URL", "") }
+            let response: V1HelpAnswerListResponse = try await perform(URLRequest(url: url))
+            return MySubmittedAnswersResult(
+                answers: response.items.compactMap(\.record),
+                notice: nil
+            )
+        } catch {
+            return MySubmittedAnswersResult(answers: [], notice: MockData.profileSnapshotUnavailableNotice(error: error))
+        }
+    }
+
+    func myFavoriteChoices(limit: Int) async -> MyFavoriteChoicesResult {
+        do {
+            var components = URLComponents(url: endpoint("/v1/favorites/mine"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceUid),
+                URLQueryItem(name: "limit", value: "\(max(1, min(limit, 100)))")
+            ]
+
+            guard let url = components.url else { throw BackendServiceError.decoding("invalid favorites URL", "") }
+            let response: V1FavoriteChoiceListResponse = try await perform(URLRequest(url: url))
+            return MyFavoriteChoicesResult(
+                choices: response.items.compactMap(\.model),
+                notice: nil
+            )
+        } catch {
+            return MyFavoriteChoicesResult(choices: [], notice: MockData.profileSnapshotUnavailableNotice(error: error))
+        }
+    }
+
+    func answerQueue(excluding sessionId: UUID?) async -> AnswerQueueResult {
         do {
             var components = URLComponents(url: endpoint("/v1/help-feed"), resolvingAgainstBaseURL: false)!
             let queryItems = [
@@ -259,15 +581,20 @@ struct BackendRecommendationService: RecommendationService {
             ]
             components.queryItems = queryItems
 
-            guard let url = components.url else { return [] }
+            guard let url = components.url else {
+                return AnswerQueueResult(requests: [], notice: MockData.answerQueueUnavailableNotice())
+            }
             let response: V1HelpFeedResponse = try await perform(URLRequest(url: url))
-            return response.items.map { $0.model(fallbackTitle: "求一个") }
+            return AnswerQueueResult(
+                requests: response.items.map { $0.model(fallbackTitle: "求一个") },
+                notice: nil
+            )
         } catch {
-            return []
+            return AnswerQueueResult(requests: [], notice: MockData.answerQueueUnavailableNotice())
         }
     }
 
-    func answer(_ text: String, for helpRequest: HelpRequest) async -> HelpRequest {
+    func answer(_ text: String, for helpRequest: HelpRequest) async -> SubmitHelpAnswerResult {
         do {
             let response: V1HelpCardOneLinerResponse = try await perform(makeRequest(
                 path: "/v1/help-cards/\(helpRequest.id.uuidString)/one-liner",
@@ -279,24 +606,26 @@ struct BackendRecommendationService: RecommendationService {
             updated.rewardLabel = response.reward?.label ?? updated.rewardLabel
             updated.answerCount += 1
             updated.status = response.isFinalReady ? .answered : .published
-            return updated
+            return SubmitHelpAnswerResult(request: updated, didSubmit: true, notice: nil)
         } catch {
-            var fallback = helpRequest
-            fallback.answers.append(HumanAnswer(text: text, nickname: "路过的人", timeLabel: "刚刚"))
-            fallback.answerCount += 1
-            fallback.status = .answered
-            return fallback
+            return SubmitHelpAnswerResult(
+                request: helpRequest,
+                didSubmit: false,
+                notice: MockData.answerUnavailableNotice(error: error)
+            )
         }
     }
 
-    func acceptCard(id: UUID?) async -> Bool {
-        guard let id else { return false }
-
+    func skip(_ helpRequest: HelpRequest, reason: String) async -> Bool {
         do {
-            let _: V1CardAcceptResponse = try await perform(makeRequest(
-                path: "/v1/cards/\(id.uuidString)/accept",
+            let _: V1HelpCardSkipResponse = try await perform(makeRequest(
+                path: "/v1/help-cards/\(helpRequest.id.uuidString)/skip",
                 method: "POST",
-                body: V1CardAcceptRequest(metadata: ["source": "ios"])
+                body: V1HelpCardSkipRequest(
+                    deviceId: deviceUid,
+                    reason: reason,
+                    metadata: ["source": "ios", "surface": "answer_deck"]
+                )
             ))
             return true
         } catch {
@@ -304,8 +633,85 @@ struct BackendRecommendationService: RecommendationService {
         }
     }
 
-    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory] {
-        []
+    func acceptCard(id: UUID?) async -> Bool {
+        guard let id else { return false }
+
+        do {
+            let response: V1CardAcceptResponse = try await perform(makeRequest(
+                path: "/v1/cards/\(id.uuidString)/accept",
+                method: "POST",
+                body: V1CardAcceptRequest(metadata: ["source": "ios"])
+            ))
+            return response.accepted
+        } catch {
+            return false
+        }
+    }
+
+    func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool {
+        guard let id else { return false }
+
+        do {
+            let _: V1CardFeedbackResponse = try await perform(makeRequest(
+                path: "/v1/cards/\(id.uuidString)/\(action.endpointPath)",
+                method: "POST",
+                body: V1CardFeedbackRequest(
+                    deviceId: deviceUid,
+                    reason: reason,
+                    tags: [reason],
+                    metadata: ["source": "ios", "surface": "chat_card"]
+                )
+            ))
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> CompleteQuestionResult {
+        guard let helpRequestId else {
+            return CompleteQuestionResult(
+                didComplete: false,
+                history: [],
+                notice: MockData.acceptUnavailableNotice()
+            )
+        }
+
+        do {
+            let response: V1HelpCardFinalAcceptResponse = try await perform(makeRequest(
+                path: "/v1/help-cards/\(helpRequestId.uuidString)/accept-final",
+                method: "POST",
+                body: V1HelpCardFinalAcceptRequest(
+                    deviceId: deviceUid,
+                    reason: source == "human_answer" ? "采纳来一句最终结果" : "采纳皮皮结果",
+                    metadata: [
+                        "source": source,
+                        "surface": "ios",
+                        "conversation_id": sessionId?.uuidString ?? "",
+                        "question_id": questionId?.uuidString ?? ""
+                    ].compactMapValues { $0.isEmpty ? nil : $0 }
+                )
+            ))
+            guard response.accepted else {
+                return CompleteQuestionResult(
+                    didComplete: false,
+                    history: [],
+                    notice: MockData.acceptUnavailableNotice()
+                )
+            }
+            return CompleteQuestionResult(
+                didComplete: true,
+                history: [],
+                finalRecommendationCardId: response.cardId.flatMap(UUID.init(uuidString:)),
+                notice: nil
+            )
+        } catch {
+            return CompleteQuestionResult(
+                didComplete: false,
+                history: [],
+                notice: MockData.acceptUnavailableNotice()
+            )
+        }
     }
 
     private func makeRequest<Body: Encodable>(path: String, method: String, body: Body) throws -> URLRequest {
@@ -336,7 +742,7 @@ struct BackendRecommendationService: RecommendationService {
                 }
             }
             let body = String(data: data, encoding: .utf8) ?? ""
-            print("BackendRecommendationService HTTP \(status) for \(request.url?.absoluteString ?? "<nil>"): \(body)")
+            debugLog("HTTP \(status)")
             throw BackendServiceError.httpStatus(status, body)
         }
 
@@ -344,15 +750,15 @@ struct BackendRecommendationService: RecommendationService {
             return try JSONDecoder().decode(Response.self, from: data)
         } catch {
             let body = String(data: data, encoding: .utf8) ?? ""
-            print("BackendRecommendationService decode failed for \(request.url?.absoluteString ?? "<nil>"): \(error). Body: \(body)")
+            debugLog("decode failed")
             throw BackendServiceError.decoding(String(describing: error), body)
         }
     }
 
-    private func publishedFallback(_ helpRequest: HelpRequest) -> HelpRequest {
-        var fallback = helpRequest
-        fallback.status = .published
-        return fallback
+    private func debugLog(_ message: String) {
+        #if DEBUG
+        NSLog("BackendRecommendationService: %@", message)
+        #endif
     }
 
     private func shouldRetryWithFreshConversation(after error: Error, sessionId: UUID?) -> Bool {
@@ -375,6 +781,125 @@ struct BackendRecommendationService: RecommendationService {
     }
 }
 
+struct UserBehaviorEventService: Sendable {
+    private let baseURL = AppAPIEnvironment.baseURL
+    private let deviceUid = DeviceIdentity.uid
+
+    func record(eventType: String, metadata: [String: String] = [:]) async -> Bool {
+        let trimmedType = eventType.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedType.isEmpty else { return false }
+
+        do {
+            var request = URLRequest(url: endpoint("/v1/events"))
+            request.httpMethod = "POST"
+            request.timeoutInterval = 10
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if let accessToken = AuthTokenStore.accessToken, !accessToken.isEmpty {
+                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            }
+            request.httpBody = try JSONEncoder().encode(V1UserBehaviorEventRequest(
+                eventType: trimmedType,
+                deviceId: deviceUid,
+                source: "ios",
+                metadata: metadata
+            ))
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                return false
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func drawerHistoryState() async -> DrawerHistoryRemoteState? {
+        do {
+            var components = URLComponents(url: endpoint("/v1/drawer/history-state/mine"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceUid),
+                URLQueryItem(name: "limit", value: "500")
+            ]
+            guard let url = components.url else { return nil }
+            let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url))
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                return nil
+            }
+            return try JSONDecoder().decode(DrawerHistoryRemoteState.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+
+    private func endpoint(_ path: String) -> URL {
+        URL(string: path, relativeTo: baseURL)!.absoluteURL
+    }
+}
+
+struct DrawerHistoryRemoteState: Decodable, Sendable {
+    let pinnedHistoryIds: [UUID]
+    let hiddenHistoryIds: [UUID]
+    let renamedHistoryTitles: [UUID: String]
+
+    enum CodingKeys: String, CodingKey {
+        case pinnedHistoryIds = "pinned_history_ids"
+        case hiddenHistoryIds = "hidden_history_ids"
+        case renamedHistoryTitles = "renamed_history_titles"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pinnedHistoryIds = try container.decodeIfPresent([String].self, forKey: .pinnedHistoryIds)?
+            .compactMap(UUID.init(uuidString:)) ?? []
+        hiddenHistoryIds = try container.decodeIfPresent([String].self, forKey: .hiddenHistoryIds)?
+            .compactMap(UUID.init(uuidString:)) ?? []
+        let rawTitles = try container.decodeIfPresent([String: String].self, forKey: .renamedHistoryTitles) ?? [:]
+        renamedHistoryTitles = rawTitles.reduce(into: [:]) { result, item in
+            guard let id = UUID(uuidString: item.key) else { return }
+            let title = item.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { return }
+            result[id] = title
+        }
+    }
+}
+
+enum UserBehaviorEventMetadata {
+    static func history(_ item: QuestionHistory, extra: [String: String] = [:]) -> [String: String] {
+        var payload: [String: String] = [
+            "history_id": item.id.uuidString,
+            "query": item.query,
+            "status": item.status
+        ]
+        if let helpRequestId = item.helpRequestId {
+            payload["help_request_id"] = helpRequestId.uuidString
+        }
+        if let topPick = item.topPick {
+            payload["title"] = topPick.title
+            payload["subtitle"] = topPick.subtitle
+            payload["reason"] = topPick.reason
+            payload["preface"] = topPick.preface
+            if let cardId = topPick.cardId {
+                payload["card_id"] = cardId.uuidString
+            }
+        }
+        extra.forEach { key, value in
+            payload[key] = value
+        }
+        return compact(payload)
+    }
+
+    static func compact(_ raw: [String: String]) -> [String: String] {
+        raw.reduce(into: [:]) { result, item in
+            let value = item.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { return }
+            result[item.key] = String(value.prefix(180))
+        }
+    }
+}
+
 private enum BackendServiceError: LocalizedError {
     case httpStatus(Int, String)
     case decoding(String, String)
@@ -389,13 +914,33 @@ private enum BackendServiceError: LocalizedError {
     }
 }
 
+private enum AuthAccountDeletionError: LocalizedError {
+    case requiresLogin
+    case notConfirmed
+
+    var errorDescription: String? {
+        switch self {
+        case .requiresLogin:
+            "需要重新登录后才能删除账号。"
+        case .notConfirmed:
+            "后端没有确认账号已删除。"
+        }
+    }
+}
+
 struct AuthenticatedAccount: Equatable {
     let email: String?
     let displayName: String
 }
 
+struct AuthLogoutResult: Sendable {
+    let localCleared: Bool
+    let remoteRevoked: Bool
+    let errorDescription: String?
+}
+
 struct AuthAPIService: Sendable {
-    private let baseURL = URL(string: "http://67.230.169.161:8788")!
+    private let baseURL = AppAPIEnvironment.baseURL
 
     func requestCode(email: String) async throws {
         var request = URLRequest(url: endpoint("/v1/auth/request-code"))
@@ -462,11 +1007,13 @@ struct AuthAPIService: Sendable {
         }
     }
 
-    func logout() async {
+    func logout() async -> AuthLogoutResult {
         guard let refreshToken = AuthTokenStore.refreshToken else {
             AuthTokenStore.clear()
-            return
+            return AuthLogoutResult(localCleared: true, remoteRevoked: false, errorDescription: nil)
         }
+        var remoteRevoked = false
+        var remoteErrorDescription: String?
         do {
             var request = URLRequest(url: endpoint("/v1/auth/logout"))
             request.httpMethod = "POST"
@@ -474,8 +1021,30 @@ struct AuthAPIService: Sendable {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(V1AuthRefreshRequest(refreshToken: refreshToken))
             let _: V1AuthLogoutResponse = try await perform(request)
+            remoteRevoked = true
         } catch {
-            // Logout is best-effort on the client; local credentials must still go away.
+            remoteErrorDescription = error.localizedDescription
+        }
+        AuthTokenStore.clear()
+        return AuthLogoutResult(
+            localCleared: true,
+            remoteRevoked: remoteRevoked,
+            errorDescription: remoteErrorDescription
+        )
+    }
+
+    func deleteAccount() async throws {
+        guard AuthTokenStore.accessToken?.isEmpty == false else {
+            throw AuthAccountDeletionError.requiresLogin
+        }
+
+        var request = URLRequest(url: endpoint("/v1/auth/me"))
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 12
+        request = authorized(request)
+        let response: V1AuthDeleteMeResponse = try await perform(request)
+        guard response.ok, response.deleted == true else {
+            throw AuthAccountDeletionError.notConfirmed
         }
         AuthTokenStore.clear()
     }
@@ -500,6 +1069,477 @@ struct AuthAPIService: Sendable {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
         return request
+    }
+}
+
+struct UserLightEvent: Identifiable, Equatable, Sendable {
+    let id: String
+    let kind: String?
+    let title: String
+    let body: String
+    let cardId: UUID?
+    let helpCardId: UUID?
+    let createdAt: String?
+
+    var destinationHint: String {
+        if helpCardId != nil {
+            return "打开求助详情"
+        }
+        if cardId != nil {
+            return "打开相关推荐"
+        }
+        if kind?.contains("reward") == true {
+            return "查看奖励明细"
+        }
+        return "查看相关内容"
+    }
+}
+
+struct UserDashboardSnapshot: Equatable, Sendable {
+    let pendingReward: Int
+    let grantedReward: Int
+    let rejectedReward: Int
+    let answeredCount: Int
+    let qualityTier: String
+    let answerStatusCounts: [String: Int]
+    let rewardStatusCounts: [String: Int]
+    let rewardItems: [RewardLedgerItem]
+    let lightEvents: [UserLightEvent]
+
+    static let empty = UserDashboardSnapshot(
+        pendingReward: 0,
+        grantedReward: 0,
+        rejectedReward: 0,
+        answeredCount: 0,
+        qualityTier: "new",
+        answerStatusCounts: [:],
+        rewardStatusCounts: [:],
+        rewardItems: [],
+        lightEvents: []
+    )
+}
+
+struct UserDashboardSnapshotResult: Sendable {
+    let snapshot: UserDashboardSnapshot
+    let notice: ServiceNotice?
+}
+
+enum RewardLedgerStatus: String, Codable, Hashable, Sendable {
+    case pending
+    case granted
+    case rejected
+
+    init(rawStatus: String) {
+        switch rawStatus {
+        case "granted", "accepted":
+            self = .granted
+        case "rejected":
+            self = .rejected
+        default:
+            self = .pending
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .pending:
+            "待确认"
+        case .granted:
+            "已获得"
+        case .rejected:
+            "未采用"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pending:
+            "clock"
+        case .granted:
+            "checkmark.seal"
+        case .rejected:
+            "minus.circle"
+        }
+    }
+}
+
+struct RewardLedgerItem: Identifiable, Hashable, Sendable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let valueLabel: String
+    let status: RewardLedgerStatus
+    let createdAt: String?
+    let finalRecommendationCardId: UUID?
+    let settlementReason: String?
+    let usedAsFinalEvidence: Bool
+
+    init(
+        id: String,
+        title: String,
+        subtitle: String,
+        valueLabel: String,
+        status: RewardLedgerStatus,
+        createdAt: String?,
+        finalRecommendationCardId: UUID? = nil,
+        settlementReason: String? = nil,
+        usedAsFinalEvidence: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.valueLabel = valueLabel
+        self.status = status
+        self.createdAt = createdAt
+        self.finalRecommendationCardId = finalRecommendationCardId
+        self.settlementReason = settlementReason
+        self.usedAsFinalEvidence = usedAsFinalEvidence
+    }
+}
+
+enum SubmittedAnswerStatus: String, Codable, Hashable, Sendable {
+    case pending
+    case accepted
+    case rejected
+
+    var label: String {
+        switch self {
+        case .pending:
+            "待采纳"
+        case .accepted:
+            "已采纳"
+        case .rejected:
+            "未采用"
+        }
+    }
+}
+
+struct SubmittedAnswerRecord: Identifiable, Hashable, Codable, Sendable {
+    let id: UUID
+    let helpRequestId: UUID
+    let questionTitle: String
+    let questionContext: String
+    let text: String
+    let rewardLabel: String
+    let status: SubmittedAnswerStatus
+    let timeLabel: String
+    let finalRecommendationCardId: UUID?
+    let settlementReason: String?
+    let usedAsFinalEvidence: Bool?
+
+    init(
+        id: UUID = UUID(),
+        helpRequestId: UUID,
+        questionTitle: String,
+        questionContext: String,
+        text: String,
+        rewardLabel: String,
+        status: SubmittedAnswerStatus = .pending,
+        timeLabel: String = "刚刚",
+        finalRecommendationCardId: UUID? = nil,
+        settlementReason: String? = nil,
+        usedAsFinalEvidence: Bool? = nil
+    ) {
+        self.id = id
+        self.helpRequestId = helpRequestId
+        self.questionTitle = questionTitle
+        self.questionContext = questionContext
+        self.text = text
+        self.rewardLabel = rewardLabel
+        self.status = status
+        self.timeLabel = timeLabel
+        self.finalRecommendationCardId = finalRecommendationCardId
+        self.settlementReason = settlementReason
+        self.usedAsFinalEvidence = usedAsFinalEvidence
+    }
+}
+
+struct ProfileAPIService: Sendable {
+    private let baseURL = AppAPIEnvironment.baseURL
+    private let deviceUid = DeviceIdentity.uid
+
+    func fetchSnapshot() async -> UserDashboardSnapshot {
+        await fetchSnapshotResult().snapshot
+    }
+
+    func fetchSnapshotResult() async -> UserDashboardSnapshotResult {
+        var firstError: Error?
+        let rewards: V1ProfileRewardsResponse?
+        let quality: V1ProfileAnswererQualityResponse?
+        let lights: V1ProfileLightEventsResponse?
+
+        do {
+            rewards = try await fetchRewards()
+        } catch {
+            firstError = firstError ?? error
+            rewards = nil
+        }
+
+        do {
+            quality = try await fetchAnswererQuality()
+        } catch {
+            firstError = firstError ?? error
+            quality = nil
+        }
+
+        do {
+            lights = try await fetchLightEvents()
+        } catch {
+            firstError = firstError ?? error
+            lights = nil
+        }
+
+        let snapshot = UserDashboardSnapshot(
+            pendingReward: rewards?.pendingValue ?? 0,
+            grantedReward: rewards?.grantedValue ?? 0,
+            rejectedReward: rewards?.rejectedValue ?? 0,
+            answeredCount: quality?.answers.submittedCount ?? 0,
+            qualityTier: quality?.quality.tier ?? "new",
+            answerStatusCounts: quality?.answers.statusCounts ?? [:],
+            rewardStatusCounts: quality?.rewards?.statusCounts ?? [:],
+            rewardItems: (rewards?.items ?? []).map(\.ledgerItem),
+            lightEvents: (lights?.items ?? []).map { item in
+                UserLightEvent(
+                    id: item.id,
+                    kind: item.kind ?? item.type,
+                    title: item.title ?? "有新消息",
+                    body: item.body ?? item.message ?? "皮皮有新进展。",
+                    cardId: UUID(uuidString: item.cardId ?? ""),
+                    helpCardId: UUID(uuidString: item.helpCardId ?? ""),
+                    createdAt: item.createdAt
+                )
+            }
+        )
+
+        return UserDashboardSnapshotResult(
+            snapshot: snapshot,
+            notice: firstError.map(MockData.profileSnapshotUnavailableNotice(error:))
+        )
+    }
+
+    private func fetchRewards() async throws -> V1ProfileRewardsResponse {
+        var components = URLComponents(url: endpoint("/v1/rewards/me"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "device_uid", value: deviceUid)]
+        guard let url = components.url else { throw BackendServiceError.decoding("invalid rewards URL", "") }
+        return try await perform(URLRequest(url: url))
+    }
+
+    private func fetchAnswererQuality() async throws -> V1ProfileAnswererQualityResponse {
+        var components = URLComponents(url: endpoint("/v1/answerers/me/quality"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "device_uid", value: deviceUid)]
+        guard let url = components.url else { throw BackendServiceError.decoding("invalid quality URL", "") }
+        return try await perform(URLRequest(url: url))
+    }
+
+    private func fetchLightEvents() async throws -> V1ProfileLightEventsResponse {
+        var components = URLComponents(url: endpoint("/v1/light-events"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "device_uid", value: deviceUid),
+            URLQueryItem(name: "limit", value: "10")
+        ]
+        guard let url = components.url else { throw BackendServiceError.decoding("invalid lights URL", "") }
+        return try await perform(URLRequest(url: url))
+    }
+
+    private func perform<Response: Decodable>(_ request: URLRequest) async throws -> Response {
+        var request = authorized(request)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            if status == 401, await AuthAPIService().refreshIfPossible() {
+                request = authorized(request)
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: request)
+                if let retryHTTP = retryResponse as? HTTPURLResponse, (200..<300).contains(retryHTTP.statusCode) {
+                    return try JSONDecoder().decode(Response.self, from: retryData)
+                }
+            }
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw BackendServiceError.httpStatus(status, body)
+        }
+        return try JSONDecoder().decode(Response.self, from: data)
+    }
+
+    private func authorized(_ request: URLRequest) -> URLRequest {
+        var request = request
+        if let token = AuthTokenStore.accessToken, !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+
+    private func endpoint(_ path: String) -> URL {
+        URL(string: path, relativeTo: baseURL)!.absoluteURL
+    }
+}
+
+private struct V1ProfileRewardsResponse: Decodable {
+    let pendingValue: Int
+    let grantedValue: Int
+    let rejectedValue: Int
+    let items: [V1ProfileRewardItem]
+
+    enum CodingKeys: String, CodingKey {
+        case pendingValue = "pending_value"
+        case grantedValue = "granted_value"
+        case rejectedValue = "rejected_value"
+        case items
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pendingValue = try container.decodeIfPresent(Int.self, forKey: .pendingValue) ?? 0
+        grantedValue = try container.decodeIfPresent(Int.self, forKey: .grantedValue) ?? 0
+        rejectedValue = try container.decodeIfPresent(Int.self, forKey: .rejectedValue) ?? 0
+        items = try container.decodeIfPresent([V1ProfileRewardItem].self, forKey: .items) ?? []
+    }
+}
+
+private struct V1ProfileRewardItem: Decodable {
+    let id: String
+    let type: String?
+    let label: String?
+    let value: Int
+    let status: String
+    let helpCardId: String?
+    let helpAnswerId: String?
+    let finalRecommendationCardId: String?
+    let settlementReason: String?
+    let usedAsFinalEvidence: Bool
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case label
+        case value
+        case status
+        case helpCardId = "help_card_id"
+        case helpAnswerId = "help_answer_id"
+        case finalRecommendationCardId = "final_recommendation_card_id"
+        case settlementReason = "settlement_reason"
+        case usedAsFinalEvidence = "used_as_final_evidence"
+        case createdAt = "created_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        value = try container.decodeIfPresent(Int.self, forKey: .value) ?? 0
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "pending"
+        helpCardId = try container.decodeIfPresent(String.self, forKey: .helpCardId)
+        helpAnswerId = try container.decodeIfPresent(String.self, forKey: .helpAnswerId)
+        finalRecommendationCardId = try container.decodeIfPresent(String.self, forKey: .finalRecommendationCardId)
+        settlementReason = try container.decodeIfPresent(String.self, forKey: .settlementReason)
+        usedAsFinalEvidence = try container.decodeIfPresent(Bool.self, forKey: .usedAsFinalEvidence) ?? false
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+    }
+
+    var ledgerItem: RewardLedgerItem {
+        let normalizedStatus = RewardLedgerStatus(rawStatus: status)
+        let rewardLabel = label?.isEmpty == false ? label! : "+\(value)"
+        return RewardLedgerItem(
+            id: helpCardId ?? helpAnswerId ?? id,
+            title: "来一句奖励",
+            subtitle: rewardSubtitle(for: normalizedStatus),
+            valueLabel: rewardLabel,
+            status: normalizedStatus,
+            createdAt: createdAt,
+            finalRecommendationCardId: finalRecommendationCardId.flatMap(UUID.init(uuidString:)),
+            settlementReason: settlementReason,
+            usedAsFinalEvidence: usedAsFinalEvidence
+        )
+    }
+
+    private func rewardSubtitle(for status: RewardLedgerStatus) -> String {
+        if usedAsFinalEvidence || settlementReason == "used_as_final_evidence" {
+            return "被用于最终推荐"
+        }
+        if settlementReason == "not_selected_for_final_answer" {
+            return "未被最终采用"
+        }
+        return status == .pending ? "等待对方采纳" : "来自一次来一句回答"
+    }
+}
+
+private struct V1ProfileAnswererQualityResponse: Decodable {
+    let quality: V1ProfileQuality
+    let answers: V1ProfileAnswers
+    let rewards: V1ProfileAnswerRewards?
+}
+
+private struct V1ProfileQuality: Decodable {
+    let tier: String
+}
+
+private struct V1ProfileAnswers: Decodable {
+    let submittedCount: Int
+    let statusCounts: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case submittedCount = "submitted_count"
+        case statusCounts = "status_counts"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        submittedCount = try container.decodeIfPresent(Int.self, forKey: .submittedCount) ?? 0
+        statusCounts = try container.decodeIfPresent([String: Int].self, forKey: .statusCounts) ?? [:]
+    }
+}
+
+private struct V1ProfileAnswerRewards: Decodable {
+    let pendingCount: Int
+    let grantedCount: Int
+    let rejectedCount: Int
+    let statusCounts: [String: Int]
+
+    enum CodingKeys: String, CodingKey {
+        case pendingCount = "pending_count"
+        case grantedCount = "granted_count"
+        case rejectedCount = "rejected_count"
+        case statusCounts = "status_counts"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pendingCount = try container.decodeIfPresent(Int.self, forKey: .pendingCount) ?? 0
+        grantedCount = try container.decodeIfPresent(Int.self, forKey: .grantedCount) ?? 0
+        rejectedCount = try container.decodeIfPresent(Int.self, forKey: .rejectedCount) ?? 0
+        statusCounts = try container.decodeIfPresent([String: Int].self, forKey: .statusCounts) ?? [
+            "pending": pendingCount,
+            "granted": grantedCount,
+            "rejected": rejectedCount
+        ]
+    }
+}
+
+private struct V1ProfileLightEventsResponse: Decodable {
+    let items: [V1ProfileLightEvent]
+}
+
+private struct V1ProfileLightEvent: Decodable {
+    let id: String
+    let kind: String?
+    let type: String?
+    let title: String?
+    let body: String?
+    let message: String?
+    let cardId: String?
+    let helpCardId: String?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case type
+        case title
+        case body
+        case message
+        case cardId = "card_id"
+        case helpCardId = "help_card_id"
+        case createdAt = "created_at"
     }
 }
 
@@ -667,6 +1707,11 @@ private struct V1AuthLogoutResponse: Decodable {
     let ok: Bool
 }
 
+private struct V1AuthDeleteMeResponse: Decodable {
+    let ok: Bool
+    let deleted: Bool?
+}
+
 private struct V1AuthUser: Decodable {
     let id: String
     let email: String?
@@ -728,9 +1773,16 @@ private struct V1ChatTurnRequest: Encodable {
 private struct V1ClientContext: Encodable {
     let source: String
     let location: V1ClientLocation?
+    let decisionLocation: V1DecisionLocationContext?
+
+    enum CodingKeys: String, CodingKey {
+        case source
+        case location
+        case decisionLocation = "decision_location"
+    }
 }
 
-private struct V1ClientLocation: Encodable {
+struct V1ClientLocation: Encodable {
     let latitude: Double
     let longitude: Double
     let horizontalAccuracy: Double
@@ -755,10 +1807,41 @@ private struct V1ClientLocation: Encodable {
         self.provider = "ios_core_location"
         self.coordType = "ios_core_location"
     }
+
+    init?(context: DecisionLocationContext) {
+        guard let latitude = context.latitude, let longitude = context.longitude else {
+            return nil
+        }
+
+        self.latitude = latitude
+        self.longitude = longitude
+        self.horizontalAccuracy = 0
+        self.capturedAt = ISO8601DateFormatter().string(from: Date())
+        self.provider = context.source == "current" ? "ios_core_location" : context.source
+        self.coordType = context.source == "current" ? "ios_core_location" : "manual_hint"
+    }
+}
+
+private struct V1DecisionLocationContext: Encodable {
+    let label: String
+    let city: String?
+    let area: String?
+    let latitude: Double?
+    let longitude: Double?
+    let source: String
+
+    init(context: DecisionLocationContext) {
+        self.label = context.label
+        self.city = context.city
+        self.area = context.area
+        self.latitude = context.latitude
+        self.longitude = context.longitude
+        self.source = context.source
+    }
 }
 
 @MainActor
-private final class DeviceLocationProvider: NSObject, @preconcurrency CLLocationManagerDelegate {
+final class DeviceLocationProvider: NSObject, @preconcurrency CLLocationManagerDelegate {
     static let shared = DeviceLocationProvider()
 
     private let manager = CLLocationManager()
@@ -797,6 +1880,30 @@ private final class DeviceLocationProvider: NSObject, @preconcurrency CLLocation
                 finish(nil)
             }
         }
+    }
+
+    func currentDecisionLocation() async -> DecisionLocationContext? {
+        guard let payload = await currentLocationPayload() else { return nil }
+        let location = CLLocation(latitude: payload.latitude, longitude: payload.longitude)
+        let placemarks = try? await CLGeocoder().reverseGeocodeLocation(location)
+        let placemark = placemarks?.first
+        let city = placemark?.locality ?? placemark?.administrativeArea
+        let area = placemark?.subLocality ?? placemark?.name
+        let labelParts = [city, area]
+            .compactMap { value in
+                value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .filter { !$0.isEmpty }
+        let label = labelParts.isEmpty ? "当前位置" : labelParts.joined(separator: " · ")
+
+        return DecisionLocationContext(
+            label: label,
+            city: city,
+            area: area,
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            source: "current"
+        )
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -928,6 +2035,23 @@ private struct V1CardSummary: Decodable {
     }
 }
 
+private struct V1CardDetailEnvelope: Decodable {
+    let card: V1CardSummary
+
+    enum CodingKeys: String, CodingKey {
+        case card
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        if let card = try container?.decodeIfPresent(V1CardSummary.self, forKey: .card) {
+            self.card = card
+        } else {
+            self.card = try V1CardSummary(from: decoder)
+        }
+    }
+}
+
 private struct V1CardMetadata: Decodable {
     let questionId: UUID?
 
@@ -978,6 +2102,7 @@ private struct V1HelpCardSummary: Decodable {
     let answerCount: Int?
     let card: V1CardSummary?
     let metadata: V1HelpCardMetadata?
+    let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -990,22 +2115,23 @@ private struct V1HelpCardSummary: Decodable {
         case answerCount = "answer_count"
         case card
         case metadata
+        case createdAt = "created_at"
     }
 
     func model(fallbackTitle: String) -> HelpRequest {
-        var answers: [HumanAnswer] = []
-        if let card {
-            answers.append(HumanAnswer(text: clean(card.oneLiner, fallback: card.title), nickname: "皮皮", timeLabel: "刚刚"))
-        }
+        let resolvedTitle = clean(title, fallback: clean(prompt, fallback: fallbackTitle))
+        let finalPick = card?.model(query: resolvedTitle)
 
         return HelpRequest(
             id: id ?? UUID(),
-            title: clean(title, fallback: clean(prompt, fallback: fallbackTitle)),
+            title: resolvedTitle,
             context: clean(contextText, fallback: clean(oneLiner, fallback: "这题不硬选 · 等懂的人来一句")),
             rewardLabel: reward?.label ?? "+10",
-            answerCount: answerCount ?? metadata?.answerCount ?? answers.count,
+            answerCount: answerCount ?? metadata?.answerCount ?? 0,
             status: helpRequestStatus(from: status),
-            answers: answers
+            answers: [],
+            finalPick: finalPick,
+            createdAt: createdAt
         )
     }
 
@@ -1017,10 +2143,29 @@ private struct V1HelpCardSummary: Decodable {
             .published
         case "final_ready", "answered":
             .answered
-        case "closed", "completed":
+        case "closed":
+            .closed
+        case "completed":
             .completed
         default:
             .draft
+        }
+    }
+}
+
+private struct V1HelpCardDetailEnvelope: Decodable {
+    let summary: V1HelpCardSummary
+
+    enum CodingKeys: String, CodingKey {
+        case helpCard = "help_card"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        if let summary = try container?.decodeIfPresent(V1HelpCardSummary.self, forKey: .helpCard) {
+            self.summary = summary
+        } else {
+            self.summary = try V1HelpCardSummary(from: decoder)
         }
     }
 }
@@ -1045,6 +2190,121 @@ private struct V1HelpCardMetadata: Decodable {
 
 private struct V1HelpFeedResponse: Decodable {
     let items: [V1HelpCardSummary]
+}
+
+private struct V1HelpAnswerListResponse: Decodable {
+    let items: [V1HelpAnswerSummary]
+}
+
+private struct V1FavoriteChoiceListResponse: Decodable {
+    let items: [V1FavoriteChoiceSummary]
+}
+
+private struct V1FavoriteChoiceSummary: Decodable {
+    let id: UUID?
+    let query: String?
+    let status: String?
+    let helpRequestId: UUID?
+    let topPick: TopPickResponse?
+    let finalRecommendationCardId: String?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case query
+        case status
+        case helpRequestId = "help_request_id"
+        case topPick = "top_pick"
+        case finalRecommendationCardId = "final_recommendation_card_id"
+        case createdAt = "created_at"
+    }
+
+    var model: QuestionHistory? {
+        guard let id, let query else { return nil }
+        return QuestionHistory(
+            id: id,
+            query: query,
+            status: status ?? "saved",
+            helpRequestId: helpRequestId,
+            topPick: topPick?.model(query: query),
+            finalRecommendationCardId: finalRecommendationCardId.flatMap(UUID.init(uuidString:)),
+            createdAt: createdAt
+        )
+    }
+}
+
+private struct V1HelpAnswerSummary: Decodable {
+    let id: String
+    let helpCardId: String
+    let rawText: String
+    let status: String
+    let rewardStatus: String
+    let questionTitle: String
+    let questionContext: String?
+    let reward: V1RewardPayload?
+    let finalRecommendationCardId: String?
+    let settlementReason: String?
+    let usedAsFinalEvidence: Bool
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case helpCardId = "help_card_id"
+        case rawText = "raw_text"
+        case status
+        case rewardStatus = "reward_status"
+        case questionTitle = "question_title"
+        case questionContext = "question_context"
+        case reward
+        case finalRecommendationCardId = "final_recommendation_card_id"
+        case settlementReason = "settlement_reason"
+        case usedAsFinalEvidence = "used_as_final_evidence"
+        case createdAt = "created_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        helpCardId = try container.decode(String.self, forKey: .helpCardId)
+        rawText = try container.decodeIfPresent(String.self, forKey: .rawText) ?? ""
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "submitted"
+        rewardStatus = try container.decodeIfPresent(String.self, forKey: .rewardStatus) ?? "pending"
+        questionTitle = try container.decodeIfPresent(String.self, forKey: .questionTitle) ?? "求一个"
+        questionContext = try container.decodeIfPresent(String.self, forKey: .questionContext)
+        reward = try container.decodeIfPresent(V1RewardPayload.self, forKey: .reward)
+        finalRecommendationCardId = try container.decodeIfPresent(String.self, forKey: .finalRecommendationCardId)
+        settlementReason = try container.decodeIfPresent(String.self, forKey: .settlementReason)
+        usedAsFinalEvidence = try container.decodeIfPresent(Bool.self, forKey: .usedAsFinalEvidence) ?? false
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+    }
+
+    var record: SubmittedAnswerRecord? {
+        guard let answerId = UUID(uuidString: id),
+              let helpRequestId = UUID(uuidString: helpCardId) else { return nil }
+        return SubmittedAnswerRecord(
+            id: answerId,
+            helpRequestId: helpRequestId,
+            questionTitle: questionTitle,
+            questionContext: questionContext ?? "",
+            text: rawText,
+            rewardLabel: reward?.label ?? "+10",
+            status: submittedStatus,
+            timeLabel: createdAt ?? "刚刚",
+            finalRecommendationCardId: finalRecommendationCardId.flatMap(UUID.init(uuidString:)),
+            settlementReason: settlementReason,
+            usedAsFinalEvidence: usedAsFinalEvidence
+        )
+    }
+
+    private var submittedStatus: SubmittedAnswerStatus {
+        if rewardStatus == "granted" || status == "used" {
+            return .accepted
+        }
+        if rewardStatus == "rejected" || status == "rejected" {
+            return .rejected
+        }
+        return .pending
+    }
 }
 
 private struct V1HelpCardOneLinerRequest: Encodable {
@@ -1087,6 +2347,52 @@ private struct V1OneLinerMetadata: Decodable {
     }
 }
 
+private struct V1HelpCardSkipRequest: Encodable {
+    let deviceId: String
+    let reason: String
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case deviceId = "device_id"
+        case reason
+        case metadata
+    }
+}
+
+private struct V1HelpCardSkipResponse: Decodable {
+    let ok: Bool
+    let helpCardId: String
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case helpCardId = "help_card_id"
+    }
+}
+
+private struct V1HelpCardFinalAcceptRequest: Encodable {
+    let deviceId: String
+    let reason: String
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case deviceId = "device_id"
+        case reason
+        case metadata
+    }
+}
+
+private struct V1HelpCardFinalAcceptResponse: Decodable {
+    let helpCardId: String
+    let cardId: String?
+    let accepted: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case helpCardId = "help_card_id"
+        case cardId = "card_id"
+        case accepted
+    }
+}
+
 private struct V1LightEventsResponse: Decodable {
     let items: [V1LightEvent]
 }
@@ -1103,6 +2409,20 @@ private struct V1CardAcceptRequest: Encodable {
     let metadata: [String: String]
 }
 
+private struct V1CardFeedbackRequest: Encodable {
+    let deviceId: String
+    let reason: String
+    let tags: [String]
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case deviceId = "device_id"
+        case reason
+        case tags
+        case metadata
+    }
+}
+
 private struct V1CardAcceptResponse: Decodable {
     let cardId: String
     let accepted: Bool
@@ -1113,8 +2433,32 @@ private struct V1CardAcceptResponse: Decodable {
     }
 }
 
+private struct V1CardFeedbackResponse: Decodable {
+    let cardId: String
+    let accepted: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case accepted
+    }
+}
+
+private struct V1UserBehaviorEventRequest: Encodable {
+    let eventType: String
+    let deviceId: String
+    let source: String
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case eventType = "event_type"
+        case deviceId = "device_id"
+        case source
+        case metadata
+    }
+}
+
 struct MockCloudRecommendationService: RecommendationService {
-    func submit(query: String, sessionId: UUID?) async -> RecommendationResult {
+    func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult {
         try? await Task.sleep(for: .milliseconds(650))
 
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1137,38 +2481,66 @@ struct MockCloudRecommendationService: RecommendationService {
         )
     }
 
-    func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> HelpRequest {
+    func publish(_ request: HelpRequest, sessionId: UUID?, questionId: UUID?) async -> PublishHelpResult {
         var updated = request
         updated.status = .published
-        return updated
+        return PublishHelpResult(request: updated, didPublish: true, notice: nil)
     }
 
     func refresh(_ request: HelpRequest) async -> HelpRequest {
         request
     }
 
+    func fetchRecommendationCard(id: UUID, query: String) async -> TopPick? {
+        nil
+    }
+
+    func fetchHelpRequestDetail(id: UUID) async -> HelpRequestDetailResult {
+        HelpRequestDetailResult(request: nil, notice: MockData.helpDetailUnavailableNotice())
+    }
+
     func fetchHelpRequest(id: UUID) async -> HelpRequest? {
         nil
     }
 
-    func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest] {
-        [MockData.defaultHelpRequest]
+    func myHelpRequests(limit: Int) async -> MyHelpRequestsResult {
+        MyHelpRequestsResult(requests: [MockData.defaultHelpRequest], notice: nil)
     }
 
-    func answer(_ text: String, for request: HelpRequest) async -> HelpRequest {
+    func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult {
+        MySubmittedAnswersResult(answers: [], notice: nil)
+    }
+
+    func myFavoriteChoices(limit: Int) async -> MyFavoriteChoicesResult {
+        MyFavoriteChoicesResult(choices: [], notice: nil)
+    }
+
+    func answerQueue(excluding sessionId: UUID?) async -> AnswerQueueResult {
+        AnswerQueueResult(requests: [MockData.defaultHelpRequest], notice: nil)
+    }
+
+    func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult {
         var updated = request
         updated.answers.append(HumanAnswer(text: text, nickname: "路过的人", timeLabel: "刚刚"))
         updated.answerCount += 1
         updated.status = .answered
-        return updated
+        return SubmitHelpAnswerResult(request: updated, didSubmit: true, notice: nil)
+    }
+
+    func skip(_ request: HelpRequest, reason: String) async -> Bool {
+        true
     }
 
     func acceptCard(id: UUID?) async -> Bool {
         true
     }
 
-    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> [QuestionHistory] {
-        []
+    func sendCardFeedback(id: UUID?, action: CardFeedbackAction, reason: String) async -> Bool {
+        id != nil && !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func complete(sessionId: UUID?, questionId: UUID?, helpRequestId: UUID?, source: String) async -> CompleteQuestionResult {
+        CompleteQuestionResult(didComplete: helpRequestId != nil, history: [], notice: nil)
     }
 
     private func shouldAskHuman(for query: String) -> Bool {
@@ -1279,6 +2651,18 @@ private struct QuestionHistoryResponse: Decodable {
     let status: String?
     let helpRequestId: UUID?
     let topPick: TopPickResponse?
+    let finalRecommendationCardId: String?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case query
+        case status
+        case helpRequestId = "help_request_id"
+        case topPick = "top_pick"
+        case finalRecommendationCardId = "final_recommendation_card_id"
+        case createdAt = "created_at"
+    }
 
     var model: QuestionHistory? {
         guard let id, let query, let status else { return nil }
@@ -1287,7 +2671,9 @@ private struct QuestionHistoryResponse: Decodable {
             query: query,
             status: status,
             helpRequestId: helpRequestId,
-            topPick: topPick?.model(query: query)
+            topPick: topPick?.model(query: query),
+            finalRecommendationCardId: finalRecommendationCardId.flatMap(UUID.init(uuidString:)),
+            createdAt: createdAt
         )
     }
 }
@@ -1301,6 +2687,7 @@ private struct HelpRequestListEnvelope: Decodable {
 }
 
 private struct TopPickResponse: Decodable {
+    let cardId: UUID?
     let query: String?
     let preface: String?
     let title: String?
@@ -1310,13 +2697,25 @@ private struct TopPickResponse: Decodable {
     let warning: String?
     let followups: [String]?
 
+    enum CodingKeys: String, CodingKey {
+        case cardId = "card_id"
+        case query
+        case preface
+        case title
+        case subtitle
+        case reason
+        case bullets
+        case warning
+        case followups
+    }
+
     func model(query fallbackQuery: String) -> TopPick {
         let resolvedFollowups = removeAskHuman(
             from: cleanArray(followups, fallback: ["为什么?", "换个小众的"])
         )
 
         return TopPick(
-            cardId: nil,
+            cardId: cardId,
             query: clean(query, fallback: fallbackQuery),
             preface: clean(preface, fallback: "别查了,就这个。"),
             title: clean(title, fallback: "先选一个最稳的"),
@@ -1373,6 +2772,10 @@ final class AppSession {
     private(set) var currentTopPick: TopPick?
     private(set) var currentHelpRequest: HelpRequest?
     private(set) var history: [QuestionHistory] = []
+    private(set) var favoriteChoices: [QuestionHistory] = []
+    private(set) var hiddenFavoriteChoiceIds: Set<UUID> = []
+    private(set) var submittedAnswers: [SubmittedAnswerRecord] = []
+    private(set) var myHelpRequests: [HelpRequest] = []
     private(set) var answerQueue: [HelpRequest] = []
     private(set) var answerTarget: HelpRequest?
     private(set) var submitState: SubmitState = .idle
@@ -1380,14 +2783,23 @@ final class AppSession {
 
     @ObservationIgnored private let service: any RecommendationService
     @ObservationIgnored private let documentationDemo: String?
+    @ObservationIgnored private static let historyKey = "question_history_v1"
+    @ObservationIgnored private static let favoriteChoicesKey = "favorite_choices_v1"
+    @ObservationIgnored private static let hiddenFavoriteChoiceIDsKey = "hidden_favorite_choice_ids_v1"
+    @ObservationIgnored private static let submittedAnswersKey = "submitted_answers_v1"
 
     init(service: any RecommendationService, documentationDemo: String? = nil) {
         self.service = service
         self.documentationDemo = documentationDemo
+        restoreLocalCollections()
 
         #if DEBUG
         applyDocumentationDemo(documentationDemo)
         #endif
+    }
+
+    private func recordBehaviorEvent(_ eventType: String, metadata: [String: String]) async -> Bool {
+        await UserBehaviorEventService().record(eventType: eventType, metadata: metadata)
     }
 
     var isSubmitting: Bool {
@@ -1421,17 +2833,48 @@ final class AppSession {
         submitState = .idle
     }
 
-    func submit(query: String) async -> RecommendationDecision {
+    func clearLocalUserData() {
+        sessionId = nil
+        currentQuestionId = nil
+        currentQuery = ""
+        currentTopPick = nil
+        currentHelpRequest = nil
+        history = []
+        favoriteChoices = []
+        hiddenFavoriteChoiceIds = []
+        submittedAnswers = []
+        myHelpRequests = []
+        answerQueue = []
+        answerTarget = nil
+        serviceNotice = nil
+        submitState = .idle
+
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.historyKey)
+        defaults.removeObject(forKey: Self.favoriteChoicesKey)
+        defaults.removeObject(forKey: Self.hiddenFavoriteChoiceIDsKey)
+        defaults.removeObject(forKey: Self.submittedAnswersKey)
+        defaults.removeObject(forKey: "seen_light_event_ids")
+        defaults.removeObject(forKey: "pinned_history_ids")
+        defaults.removeObject(forKey: "hidden_history_ids")
+        defaults.removeObject(forKey: "renamed_history_titles")
+        defaults.removeObject(forKey: "recent_decision_location_labels")
+        defaults.removeObject(forKey: "active_decision_location_context")
+        defaults.removeObject(forKey: "did_attempt_current_location_bootstrap")
+    }
+
+    func submit(query: String, locationContext: DecisionLocationContext? = nil) async -> RecommendationDecision {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         currentQuery = trimmed
         submitState = .loading
 
-        let result = await service.submit(query: trimmed, sessionId: sessionId)
+        let result = await service.submit(query: trimmed, sessionId: sessionId, locationContext: locationContext)
         serviceNotice = result.serviceNotice
         sessionId = result.sessionId ?? sessionId
         currentQuestionId = result.questionId ?? currentQuestionId
         if !result.history.isEmpty {
             history = result.history
+            persistHistory()
         } else if !result.decision.isEmpty {
             upsertLocalHistory(
                 query: trimmed,
@@ -1451,9 +2894,15 @@ final class AppSession {
 
         if shouldOpenHelpRequest(for: item) {
             currentTopPick = nil
-            if let helpRequestId = item.helpRequestId,
-               let request = await service.fetchHelpRequest(id: helpRequestId) {
-                currentHelpRequest = request
+            if let helpRequestId = item.helpRequestId {
+                let result = await service.fetchHelpRequestDetail(id: helpRequestId)
+                if let request = result.request {
+                    currentHelpRequest = request
+                    serviceNotice = nil
+                } else {
+                    currentHelpRequest = fallbackHelpRequest(for: item)
+                    serviceNotice = result.notice
+                }
             } else {
                 currentHelpRequest = fallbackHelpRequest(for: item)
             }
@@ -1465,9 +2914,47 @@ final class AppSession {
         return .result
     }
 
+    func helpRequestDetail(for item: QuestionHistory) async -> HelpRequestDetailResult {
+        if currentHelpRequest?.id == item.helpRequestId {
+            let request = await requestWithFinalPick(
+                currentHelpRequest ?? fallbackHelpRequest(for: item),
+                historyItem: item
+            )
+            return HelpRequestDetailResult(
+                request: request,
+                notice: nil
+            )
+        }
+
+        guard let helpRequestId = item.helpRequestId else {
+            let request = await requestWithFinalPick(fallbackHelpRequest(for: item), historyItem: item)
+            return HelpRequestDetailResult(
+                request: request,
+                notice: nil
+            )
+        }
+
+        let result = await service.fetchHelpRequestDetail(id: helpRequestId)
+        guard let request = result.request else {
+            serviceNotice = result.notice
+            return HelpRequestDetailResult(request: nil, notice: result.notice)
+        }
+
+        let merged = await requestWithFinalPick(
+            mergedLocalHelpAnswers(into: request, historyItem: item),
+            historyItem: item
+        )
+        currentHelpRequest = merged
+        serviceNotice = nil
+        return HelpRequestDetailResult(request: merged, notice: nil)
+    }
+
     func makeHelpRequestFromCurrentTopPick() {
         let query = currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery
         let pick = topPick
+        Task {
+            _ = await service.sendCardFeedback(id: pick.cardId, action: .askHuman, reason: "想听真人意见")
+        }
         currentHelpRequest = HelpRequest(
             title: query,
             context: "已经给过一个选择: \(pick.title) · 还想听懂的人来一句",
@@ -1484,51 +2971,129 @@ final class AppSession {
         currentHelpRequest?.context += "\n补充: \(supplement)"
     }
 
-    func publishCurrentRequest() async {
+    func publishCurrentRequest() async -> Bool {
         ensureHelpRequest()
-        guard let request = currentHelpRequest else { return }
-        let published = await service.publish(request, sessionId: sessionId, questionId: currentQuestionId)
-        currentHelpRequest = published
-        upsertLocalHistory(query: published.title, status: "waiting_for_human", helpRequestId: published.id, topPick: currentTopPick)
+        guard let request = currentHelpRequest else { return false }
+        let result = await service.publish(request, sessionId: sessionId, questionId: currentQuestionId)
+        currentHelpRequest = result.request
+        serviceNotice = result.notice
+        guard result.didPublish else { return false }
+        upsertMyHelpRequest(result.request)
+        upsertLocalHistory(query: result.request.title, status: "waiting_for_human", helpRequestId: result.request.id, topPick: currentTopPick)
+        return true
     }
 
     func refreshCurrentHelpRequest() async -> Bool {
         guard let request = currentHelpRequest else { return false }
         let previousAnswerCount = request.answers.count
         let refreshed = await service.refresh(request)
+        let receivedFinalPick = request.finalPick == nil && refreshed.finalPick != nil
         currentHelpRequest = refreshed
-        if refreshed.answers.count > previousAnswerCount {
-            upsertLocalHistory(query: refreshed.title, status: "answer_received", helpRequestId: refreshed.id, topPick: currentTopPick)
+        upsertMyHelpRequest(refreshed)
+        if refreshed.answers.count > previousAnswerCount || receivedFinalPick {
+            upsertLocalHistory(
+                query: refreshed.title,
+                status: refreshed.finalPick == nil ? "answer_received" : "completed",
+                helpRequestId: refreshed.id,
+                topPick: refreshed.finalPick ?? currentTopPick,
+                finalRecommendationCardId: refreshed.finalPick?.cardId
+            )
             return true
         }
         return false
     }
 
-    func loadAnswerQueue() async {
+    func closeCurrentHelpRequest() {
+        guard currentHelpRequest != nil else { return }
+        currentHelpRequest?.status = .closed
+        let request = helpRequest
+        upsertMyHelpRequest(request)
+        upsertLocalHistory(
+            query: request.title,
+            status: "closed",
+            helpRequestId: request.id,
+            topPick: currentTopPick
+        )
+    }
+
+    @discardableResult
+    func loadAnswerQueue() async -> ServiceNotice? {
         #if DEBUG
         if documentationDemo == "answer", !answerQueue.isEmpty {
             answerTarget = answerQueue.first
-            return
+            return nil
         }
         #endif
 
-        let requests = await service.answerQueue(excluding: sessionId)
-        answerQueue = requests
-        answerTarget = requests.first
+        let result = await service.answerQueue(excluding: sessionId)
+        if result.notice == nil || !result.requests.isEmpty {
+            answerQueue = result.requests
+            answerTarget = result.requests.first
+        }
+        serviceNotice = result.notice
+        return result.notice
     }
 
-    func addAnswer(_ text: String) async {
-        let answer = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !answer.isEmpty else { return }
+    @discardableResult
+    func loadMyHelpRequests() async -> ServiceNotice? {
+        let result = await service.myHelpRequests(limit: 100)
+        if result.notice == nil || !result.requests.isEmpty {
+            myHelpRequests = result.requests
+        }
+        serviceNotice = result.notice
+        return result.notice
+    }
 
-        guard let request = answerRequest else { return }
-        let updated = await service.answer(answer, for: request)
+    @discardableResult
+    func loadSubmittedAnswers() async -> ServiceNotice? {
+        let result = await service.mySubmittedAnswers(limit: 100)
+        if result.notice == nil || !result.answers.isEmpty {
+            mergeSubmittedAnswersFromRemote(result.answers)
+        }
+        serviceNotice = result.notice
+        return result.notice
+    }
+
+    func selectAnswerRequest(_ request: HelpRequest) {
+        if !answerQueue.contains(where: { $0.id == request.id }) {
+            answerQueue.insert(request, at: 0)
+        }
+        answerTarget = request
+    }
+
+    @discardableResult
+    func addAnswer(_ text: String) async -> SubmitHelpAnswerResult {
+        let answer = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else {
+            return SubmitHelpAnswerResult(request: nil, didSubmit: false, notice: nil)
+        }
+
+        guard let request = answerRequest else {
+            return SubmitHelpAnswerResult(request: nil, didSubmit: false, notice: nil)
+        }
+        let result = await service.answer(answer, for: request)
+        guard result.didSubmit, let updated = result.request else {
+            serviceNotice = result.notice
+            return result
+        }
+        let record = SubmittedAnswerRecord(
+            helpRequestId: request.id,
+            questionTitle: request.title,
+            questionContext: request.context,
+            text: answer,
+            rewardLabel: updated.rewardLabel.isEmpty ? request.rewardLabel : updated.rewardLabel
+        )
+        submittedAnswers.removeAll { $0.helpRequestId == request.id }
+        submittedAnswers.insert(record, at: 0)
+        persistSubmittedAnswers()
 
         if currentHelpRequest?.id == updated.id {
             currentHelpRequest = updated
         }
         answerQueue.removeAll { $0.id == request.id }
         answerTarget = answerQueue.first
+        serviceNotice = nil
+        return result
     }
 
     func advanceAnswerRequest() {
@@ -1537,34 +3102,168 @@ final class AppSession {
         answerTarget = answerQueue.first
     }
 
-    func acceptCurrentTopPick() async {
-        let accepted = await service.acceptCard(id: currentTopPick?.cardId)
-        let remoteHistory: [QuestionHistory]
-        if accepted {
-            remoteHistory = []
-        } else {
-            remoteHistory = await service.complete(
-                sessionId: sessionId,
-                questionId: currentQuestionId,
-                helpRequestId: nil,
-                source: "top1"
-            )
+    @discardableResult
+    func skipAnswerRequest(reason: String) async -> SkipHelpRequestResult {
+        guard let request = answerRequest else {
+            return SkipHelpRequestResult(didSkip: false, notice: nil)
         }
-        markCurrentQuestionCompleted(remoteHistory: remoteHistory)
-        currentTopPick = nil
-        currentQuery = ""
+        let didSkip = await service.skip(request, reason: reason)
+        guard didSkip else {
+            let notice = MockData.skipAnswerUnavailableNotice(reason: reason)
+            serviceNotice = notice
+            return SkipHelpRequestResult(didSkip: false, notice: notice)
+        }
+        answerQueue.removeAll { $0.id == request.id }
+        answerTarget = answerQueue.first
+        serviceNotice = nil
+        return SkipHelpRequestResult(didSkip: true, notice: nil)
     }
 
-    func acceptCurrentHelpAnswer() async {
-        let remoteHistory = await service.complete(
+    func acceptCurrentTopPick() async -> Bool {
+        let accepted = await service.acceptCard(id: currentTopPick?.cardId)
+        guard accepted else {
+            serviceNotice = MockData.acceptUnavailableNotice()
+            return false
+        }
+
+        serviceNotice = nil
+        markCurrentQuestionCompleted(remoteHistory: [])
+        currentTopPick = nil
+        currentQuery = ""
+        return true
+    }
+
+    func saveCurrentTopPickToFavorites() async -> Bool {
+        let query = currentQuery.isEmpty ? topPick.query : currentQuery
+        let item = QuestionHistory(
+            id: currentQuestionId ?? UUID(),
+            query: query.isEmpty ? MockData.queryPlaceholder : query,
+            status: "saved",
+            helpRequestId: nil,
+            topPick: currentTopPick ?? topPick,
+            createdAt: ISO8601DateFormatter().string(from: Date())
+        )
+        let didRecord = await recordBehaviorEvent(
+            "favorite_choice_saved",
+            metadata: UserBehaviorEventMetadata.history(item, extra: ["surface": "favorites"])
+        )
+        guard didRecord else {
+            serviceNotice = MockData.favoriteSyncUnavailableNotice(action: "收藏")
+            return false
+        }
+        favoriteChoices.removeAll { $0.id == item.id }
+        hiddenFavoriteChoiceIds.remove(item.id)
+        favoriteChoices.insert(item, at: 0)
+        persistFavoriteState()
+        serviceNotice = nil
+        return true
+    }
+
+    @discardableResult
+    func loadFavoriteChoices() async -> ServiceNotice? {
+        let result = await service.myFavoriteChoices(limit: 100)
+        if result.notice == nil || !result.choices.isEmpty {
+            mergeFavoriteChoicesFromRemote(result.choices)
+        }
+        serviceNotice = result.notice
+        return result.notice
+    }
+
+    func removeFavoriteChoice(id: UUID) async -> Bool {
+        let existing = favoriteChoices.first { $0.id == id }
+        let metadata = existing.map {
+            UserBehaviorEventMetadata.history($0, extra: ["surface": "favorites"])
+        } ?? ["history_id": id.uuidString, "surface": "favorites"]
+        let didRecord = await recordBehaviorEvent("favorite_choice_removed", metadata: metadata)
+        guard didRecord else {
+            serviceNotice = MockData.favoriteSyncUnavailableNotice(action: "取消收藏")
+            return false
+        }
+        favoriteChoices.removeAll { $0.id == id }
+        hiddenFavoriteChoiceIds.insert(id)
+        persistFavoriteState()
+        serviceNotice = nil
+        return true
+    }
+
+    func restoreFavoriteChoice(_ item: QuestionHistory) async -> Bool {
+        let didRecord = await recordBehaviorEvent(
+            "favorite_choice_restored",
+            metadata: UserBehaviorEventMetadata.history(item, extra: ["surface": "favorites"])
+        )
+        guard didRecord else {
+            serviceNotice = MockData.favoriteSyncUnavailableNotice(action: "恢复收藏")
+            return false
+        }
+        favoriteChoices.removeAll { $0.id == item.id }
+        hiddenFavoriteChoiceIds.remove(item.id)
+        favoriteChoices.insert(item, at: 0)
+        persistFavoriteState()
+        serviceNotice = nil
+        return true
+    }
+
+    func unhideFavoriteChoice(id: UUID) async -> Bool {
+        let didRecord = await recordBehaviorEvent(
+            "favorite_choice_unhidden",
+            metadata: ["history_id": id.uuidString, "surface": "favorites"]
+        )
+        guard didRecord else {
+            serviceNotice = MockData.favoriteSyncUnavailableNotice(action: "恢复收藏")
+            return false
+        }
+        hiddenFavoriteChoiceIds.remove(id)
+        persistFavoriteState()
+        serviceNotice = nil
+        return true
+    }
+
+    func deleteHistoryItem(id: UUID) {
+        history.removeAll { $0.id == id }
+        persistHistory()
+
+        guard currentQuestionId == id else { return }
+        currentQuestionId = nil
+        currentQuery = ""
+        currentTopPick = nil
+        currentHelpRequest = nil
+        serviceNotice = nil
+        submitState = .idle
+    }
+
+    func restoreDeletedHistoryItem(_ item: QuestionHistory) {
+        history.removeAll { $0.id == item.id }
+        history.insert(item, at: 0)
+        persistHistory()
+    }
+
+    @discardableResult
+    func sendCurrentTopPickFeedback(action: CardFeedbackAction, reason: String) async -> Bool {
+        let didSend = await service.sendCardFeedback(id: currentTopPick?.cardId, action: action, reason: reason)
+        serviceNotice = didSend ? nil : MockData.cardFeedbackUnavailableNotice(action: action)
+        return didSend
+    }
+
+    func acceptCurrentHelpAnswer() async -> Bool {
+        let result = await service.complete(
             sessionId: sessionId,
             questionId: currentQuestionId,
             helpRequestId: currentHelpRequest?.id,
             source: "human_answer"
         )
-        markCurrentQuestionCompleted(remoteHistory: remoteHistory)
+
+        serviceNotice = result.notice
+        guard result.didComplete else { return false }
+
+        let finalPick = await finalPickForCompletedHelpRequest(cardId: result.finalRecommendationCardId)
+        markCurrentQuestionCompleted(
+            remoteHistory: result.history,
+            finalRecommendationCardId: result.finalRecommendationCardId,
+            finalPick: finalPick
+        )
         currentHelpRequest = nil
         currentQuery = ""
+        return true
     }
 
     private func apply(_ decision: RecommendationDecision) {
@@ -1586,7 +3285,99 @@ final class AppSession {
         currentHelpRequest = MockData.helpRequest(for: currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery)
     }
 
-    private func upsertLocalHistory(query: String, status: String, helpRequestId: UUID?, topPick: TopPick?) {
+    private func restoreLocalCollections() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: Self.historyKey),
+           let decoded = try? JSONDecoder().decode([QuestionHistory].self, from: data) {
+            history = decoded
+        }
+        if let data = defaults.data(forKey: Self.favoriteChoicesKey),
+           let decoded = try? JSONDecoder().decode([QuestionHistory].self, from: data) {
+            favoriteChoices = decoded
+        }
+        if let data = defaults.data(forKey: Self.hiddenFavoriteChoiceIDsKey),
+           let decoded = try? JSONDecoder().decode([UUID].self, from: data) {
+            hiddenFavoriteChoiceIds = Set(decoded)
+        }
+        if let data = defaults.data(forKey: Self.submittedAnswersKey),
+           let decoded = try? JSONDecoder().decode([SubmittedAnswerRecord].self, from: data) {
+            submittedAnswers = decoded
+        }
+    }
+
+    private func persistHistory() {
+        let historyItems = Array(history.prefix(120))
+        if history.count != historyItems.count {
+            history = historyItems
+        }
+        if let data = try? JSONEncoder().encode(historyItems) {
+            UserDefaults.standard.set(data, forKey: Self.historyKey)
+        }
+    }
+
+    private func persistFavoriteState() {
+        let defaults = UserDefaults.standard
+        let favorites = Array(favoriteChoices.prefix(80))
+        if let data = try? JSONEncoder().encode(favorites) {
+            defaults.set(data, forKey: Self.favoriteChoicesKey)
+        }
+        if let data = try? JSONEncoder().encode(Array(hiddenFavoriteChoiceIds)) {
+            defaults.set(data, forKey: Self.hiddenFavoriteChoiceIDsKey)
+        }
+    }
+
+    private func mergeFavoriteChoicesFromRemote(_ remoteChoices: [QuestionHistory]) {
+        var merged: [QuestionHistory] = []
+        var seenIds: Set<UUID> = []
+
+        func appendIfNeeded(_ item: QuestionHistory) {
+            guard !hiddenFavoriteChoiceIds.contains(item.id), !seenIds.contains(item.id) else { return }
+            merged.append(item)
+            seenIds.insert(item.id)
+        }
+
+        remoteChoices.forEach(appendIfNeeded)
+        favoriteChoices.forEach(appendIfNeeded)
+        favoriteChoices = Array(merged.prefix(80))
+        persistFavoriteState()
+    }
+
+    private func persistSubmittedAnswers() {
+        let answers = Array(submittedAnswers.prefix(80))
+        if submittedAnswers.count != answers.count {
+            submittedAnswers = answers
+        }
+        if let data = try? JSONEncoder().encode(answers) {
+            UserDefaults.standard.set(data, forKey: Self.submittedAnswersKey)
+        }
+    }
+
+    private func mergeSubmittedAnswersFromRemote(_ remoteAnswers: [SubmittedAnswerRecord]) {
+        var merged: [SubmittedAnswerRecord] = []
+        var seenIds: Set<UUID> = []
+        var seenKeys: Set<String> = []
+
+        func appendIfNeeded(_ answer: SubmittedAnswerRecord) {
+            let key = "\(answer.helpRequestId.uuidString)|\(answer.text.trimmingCharacters(in: .whitespacesAndNewlines))"
+            guard !seenIds.contains(answer.id), !seenKeys.contains(key) else { return }
+            merged.append(answer)
+            seenIds.insert(answer.id)
+            seenKeys.insert(key)
+        }
+
+        remoteAnswers.forEach(appendIfNeeded)
+        submittedAnswers.forEach(appendIfNeeded)
+        submittedAnswers = Array(merged.prefix(80))
+        persistSubmittedAnswers()
+    }
+
+    private func upsertLocalHistory(
+        query: String,
+        status: String,
+        helpRequestId: UUID?,
+        topPick: TopPick?,
+        finalRecommendationCardId: UUID? = nil
+    ) {
         if let currentQuestionId,
            let index = history.firstIndex(where: { $0.id == currentQuestionId }) {
             let existing = history[index]
@@ -1595,8 +3386,11 @@ final class AppSession {
                 query: query,
                 status: status,
                 helpRequestId: helpRequestId,
-                topPick: topPick ?? existing.topPick
+                topPick: topPick ?? existing.topPick,
+                finalRecommendationCardId: finalRecommendationCardId ?? existing.finalRecommendationCardId,
+                createdAt: existing.createdAt
             )
+            persistHistory()
             return
         }
 
@@ -1608,10 +3402,21 @@ final class AppSession {
                 query: query,
                 status: status,
                 helpRequestId: helpRequestId,
-                topPick: topPick
+                topPick: topPick,
+                finalRecommendationCardId: finalRecommendationCardId,
+                createdAt: ISO8601DateFormatter().string(from: Date())
             ),
             at: 0
         )
+        persistHistory()
+    }
+
+    private func upsertMyHelpRequest(_ request: HelpRequest) {
+        if let index = myHelpRequests.firstIndex(where: { $0.id == request.id }) {
+            myHelpRequests[index] = request
+        } else {
+            myHelpRequests.insert(request, at: 0)
+        }
     }
 
     private func status(for decision: RecommendationDecision) -> String {
@@ -1652,23 +3457,62 @@ final class AppSession {
             return true
         }
 
-        return item.status == "waiting_for_human" || item.status == "answer_received"
+        return item.status == "draft"
+            || item.status == "waiting_for_human"
+            || item.status == "answer_received"
+            || item.status == "closed"
     }
 
     private func fallbackHelpRequest(for item: QuestionHistory) -> HelpRequest {
-        HelpRequest(
+        let request = HelpRequest(
             id: item.helpRequestId ?? UUID(),
             title: item.query,
             context: item.status == "completed"
                 ? "这题已经完成。"
                 : "这题不硬选 · 等懂的人来一句",
             status: helpRequestStatus(for: item),
-            answers: []
+            answers: [],
+            finalPick: item.topPick
         )
+        return mergedLocalHelpAnswers(into: request, historyItem: item)
+    }
+
+    private func requestWithFinalPick(_ request: HelpRequest, historyItem: QuestionHistory) async -> HelpRequest {
+        guard request.finalPick == nil,
+              let cardId = historyItem.finalRecommendationCardId,
+              let finalPick = await service.fetchRecommendationCard(id: cardId, query: request.title)
+        else {
+            return request
+        }
+
+        var updated = request
+        updated.finalPick = finalPick
+        return updated
+    }
+
+    private func mergedLocalHelpAnswers(into request: HelpRequest, historyItem: QuestionHistory) -> HelpRequest {
+        var merged = request
+        let localAnswers = submittedAnswers
+            .filter { $0.helpRequestId == historyItem.helpRequestId || $0.helpRequestId == request.id }
+            .map { answer in
+                HumanAnswer(
+                    id: answer.id,
+                    text: answer.text,
+                    nickname: "我",
+                    timeLabel: answer.timeLabel
+                )
+            }
+        for answer in localAnswers where !merged.answers.contains(where: { $0.id == answer.id || $0.text == answer.text }) {
+            merged.answers.append(answer)
+        }
+        merged.answerCount = max(merged.answerCount, merged.answers.count)
+        return merged
     }
 
     private func helpRequestStatus(for item: QuestionHistory) -> HelpRequestStatus {
         switch item.status {
+        case "closed":
+            .closed
         case "completed":
             .completed
         case "answer_received":
@@ -1680,14 +3524,56 @@ final class AppSession {
         }
     }
 
-    private func markCurrentQuestionCompleted(remoteHistory: [QuestionHistory]) {
+    private func markCurrentQuestionCompleted(
+        remoteHistory: [QuestionHistory],
+        finalRecommendationCardId: UUID? = nil,
+        finalPick: TopPick? = nil
+    ) {
         if !remoteHistory.isEmpty {
-            history = remoteHistory
+            history = remoteHistory.map { item in
+                guard item.helpRequestId == currentHelpRequest?.id || item.id == currentQuestionId else {
+                    return item
+                }
+                return historyItemByAddingFinalPick(
+                    item,
+                    finalRecommendationCardId: finalRecommendationCardId,
+                    finalPick: finalPick
+                )
+            }
+            persistHistory()
             return
         }
 
         let query = currentQuery.isEmpty ? MockData.queryPlaceholder : currentQuery
-        upsertLocalHistory(query: query, status: "completed", helpRequestId: currentHelpRequest?.id, topPick: currentTopPick)
+        upsertLocalHistory(
+            query: query,
+            status: "completed",
+            helpRequestId: currentHelpRequest?.id,
+            topPick: finalPick ?? currentTopPick,
+            finalRecommendationCardId: finalRecommendationCardId
+        )
+    }
+
+    private func finalPickForCompletedHelpRequest(cardId: UUID?) async -> TopPick? {
+        guard let cardId else { return nil }
+        let fallbackQuery = currentHelpRequest?.title ?? currentQuery
+        return await service.fetchRecommendationCard(id: cardId, query: fallbackQuery)
+    }
+
+    private func historyItemByAddingFinalPick(
+        _ item: QuestionHistory,
+        finalRecommendationCardId: UUID?,
+        finalPick: TopPick?
+    ) -> QuestionHistory {
+        QuestionHistory(
+            id: item.id,
+            query: item.query,
+            status: item.status,
+            helpRequestId: item.helpRequestId,
+            topPick: finalPick ?? item.topPick,
+            finalRecommendationCardId: finalRecommendationCardId ?? item.finalRecommendationCardId,
+            createdAt: item.createdAt
+        )
     }
 
     #if DEBUG
@@ -1727,8 +3613,102 @@ enum MockData {
     static let demoQuery = "我现在在大同喜晋道,不知道吃什么"
     static func backendUnavailableNotice(error _: Error) -> ServiceNotice {
         ServiceNotice(
-            title: "后端未连接",
-            detail: "服务恢复后再继续。"
+            title: "皮皮",
+            detail: "这轮没连上服务，原话我先留着。你可以重试，或者改一句再发。"
+        )
+    }
+
+    static func publishUnavailableNotice(error _: Error) -> ServiceNotice {
+        ServiceNotice(
+            title: "皮皮",
+            detail: "这次没发出去，草稿还在。你可以重试。"
+        )
+    }
+
+    static func publishMissingConfirmationNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "皮皮",
+            detail: "后端还没确认发布成功，草稿先保留。你可以重试。"
+        )
+    }
+
+    static func answerUnavailableNotice(error _: Error) -> ServiceNotice {
+        ServiceNotice(
+            title: "皮皮",
+            detail: "这句还没提交成功，内容我留在输入框里。你可以重试。"
+        )
+    }
+
+    static func acceptUnavailableNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "皮皮",
+            detail: "这次还没采纳成功，当前结果我先留着。你可以重试。"
+        )
+    }
+
+    static func cardFeedbackUnavailableNotice(action: CardFeedbackAction) -> ServiceNotice {
+        let actionText: String
+        switch action {
+        case .change:
+            actionText = "换一个"
+        case .reject:
+            actionText = "信息有误"
+        case .askHuman:
+            actionText = "求一个"
+        }
+        return ServiceNotice(
+            title: "同步失败",
+            detail: "这次还没记录“\(actionText)”，当前结果先保留。你可以重试。"
+        )
+    }
+
+    static func favoriteSyncUnavailableNotice(action: String) -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "这次还没\(action)成功，收藏状态先保留。你可以重试。"
+        )
+    }
+
+    static func drawerSyncUnavailableNotice(action: String) -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "这次还没\(action)成功，抽屉状态先保留。你可以重试。"
+        )
+    }
+
+    static func profileSnapshotUnavailableNotice(error _: Error) -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "个人数据这次没同步完整，下面可能不是最新状态。你可以重试。"
+        )
+    }
+
+    static func myHelpUnavailableNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "我的求一个这次没同步完整，下面会先显示本地记录。你可以重试。"
+        )
+    }
+
+    static func helpDetailUnavailableNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "求助详情这次没同步成功，当前内容先保留。你可以重试。"
+        )
+    }
+
+    static func answerQueueUnavailableNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "来一句队列这次没同步成功，当前卡片先保留。你可以重试。"
+        )
+    }
+
+    static func skipAnswerUnavailableNotice(reason: String) -> ServiceNotice {
+        let action = reason == "reported" ? "举报" : "屏蔽"
+        return ServiceNotice(
+            title: "同步失败",
+            detail: "这张还没\(action)成功，卡片先保留。你可以重试。"
         )
     }
 

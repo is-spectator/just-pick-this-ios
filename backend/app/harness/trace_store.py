@@ -22,8 +22,13 @@ HARNESS_TRACE_EVENT_NAMES = (
     "evaluator_result",
     "answer_gate_result",
 )
+PROVIDER_FALLBACK_TRACE_EVENT_NAMES = ("reasoner_provider_fallback",)
 SHADOW_TRACE_EVENT_NAMES = ("shadow_reasoner_result",)
-TRACE_EVENT_NAMES = (*HARNESS_TRACE_EVENT_NAMES, *SHADOW_TRACE_EVENT_NAMES)
+TRACE_EVENT_NAMES = (
+    *HARNESS_TRACE_EVENT_NAMES,
+    *PROVIDER_FALLBACK_TRACE_EVENT_NAMES,
+    *SHADOW_TRACE_EVENT_NAMES,
+)
 
 
 class TraceStore:

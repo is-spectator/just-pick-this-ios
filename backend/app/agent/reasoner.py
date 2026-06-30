@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 import httpx
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from app.agent.model_adapter import (
     DeterministicPipiModelAdapter,
@@ -134,6 +134,8 @@ class OpenAIReasoner:
                 baseline,
                 llm_provider="openai",
                 llm_status="disabled",
+                llm_fallback=True,
+                llm_error_type="disabled",
                 llm_error="OPENAI_API_KEY is missing.",
             )
 
@@ -159,6 +161,8 @@ class OpenAIReasoner:
                 baseline,
                 llm_provider="openai",
                 llm_status="fallback",
+                llm_fallback=True,
+                llm_error_type=_llm_error_type(exc),
                 llm_error=str(exc)[:500],
             )
 
@@ -322,6 +326,14 @@ def _extract_openai_content(data: dict[str, Any]) -> str | None:
 
 def _annotate_decision(decision: ReasonerDecision, **fields: Any) -> ReasonerDecision:
     return decision.model_copy(update=fields)
+
+
+def _llm_error_type(exc: Exception) -> str:
+    if isinstance(exc, (json.JSONDecodeError, TypeError, ValidationError)):
+        return "schema_error"
+    if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
+        return "timeout"
+    return "provider_error"
 
 
 def _dump_decision(decision: Any) -> dict[str, Any]:

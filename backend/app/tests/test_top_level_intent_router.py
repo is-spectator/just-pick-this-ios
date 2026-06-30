@@ -63,7 +63,7 @@ def test_product_chat_turn_without_debug_flag_omits_debug_field(client: TestClie
 
 @pytest.mark.parametrize(
     "message",
-    ["你好", "嗨", "早上好", "谢谢你", "你是谁", "讲个短笑话", "晚安", "随便说点什么"],
+    ["你好", "嗨", "早上好", "谢谢你", "你是谁", "怎么用", "讲个短笑话", "晚安", "随便说点什么"],
 )
 def test_chitchat_returns_text_no_card(client: TestClient, message: str) -> None:
     body = _chat(client, message)

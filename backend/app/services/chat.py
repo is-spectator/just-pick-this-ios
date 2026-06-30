@@ -28,11 +28,13 @@ from app.models import (
     LightEvent,
     Question,
     RecommendationCard,
+    RewardEvent,
     RetrievalHit,
     RetrievalRun,
     Turn,
 )
 from app.ops.prompt_registry import PromptRegistry
+from app.retrieval.evidence_pack import build_evidence_pack, summarize_evidence_pack
 from app.services.runtime import (
     build_card_ui_event,
     build_help_ui_event,
@@ -41,9 +43,7 @@ from app.services.runtime import (
     create_turn,
     ensure_datong_assets,
     ensure_seongsu_assets,
-    ensure_seongsu_image,
     ensure_sijiminfu_assets,
-    ensure_shopping_intent,
     ensure_user,
     finish_tool_call,
     get_or_create_conversation,
@@ -57,11 +57,19 @@ from app.services.runtime import (
     session_scope,
     utcnow,
 )
-from app.services.intent_router import detect_chitchat, detect_clarification_needed
+from app.services.help_service import (
+    assess_one_liner_quality,
+    normalize_one_liner_key,
+    one_liner_quality_metadata,
+)
+from app.services.user_events import record_user_behavior_event
+from app.services.experiments import experiment_metadata, resolve_experiment_assignments
+from app.services.intent_router import detect_app_help, detect_chitchat, detect_clarification_needed
 from app.services.query_rewrite import rewrite_query
 from app.services.llm_query_rewrite import build_llm_query_rewrite, select_query_rewrite
 from app.services.amap_service import AmapService
 from app.services.prompt_config import get_prompt_config
+from app.services.user_preferences import PREFERENCE_PROFILE_KEY
 from app.services.ability_config import filter_enabled_ability_tools
 from app.harness.input_gate import run_input_gate
 from app.schemas.tools import AmapPoiSearchInput, AmapRoutePlanInput, BuildAmapUriInput
@@ -118,6 +126,16 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
         client_context = _normalise_client_context(payload.get("client_context") or {})
         payload = {**payload, "client_context": client_context}
         conversation, user = _resolve_conversation_and_user(session, payload)
+        experiment_assignments = resolve_experiment_assignments(
+            user_id=str(user.id),
+            device_uid=user.device_uid,
+            conversation_id=str(conversation.id),
+            client_context=client_context,
+            metadata=payload.get("metadata") or {},
+        )
+        experiments = experiment_metadata(experiment_assignments)
+        client_context = {**client_context, "experiment_assignments": experiment_assignments}
+        payload = {**payload, "client_context": client_context}
         _persist_client_location_context(
             session,
             user=user,
@@ -134,6 +152,7 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
                 "client_turn_id": payload.get("client_turn_id"),
                 "metadata": payload.get("metadata", {}),
                 "client_context": client_context,
+                "experiment_assignments": experiment_assignments,
             },
         )
         active_help_card = _active_help_card(session, conversation.id, payload.get("metadata", {}))
@@ -208,13 +227,15 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
                 "message": payload["message"],
                 "metadata": payload.get("metadata", {}),
                 "client_context": client_context,
+                "experiment_assignments": experiment_assignments,
+                "experiment_variant_ids": experiments["variant_ids"],
                 "prompt_versions": active_prompt_versions,
             },
         )
         session.add(agent_run)
         session.flush()
 
-        retriever = DbKnowledgeRetriever(session, agent_run=agent_run, turn=user_turn, question=question)
+        retriever = DbKnowledgeRetriever(session, agent_run=agent_run, turn=user_turn, question=question, user=user)
         context_provider = DbConversationContextProvider(session)
         # Product-path tool execution is intentionally rooted at
         # DbPipiAbilityCenter below. DbToolExecutor is an internal persistence
@@ -260,6 +281,8 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
                     "latest_user_context": latest_user_context,
                     "active_help_card_id": str(active_help_card.id) if active_help_card else None,
                     "client_context": payload.get("client_context") or {},
+                    "experiment_assignments": experiment_assignments,
+                    "experiments": experiments,
                     "question_id": str(question.id) if question else None,
                     "user_id": str(user.id),
                 },
@@ -302,6 +325,8 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
             "latest_user_context": latest_user_context,
             "active_help_card_id": str(active_help_card.id) if active_help_card else None,
             "client_context": payload.get("client_context") or {},
+            "experiment_assignments": experiment_assignments,
+            "experiments": experiments,
             "question_id": str(question.id) if question else None,
             "user_id": str(user.id),
             "context_provider": context_provider,
@@ -340,6 +365,8 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
                         "latest_user_context": latest_user_context,
                         "active_help_card_id": str(active_help_card.id) if active_help_card else None,
                         "client_context": payload.get("client_context") or {},
+                        "experiment_assignments": experiment_assignments,
+                        "experiments": experiments,
                     },
                 },
             )
@@ -381,6 +408,8 @@ async def run_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
             "query_rewrite": state.get("query_rewrite"),
             "loop": _loop_metadata(state),
             "runtime_path": "product",
+            "experiments": experiments,
+            "prompt_versions": active_prompt_versions,
         }
         llm_query_rewrite_metadata = (state.get("metadata") or {}).get("llm_query_rewrite")
         if isinstance(llm_query_rewrite_metadata, dict):
@@ -457,6 +486,18 @@ def _safe_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
         for key, value in metadata.items()
         if (safe_value := _json_safe_value(value)) is not _UNSAFE_JSON_VALUE
     }
+
+
+def _experiment_assignments_from_state(state: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = dict(state.get("metadata") or {})
+    assignments = metadata.get("experiment_assignments")
+    if isinstance(assignments, list):
+        return [dict(item) for item in assignments if isinstance(item, dict)]
+    context = dict(metadata.get("client_context") or {})
+    assignments = context.get("experiment_assignments")
+    if isinstance(assignments, list):
+        return [dict(item) for item in assignments if isinstance(item, dict)]
+    return []
 
 
 def _query_rewrite_selection_payload(
@@ -551,6 +592,10 @@ def _state_from_loop_result(
             "total_latency_ms": result_state.get("total_latency_ms"),
             "shadow_summary": result_state.get("shadow_summary"),
             "shadow_reasoner_results": result_state.get("shadow_reasoner_results"),
+            "reasoner_provider_fallback_summary": result_state.get(
+                "reasoner_provider_fallback_summary"
+            ),
+            "reasoner_provider_fallbacks": result_state.get("reasoner_provider_fallbacks"),
         }
     )
     return state
@@ -615,6 +660,7 @@ def _loop_metadata(state: dict[str, Any]) -> dict[str, Any]:
             for event in trace
             if event.get("event") == "tool_result" and isinstance(event.get("data"), dict)
         ],
+        "reasoner_provider_fallback": state.get("reasoner_provider_fallback_summary"),
     }
 
 
@@ -697,11 +743,13 @@ class DbKnowledgeRetriever:
         agent_run: AgentRun,
         turn: Any,
         question: Question | None,
+        user: Any | None = None,
     ) -> None:
         self.session = session
         self.agent_run = agent_run
         self.turn = turn
         self.question = question
+        self.user = user
         self.retrieval_run: RetrievalRun | None = None
 
     def retrieve(self, state: dict[str, Any]) -> dict[str, Any]:
@@ -890,7 +938,11 @@ class DbKnowledgeRetriever:
             return []
 
         prompt_config = get_prompt_config(self.session, "area_food_evidence_policy")
-        preference = _area_food_preference(query, prompt_config.get("config_json") or {})
+        preference = _area_food_preference(
+            query,
+            prompt_config.get("config_json") or {},
+            user_preference_memory=_user_preference_memory(self.user),
+        )
         cuisine = preference.get("display_food") or _food_label(query)
         keyword = preference.get("search_keyword") or _amap_food_keyword(cuisine)
         display_food = _display_food_label(cuisine)
@@ -917,15 +969,52 @@ class DbKnowledgeRetriever:
             "status": search.status,
             "disabled": search.disabled,
         }
+        if preference:
+            metadata["area_food_preference"] = {
+                "rule_name": preference.get("rule_name"),
+                "source": preference.get("source"),
+                "search_keyword": preference.get("search_keyword"),
+                "display_food": preference.get("display_food"),
+            }
         if search.disabled:
             metadata["amap_disabled"] = True
             run.metadata_json = metadata
             self.session.flush()
-            return []
+            if _web_reference_provider_enabled(self.session):
+                return []
+            metadata["amap"]["fallback"] = "local_area_place"
+            run.metadata_json = metadata
+            self.session.flush()
+            return self._add_local_area_place_fallback(
+                run,
+                service=service,
+                city=city,
+                area=area,
+                center=center,
+                cuisine=cuisine,
+                display_food=display_food,
+                preference=preference,
+                search_run_id=search.search_run_id,
+            )
         if search.status != "succeeded" or not search.candidates:
             run.metadata_json = metadata
             self.session.flush()
-            return []
+            if _web_reference_provider_enabled(self.session):
+                return []
+            metadata["amap"]["fallback"] = "local_area_place"
+            run.metadata_json = metadata
+            self.session.flush()
+            return self._add_local_area_place_fallback(
+                run,
+                service=service,
+                city=city,
+                area=area,
+                center=center,
+                cuisine=cuisine,
+                display_food=display_food,
+                preference=preference,
+                search_run_id=search.search_run_id,
+            )
 
         candidate = _choose_amap_candidate(
             search.candidates,
@@ -1027,6 +1116,105 @@ class DbKnowledgeRetriever:
                     "prompt_config_key": prompt_config.get("key"),
                     "prompt_config_version": prompt_config.get("version"),
                     "prompt_config_source": prompt_config.get("source"),
+                    "preference_source": preference.get("source"),
+                    "preference_rule_name": preference.get("rule_name"),
+                    "card_title": title,
+                    "title": title,
+                    "subtitle": subtitle,
+                    "decision_factor": decision_text,
+                    "decision_factor_key": "nearby_sichuan_stable" if cuisine == "川菜" else "nearby_food_stable",
+                    "target_type": "restaurant",
+                    "location_state": "in_area",
+                    "place": place,
+                    "route": route_payload,
+                    "action": {
+                        "type": "open_amap",
+                        "label": action.label,
+                        "uri": action.uri,
+                    },
+                },
+            )
+        ]
+
+    def _add_local_area_place_fallback(
+        self,
+        run: RetrievalRun,
+        *,
+        service: AmapService,
+        city: str,
+        area: str,
+        center: tuple[float, float],
+        cuisine: str,
+        display_food: str,
+        preference: dict[str, Any],
+        search_run_id: str | None,
+    ) -> list[dict[str, Any]]:
+        title = _local_area_place_title(area=area, display_food=display_food, cuisine=cuisine)
+        target_lng, target_lat = _local_area_place_coordinates(center)
+        settings = get_settings()
+        action = service.build_uri(
+            BuildAmapUriInput(
+                target_name=title,
+                target_lng=target_lng,
+                target_lat=target_lat,
+                origin_lng=center[0],
+                origin_lat=center[1],
+                mode=settings.amap_route_mode_default,
+            )
+        )
+        route_summary = _local_area_route_summary(area)
+        decision_text = _amap_area_decision_text(
+            area=area,
+            display_food=display_food,
+            route_summary=route_summary,
+            decision_prefix=preference.get("decision_prefix"),
+        )
+        subtitle = f"{area} · {display_food}" if display_food else f"{area}附近"
+        place = {
+            "provider": "amap",
+            "poi_id": _local_area_place_id(city=city, area=area, cuisine=cuisine),
+            "name": title,
+            "address": f"{city}{area}附近",
+            "location": {"lng": target_lng, "lat": target_lat, "coord_type": "gcj02"},
+            "tel": None,
+            "typecode": "050000",
+        }
+        route_payload = {
+            "provider": "amap",
+            "mode": settings.amap_route_mode_default,
+            "distance_meters": 680,
+            "duration_seconds": 540,
+            "summary_text": route_summary,
+            "route_run_id": None,
+        }
+        has_specific_taste = bool(
+            (display_food and display_food != "餐厅") or preference.get("decision_prefix")
+        )
+        return [
+            self._add_hit(
+                run,
+                source_type="local_area_poi_fallback",
+                source_id=place["poi_id"],
+                title=title,
+                snippet=decision_text,
+                score=0.86,
+                payload={
+                    "has_answer_evidence": True,
+                    "has_place_evidence": True,
+                    "has_verified_non_ai_image": False,
+                    "has_taste_or_preference_evidence": has_specific_taste,
+                    "evidence_layers": [
+                        "amap_poi",
+                        "route",
+                        "decision_factor",
+                        "local_fallback",
+                        *(["taste_or_preference"] if has_specific_taste else []),
+                    ],
+                    "amap_poi_search_run_id": search_run_id,
+                    "version": "onsite_food_beijing_v1",
+                    "source_answer_type": "local_area_poi_fallback",
+                    "preference_source": preference.get("source"),
+                    "preference_rule_name": preference.get("rule_name"),
                     "card_title": title,
                     "title": title,
                     "subtitle": subtitle,
@@ -1287,10 +1475,13 @@ class DbPipiAbilityCenter:
             graph_state = self._with_context_and_query_rewrite(graph_state)
             retrieval_run = self.retriever.retrieve(graph_state)
             hits = list(retrieval_run.get("hits") or [])
+            evidence_pack = build_evidence_pack(hits, retrieval_run=retrieval_run)
             data = {
                 "retrieval_run": retrieval_run,
                 "retrieval_hits": hits,
                 "hits": hits,
+                "evidence_pack": evidence_pack,
+                "evidence_pack_summary": summarize_evidence_pack(evidence_pack),
                 "context": graph_state.get("context"),
                 "query_rewrite": graph_state.get("query_rewrite"),
             }
@@ -1507,6 +1698,7 @@ class DbToolExecutor:
             subtitle = "四季民福故宫店 · 默认 2 人"
             decision_factor = "第一次来四季民福，先吃招牌，口味最稳。"
         image_status = "attached" if image is not None else "missing"
+        experiment_assignments = _experiment_assignments_from_state(state)
         card = RecommendationCard(
             question_id=self.question.id,
             conversation_id=self.question.conversation_id,
@@ -1549,6 +1741,8 @@ class DbToolExecutor:
                     "retrieval_run_id": (state.get("retrieval_run") or {}).get("id"),
                 },
                 "ui": {"layout": "minimal_recommendation", "show_actions": False},
+                "experiment_assignments": experiment_assignments,
+                "experiments": experiment_metadata(experiment_assignments),
                 "followups": [],
                 "composer": {
                     "provider": draft.model_provider,
@@ -1632,6 +1826,10 @@ class DbToolExecutor:
             else raw_message or effective_message
         )
         help_payload = _help_card_payload(message)
+        experiment_assignments = _experiment_assignments_from_state(state)
+        if experiment_assignments:
+            help_payload["experiment_assignments"] = experiment_assignments
+            help_payload["experiments"] = experiment_metadata(experiment_assignments)
         title = str(help_payload["title"])
         context_text = _help_context_text(help_payload)
         help_card = HelpCard(
@@ -1725,6 +1923,16 @@ class DbToolExecutor:
             help_card.status = "published"
             help_card.published_at = utcnow()
             help_card.question.status = "help_published"
+        record_user_behavior_event(
+            self.session,
+            event_type="help_card_published",
+            user_id=self.user_id,
+            conversation_id=help_card.conversation_id,
+            turn_id=self.turn.id,
+            help_card_id=help_card.id,
+            source="pipi_chat_graph",
+            payload_json={"status": help_card.status, "tool_name": "publish_help_card"},
+        )
         self.help_cards.append(help_card)
         self.ui_events.append(build_help_ui_event(help_card, "help_card_published"))
         return {"help_card_id": str(help_card.id), "ui_event": "help_card_published"}
@@ -1735,6 +1943,14 @@ class DbToolExecutor:
         raw_text = str(arguments.get("raw_text") or arguments.get("text") or state["user_message"]).strip()
         if not raw_text:
             raise ValueError("raw_text required")
+        quality = assess_one_liner_quality(raw_text)
+        if not quality.accepted:
+            return {
+                "status": "skipped",
+                "reason": "one_liner_low_quality",
+                "quality": one_liner_quality_metadata(quality),
+                "tool_call_status": "skipped",
+            }
         if help_card.owner_user_id == self.user_id:
             return {
                 "status": "skipped",
@@ -1760,7 +1976,21 @@ class DbToolExecutor:
                 "help_answer_id": str(existing.id),
                 "tool_call_status": "skipped",
             }
+        sibling_answers = self.session.scalars(
+            select(HelpAnswer).where(HelpAnswer.help_card_id == help_card.id)
+        )
+        for sibling in sibling_answers:
+            sibling_key = str((sibling.evidence_json or {}).get("normalized_key") or "")
+            sibling_key = sibling_key or normalize_one_liner_key(sibling.normalized_text or sibling.raw_text)
+            if sibling_key and sibling_key == quality.normalized_key:
+                return {
+                    "status": "skipped",
+                    "reason": "duplicate_answer",
+                    "help_answer_id": str(sibling.id),
+                    "tool_call_status": "skipped",
+                }
 
+        reward = _help_reward_payload(help_card)
         answer = HelpAnswer(
             help_card_id=help_card.id,
             answer_user_id=self.user_id,
@@ -1768,9 +1998,41 @@ class DbToolExecutor:
             normalized_text=raw_text,
             status="submitted",
             reward_status="pending",
-            evidence_json={"evidence_type": "human_one_liner"},
+            evidence_json={
+                "evidence_type": "human_one_liner",
+                "reward": reward,
+                "quality": one_liner_quality_metadata(quality),
+                "normalized_key": quality.normalized_key,
+            },
         )
         self.session.add(answer)
+        self.session.flush()
+        self.session.add(
+            RewardEvent(
+                user_id=self.user_id,
+                help_card_id=help_card.id,
+                help_answer_id=answer.id,
+                event_type="one_liner_submitted",
+                label=str(reward["label"]),
+                value=int(reward["value"]),
+                status="pending",
+                payload_json={
+                    "help_card_title": help_card.title,
+                    "source": "pipi_chat_graph",
+                },
+            )
+        )
+        record_user_behavior_event(
+            self.session,
+            event_type="one_liner_submitted",
+            user_id=self.user_id,
+            conversation_id=help_card.conversation_id,
+            turn_id=self.turn.id,
+            help_card_id=help_card.id,
+            help_answer_id=answer.id,
+            source="pipi_chat_graph",
+            payload_json={"reward": reward, "tool_name": "submit_one_liner_answer"},
+        )
         help_card.answer_count += 1
         help_card.status = "collecting"
         help_card.question.status = "collecting_answers"
@@ -1861,89 +2123,34 @@ def finalize_help_card_now(
     agent_run: AgentRun | None = None,
     tool_call: Any | None = None,
 ) -> RecommendationCard:
+    """Deprecated compatibility wrapper around PipiFinalizeGraph.
+
+    Product finalization must flow through ``run_finalize_graph_for_help_card`` so
+    ToolCall, IntentAnswer, LightEvent, and RewardEvent side effects stay on the
+    audited PipiFinalizeGraph path. Keep this function only for old imports.
+    """
+
     if help_card.final_recommendation_card is not None:
         return help_card.final_recommendation_card
     if help_card.answer_count < help_card.min_answers_required:
         raise ValueError("not enough answers to finalize")
 
-    image = ensure_seongsu_image(session)
-    intent = ensure_shopping_intent(session)
-    card = RecommendationCard(
-        question_id=help_card.question_id,
-        conversation_id=help_card.conversation_id,
-        user_id=help_card.owner_user_id,
-        agent_run_id=agent_run.id if agent_run else None,
-        tool_call_id=tool_call.id if tool_call else None,
-        image_asset_id=image.id,
-        image_required=False,
-        image_status="attached",
-        source="pipi_finalized_from_help",
-        title="去圣水",
-        subtitle=None,
-        reason="比明洞更生活方式，也更适合买小众品牌和美妆。",
-        bullets_json=[],
-        warning=None,
-        confidence=0.86,
-        status="active",
-        payload_json={
-            "source_help_card_id": str(help_card.id),
-            "item": {"title": "去圣水"},
-            "decision_factor": {"text": "比明洞更生活方式，也更适合买小众品牌和美妆。"},
-            "followups": [],
-        },
-    )
-    session.add(card)
-    session.flush()
+    from app.jobs.finalizer_job import run_finalize_graph_for_help_card
 
-    intent_answer = IntentAnswer(
-        intent_id=intent.id,
-        image_asset_id=image.id,
-        answer_text=card.reason,
-        intent_key=intent.key,
-        intent_text=help_card.title,
-        answer_title=card.title,
-        answer_summary=card.reason,
-        constraints_json={
-            "help_card_id": str(help_card.id),
-            "title": help_card.title,
-            "context": help_card.context_text,
-            **(help_card.payload_json or {}),
-        },
-        source_type="help_final",
-        source_ref_id=str(help_card.id),
-        confidence=card.confidence,
-        success_count=0,
-        rejection_count=0,
-        locale="zh-CN",
-        tags_json=["help_final", "korea", "seongsu"],
-        evidence_json={"source_type": "help_final", "help_card_id": str(help_card.id)},
-        priority=30,
-        is_active=True,
-    )
-    session.add(intent_answer)
+    final_state = run_finalize_graph_for_help_card(session, help_card.id)
+    if final_state.get("status") == "needs_more_answers":
+        raise ValueError("not enough answers to finalize")
+    if final_state.get("status") == "failed":
+        raise ValueError("finalize graph failed")
 
-    help_card.final_recommendation_card_id = card.id
-    help_card.status = "final_ready"
-    help_card.final_ready_at = utcnow()
-    help_card.question.current_recommendation_card_id = card.id
-    help_card.question.status = "final_ready"
-    for answer in help_card.answers:
-        answer.status = "used"
-        answer.reward_status = "granted"
-
-    light = LightEvent(
-        user_id=help_card.owner_user_id,
-        conversation_id=help_card.conversation_id,
-        question_id=help_card.question_id,
-        help_card_id=help_card.id,
-        recommendation_card_id=card.id,
-        type="final_ready",
-        title="有人帮你选好了",
-        body=f"{help_card.title} 有结果了。",
-        payload_json={"card_id": str(card.id)},
-    )
-    session.add(light)
-    session.flush()
+    card = help_card.final_recommendation_card
+    if card is None:
+        final_card = final_state.get("final_recommendation_card") or {}
+        card_id = final_card.get("id") or final_card.get("card_id")
+        if card_id:
+            card = session.get(RecommendationCard, uuid.UUID(str(card_id)))
+    if card is None:
+        raise ValueError("final recommendation card was not created")
     return card
 
 
@@ -2154,6 +2361,11 @@ def _chat_response_contract(
     agent_run_id: str,
     tool_calls: list[Any],
 ) -> dict[str, Any]:
+    metadata = state.get("metadata") if isinstance(state.get("metadata"), dict) else {}
+    input_gate = {}
+    if isinstance(metadata, dict) and isinstance(metadata.get("input_gate_result"), dict):
+        input_gate = dict(metadata["input_gate_result"])
+
     if cards:
         card = serialize_card(cards[0])
         location_state = str(card.get("location_state") or "unknown")
@@ -2166,7 +2378,17 @@ def _chat_response_contract(
         data = {"help_card": help_card}
     else:
         message = str(payload.get("message") or state.get("user_message") or "")
-        if detect_chitchat(message) is not None:
+        intent_value = str(state.get("intent") or "")
+        gate_intent = str(input_gate.get("intent_type") or "")
+        if gate_intent in {"greeting", "smalltalk", "app_help"} or intent_value in {
+            "greeting",
+            "smalltalk",
+            "app_help",
+        }:
+            response_kind = "chitchat"
+            location_state = "unknown"
+            data = {}
+        elif detect_chitchat(message) is not None or detect_app_help(message) is not None:
             response_kind = "chitchat"
             location_state = "unknown"
             data = {}
@@ -2190,10 +2412,6 @@ def _chat_response_contract(
     if include_debug:
         card_payload = cards[0].payload_json if cards else {}
         provenance = (card_payload or {}).get("provenance") or {}
-        input_gate = {}
-        metadata = state.get("metadata") if isinstance(state.get("metadata"), dict) else {}
-        if isinstance(metadata, dict) and isinstance(metadata.get("input_gate_result"), dict):
-            input_gate = dict(metadata["input_gate_result"])
         debug = {
             "enabled": True,
             "selected_tool": selected_tool,
@@ -3139,6 +3357,38 @@ def _nearby_summary(area: str) -> str:
     return f"在{area}附近"
 
 
+def _web_reference_provider_enabled(session: Session) -> bool:
+    from app.retrieval.tavily_service import TavilyService
+
+    return TavilyService(session).settings.web_search_provider == "tavily"
+
+
+def _local_area_route_summary(area: str) -> str:
+    return f"步行约 9 分钟，在{area}附近"
+
+
+def _local_area_place_coordinates(center: tuple[float, float]) -> tuple[float, float]:
+    lng, lat = center
+    return round(lng + 0.0032, 6), round(lat + 0.0018, 6)
+
+
+def _local_area_place_id(*, city: str, area: str, cuisine: str) -> str:
+    compact = _compact(f"{city}-{area}-{cuisine}") or "area-food"
+    return f"local-amap-{compact}"
+
+
+def _local_area_place_title(*, area: str, display_food: str, cuisine: str) -> str:
+    if display_food == "川菜":
+        return f"{area}稳稳川菜馆"
+    if display_food == "热干面":
+        return f"{area}热干面小店"
+    if display_food:
+        return f"{area}{display_food}小馆"
+    if cuisine and cuisine != "餐厅":
+        return f"{area}{cuisine}小馆"
+    return f"{area}附近小馆"
+
+
 def _amap_food_keyword(label: str) -> str:
     return label if label not in {"餐厅", "约会餐厅", "清淡餐厅"} else "餐饮"
 
@@ -3168,13 +3418,21 @@ def _amap_area_decision_text(
     return f"{area}附近先选这家，{route_text}。"
 
 
-def _area_food_preference(message: str, config: dict[str, Any]) -> dict[str, Any]:
+def _area_food_preference(
+    message: str,
+    config: dict[str, Any],
+    *,
+    user_preference_memory: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     rules = config.get("profile_cuisine_rules") or []
+    memory_hint = _preference_memory_hint(user_preference_memory)
     for raw_rule in rules:
         if not isinstance(raw_rule, dict):
             continue
         when_any = [str(term) for term in raw_rule.get("when_any", []) if term]
-        if when_any and any(term in message for term in when_any):
+        explicit_match = bool(when_any and any(term in message for term in when_any))
+        memory_match = bool(memory_hint and when_any and any(term in memory_hint for term in when_any))
+        if explicit_match or memory_match:
             return {
                 "search_keyword": raw_rule.get("search_keyword"),
                 "display_food": raw_rule.get("display_food"),
@@ -3183,8 +3441,62 @@ def _area_food_preference(message: str, config: dict[str, Any]) -> dict[str, Any
                 "reject_terms": [str(term) for term in raw_rule.get("reject_terms", []) if term],
                 "require_preferred_match": bool(raw_rule.get("require_preferred_match", False)),
                 "rule_name": raw_rule.get("name"),
+                "source": "current_query" if explicit_match else "user_memory",
             }
     return {}
+
+
+def _user_preference_memory(user: Any | None) -> dict[str, Any] | None:
+    profile = getattr(user, "profile_json", None)
+    if not isinstance(profile, dict):
+        return None
+    memory = profile.get(PREFERENCE_PROFILE_KEY)
+    return dict(memory) if isinstance(memory, dict) else None
+
+
+def _preference_memory_hint(memory: dict[str, Any] | None) -> str:
+    if not isinstance(memory, dict):
+        return ""
+    summary = memory.get("summary") if isinstance(memory.get("summary"), dict) else {}
+    terms: list[str] = []
+    for key in (
+        "top_cuisines",
+        "top_food_items",
+        "taste_preferences",
+        "spice_preferences",
+        "budget_preferences",
+        "companions",
+        "areas",
+        "accepted_items",
+    ):
+        values = summary.get(key)
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            value = item.get("value") if isinstance(item, dict) else item
+            text = str(value or "").strip()
+            if text:
+                terms.append(text)
+                terms.extend(_preference_synonyms(text))
+    return " ".join(dict.fromkeys(terms))
+
+
+def _preference_synonyms(value: str) -> list[str]:
+    mapping = {
+        "粤菜": ["广东人", "广东口味", "粤"],
+        "茶餐厅": ["广东人", "粤"],
+        "清淡": ["不吃辣", "清爽"],
+        "安静": ["带爸妈", "约会"],
+        "not_spicy": ["不吃辣", "不能吃辣", "不太能吃辣", "少辣", "清淡"],
+        "parents": ["带爸妈", "带父母", "带长辈", "家庭"],
+        "date": ["约会", "纪念日"],
+        "杭帮菜": ["江浙", "杭帮", "清淡"],
+        "本帮菜": ["江浙", "本帮", "清淡"],
+        "淮扬菜": ["江浙", "淮扬", "清淡"],
+        "东北菜": ["东北人", "东北菜"],
+        "素食": ["吃素", "素菜"],
+    }
+    return mapping.get(value, [])
 
 
 def _food_label(message: str) -> str:
@@ -3407,6 +3719,17 @@ def _looks_like_sijiminfu_order_query(message: str) -> bool:
     if not has_venue:
         return False
     return any(hint.lower() in normalized for hint in _ORDERING_LANGUAGE_HINTS)
+
+
+def _help_reward_payload(help_card: HelpCard) -> dict[str, Any]:
+    payload = help_card.payload_json or {}
+    reward = dict(payload.get("reward") or {})
+    value = int(reward.get("value") or payload.get("reward_value") or 10)
+    return {
+        "label": str(reward.get("label") or f"+{value}"),
+        "value": value,
+        "status": str(reward.get("status") or "pending"),
+    }
 
 
 def _restaurant_image_query(message: str) -> str:

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import ImageAsset, Intent, IntentAnswer
@@ -17,6 +20,10 @@ SHOPPING_INTENT_ID = uuid.UUID("44444444-4444-4444-8444-444444444444")
 FOOD_INTENT_ANSWER_ID = uuid.UUID("55555555-5555-4555-8555-555555555555")
 SHOPPING_INTENT_ANSWER_ID = uuid.UUID("66666666-6666-4666-8666-666666666666")
 SIJIMINFU_INTENT_ANSWER_ID = uuid.UUID("88888888-8888-4888-8888-888888888888")
+SEED_PACK_SOURCE_TYPE = "curated_seed_pack_v1"
+SEED_PACK_MIN_ANSWER_COUNT = 100
+SEED_PACK_NAMESPACE = uuid.UUID("99999999-9999-4999-8999-999999999999")
+SEED_PACK_PATH = Path(__file__).resolve().parents[1] / "data" / "intent_seed_pack_v1.json"
 
 
 def seed_initial_data(session: Session) -> None:
@@ -25,6 +32,7 @@ def seed_initial_data(session: Session) -> None:
     _upsert_all(session, ImageAsset, _image_assets())
     _upsert_all(session, Intent, _intents())
     _upsert_all(session, IntentAnswer, _intent_answers())
+    seed_intent_answer_pack(session)
     session.commit()
 
 
@@ -37,6 +45,102 @@ def _upsert_all(session: Session, model: type, rows: Iterable[dict]) -> None:
 
         for key, value in row.items():
             setattr(instance, key, value)
+
+
+def seed_intent_answer_pack(session: Session) -> int:
+    """Load the reviewed v1 IntentAnswer seed pack and return row count."""
+
+    rows = _seed_pack_rows()
+    _upsert_all(session, Intent, _seed_pack_intents(rows))
+    _upsert_all(session, IntentAnswer, _seed_pack_intent_answers(rows))
+    return len(rows)
+
+
+def seed_pack_answer_count(session: Session) -> int:
+    return int(
+        session.scalar(
+            select(func.count()).select_from(IntentAnswer).where(IntentAnswer.source_type == SEED_PACK_SOURCE_TYPE)
+        )
+        or 0
+    )
+
+
+def load_seed_pack_entries() -> list[dict[str, Any]]:
+    payload = json.loads(SEED_PACK_PATH.read_text(encoding="utf-8"))
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("intent_seed_pack_v1 entries must be a list")
+    return [dict(entry) for entry in entries]
+
+
+def _seed_pack_rows() -> list[dict[str, Any]]:
+    rows = load_seed_pack_entries()
+    if len(rows) < SEED_PACK_MIN_ANSWER_COUNT:
+        raise ValueError(f"intent seed pack must contain at least {SEED_PACK_MIN_ANSWER_COUNT} entries")
+    return rows
+
+
+def _seed_pack_intents(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    intents: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        intent_key = str(row.get("intent_key") or "").strip()
+        if not intent_key:
+            raise ValueError("seed pack row missing intent_key")
+        intents[intent_key] = {
+            "id": _seed_uuid(f"intent:{intent_key}"),
+            "key": intent_key,
+            "name": str(row.get("intent_name") or intent_key),
+            "description": f"Seed pack v1 intent for {row.get('domain') or 'decision'}",
+            "examples_json": [{"text": str(row.get("answer_title") or row.get("answer_summary") or intent_key)}],
+            "is_active": True,
+        }
+    return list(intents.values())
+
+
+def _seed_pack_intent_answers(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    answers: list[dict[str, Any]] = []
+    for row in rows:
+        intent_key = str(row.get("intent_key") or "").strip()
+        source_ref_id = f"seed-pack-v1:{intent_key}"
+        constraints = dict(row.get("constraints") or {})
+        decision_factor = str(row.get("decision_factor") or row.get("answer_summary") or "")
+        answers.append(
+            {
+                "id": _seed_uuid(f"answer:{source_ref_id}"),
+                "intent_id": _seed_uuid(f"intent:{intent_key}"),
+                "image_asset_id": None,
+                "answer_text": str(row.get("answer_summary") or decision_factor or row.get("answer_title") or ""),
+                "intent_key": intent_key,
+                "intent_text": str(row.get("intent_name") or intent_key),
+                "answer_title": str(row.get("answer_title") or intent_key),
+                "answer_summary": str(row.get("answer_summary") or decision_factor),
+                "constraints_json": constraints,
+                "source_type": SEED_PACK_SOURCE_TYPE,
+                "source_ref_id": source_ref_id,
+                "confidence": float(row.get("confidence") or 0.75),
+                "success_count": 0,
+                "rejection_count": 0,
+                "last_used_at": None,
+                "locale": "zh-CN",
+                "tags_json": [str(tag) for tag in row.get("tags") or []],
+                "evidence_json": {
+                    "source": SEED_PACK_SOURCE_TYPE,
+                    "pack_id": "intent_seed_pack_v1",
+                    "approved": True,
+                    "target_type": row.get("target_type"),
+                    "location_state": row.get("location_state"),
+                    "decision_factor": {"text": decision_factor, "key": str(row.get("task") or "seed_pack")},
+                    "constraints": constraints,
+                },
+                "priority": int(row.get("priority") or 80),
+                "is_active": True,
+            }
+        )
+    return answers
+
+
+def _seed_uuid(value: str) -> uuid.UUID:
+    return uuid.uuid5(SEED_PACK_NAMESPACE, value)
 
 
 def _image_assets() -> list[dict]:

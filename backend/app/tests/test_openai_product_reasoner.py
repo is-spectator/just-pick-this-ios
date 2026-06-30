@@ -248,5 +248,16 @@ def test_openai_product_reasoner_invalid_schema_falls_back_to_deterministic(
             if event.get("event") == "reasoner_decision"
         ]
         assert "fallback" in fallback_statuses
+        fallback_events = [
+            event
+            for event in output.get("loop_trace", [])
+            if event.get("event") == "reasoner_provider_fallback"
+        ]
+        assert fallback_events
+        assert fallback_events[0].get("data", {}).get("error_type") == "schema_error"
+        summary = body.get("metadata", {}).get("loop", {}).get("reasoner_provider_fallback")
+        assert summary["schema_errors"] >= 1
+        assert summary["schema_error_rate"] > 0
+        assert summary["fallback_rate"] > 0
 
     run_async(scenario)

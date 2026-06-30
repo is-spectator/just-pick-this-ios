@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Header, Request
 
 from app.schemas.auth import (
+    DeleteMeResponse,
     LogoutRequest,
     LogoutResponse,
     MeResponse,
@@ -89,6 +90,20 @@ def update_me(
             session,
             authorization,
             display_name=payload.display_name,
+            ip_address=_client_host(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+
+
+@router.delete("/me", response_model=DeleteMeResponse)
+def delete_me(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    with session_scope() as session:
+        return auth_service.delete_me_from_authorization(
+            session,
+            authorization,
             ip_address=_client_host(request),
             user_agent=request.headers.get("user-agent"),
         )

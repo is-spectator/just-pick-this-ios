@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.retrieval.evidence_pack import build_evidence_pack, summarize_evidence_pack
+
 
 class PipiContextPack(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True, str_strip_whitespace=True)
@@ -21,6 +23,7 @@ class PipiContextPack(BaseModel):
     active_question: dict[str, Any] | None = None
     recent_turns: list[dict[str, Any]] = Field(default_factory=list, max_length=3)
     retrieval_summary: dict[str, Any] | None = None
+    evidence_pack: dict[str, Any] | None = None
     strongest_evidence: list[dict[str, Any]] = Field(default_factory=list, max_length=5)
     allowed_tools: list[str] = Field(default_factory=list)
     facts: dict[str, Any] = Field(default_factory=dict)
@@ -35,6 +38,7 @@ class PipiContextPack(BaseModel):
             "input_gate_result": dict(self.input_gate_result or {}),
             "intent_type": self.intent_type,
             "recent_turns": list(self.recent_turns),
+            "evidence_pack": summarize_evidence_pack(self.evidence_pack),
             "facts": dict(self.facts),
         }
 
@@ -54,6 +58,7 @@ class ContextBuilder:
         active_help_card: dict[str, Any] | None = None,
         active_question: dict[str, Any] | None = None,
         retrieval_summary: dict[str, Any] | None = None,
+        evidence_pack: dict[str, Any] | None = None,
         strongest_evidence: list[dict[str, Any]] | None = None,
         conversation_summary: str | None = None,
         facts: dict[str, Any] | None = None,
@@ -78,6 +83,19 @@ class ContextBuilder:
             recent_turns=source_recent_turns,
             facts={**dict(gate_data.get("facts") or {}), **dict(facts or {})},
         )
+        strongest = _strongest_evidence(strongest_evidence or [])
+        resolved_evidence_pack = evidence_pack
+        if resolved_evidence_pack is None and strongest:
+            resolved_evidence_pack = build_evidence_pack(
+                strongest,
+                retrieval_run=retrieval_summary,
+            )
+        resolved_retrieval_summary = dict(retrieval_summary or {})
+        if resolved_evidence_pack is not None:
+            resolved_retrieval_summary.setdefault(
+                "evidence_pack",
+                summarize_evidence_pack(resolved_evidence_pack),
+            )
         return PipiContextPack(
             conversation_id=conversation_id or gate_data.get("conversation_id"),
             user_turn_id=user_turn_id or gate_data.get("user_turn_id") or gate_data.get("turn_id"),
@@ -91,8 +109,9 @@ class ContextBuilder:
             active_help_card=active_help_card,
             active_question=active_question,
             recent_turns=_recent_turns(source_recent_turns),
-            retrieval_summary=retrieval_summary,
-            strongest_evidence=_strongest_evidence(strongest_evidence or []),
+            retrieval_summary=resolved_retrieval_summary or None,
+            evidence_pack=resolved_evidence_pack,
+            strongest_evidence=strongest,
             allowed_tools=list(dict.fromkeys(resolved_allowed_tools)),
             facts=merged_facts,
             client_context={
@@ -113,6 +132,7 @@ class ContextBuilder:
         context = dict(state.get("context") or {})
         retrieval = dict(state.get("retrieval_run") or {})
         hits = list(state.get("retrieval_hits") or [])
+        evidence_pack = build_evidence_pack(hits, retrieval_run=retrieval) if hits else None
         return self.build(
             user_message=str(state.get("user_message") or ""),
             allowed_tools=allowed_tools,
@@ -127,6 +147,7 @@ class ContextBuilder:
             }
             if retrieval
             else None,
+            evidence_pack=evidence_pack,
             strongest_evidence=_strongest_evidence(hits),
         )
 

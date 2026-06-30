@@ -72,6 +72,20 @@ def test_product_benchmark_runner_writes_latency_results_and_reports(
     assert summary["ok"] is True
     assert summary["run_id"]
     assert summary["evaluated_cases"] == 2
+    assert summary["benchmark_coverage"]["suite_id"] == "product_unit"
+    assert summary["benchmark_coverage"]["case_count"] == 2
+    assert summary["benchmark_coverage"]["evaluated_case_count"] == 2
+    assert summary["benchmark_coverage"]["coverage_complete"] is False
+    assert summary["benchmark_coverage"]["is_limited_run"] is True
+    assert summary["benchmark_coverage"]["runtime_path_required"] == "product"
+    assert summary["benchmark_coverage"]["by_category"] == {
+        "area_food": 1,
+        "travel_shopping": 1,
+    }
+    assert summary["benchmark_coverage"]["evaluated_by_category"] == {
+        "area_food": 1,
+        "travel_shopping": 1,
+    }
     assert summary["guard"]["latency_rows"] == 2
     assert summary["stats"]["latency"]["count"] == 2
     assert summary["stats"]["latency"]["p50_ms"] is not None
@@ -109,6 +123,8 @@ def test_product_benchmark_runner_writes_latency_results_and_reports(
     assert (output.parent / "latest.json").exists()
     summary_md = (output / "product_benchmark_summary.md").read_text(encoding="utf-8")
     assert "P50 latency" in summary_md
+    assert "Benchmark Coverage" in summary_md
+    assert "Coverage complete" in summary_md
     assert "Slowest Cases" in summary_md
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -21,9 +22,25 @@ class TwoStepReasoner:
         return AnswerDecision(message="别查了，就这个。")
 
 
+class TimeoutAwareReasoner:
+    def next(self, state: PipiState) -> ToolDecision | AnswerDecision:
+        if not state.tool_results:
+            return ToolDecision(tool_name="search_knowledge", tool_args={"query": state.user_message}, reason="search first")
+        tool_result = state.tool_results[-1]["tool_result"]
+        if tool_result.get("ok") is False:
+            return AnswerDecision(message="工具超时了，我先不硬选。")
+        return AnswerDecision(message="别查了，就这个。")
+
+
 class FakeAbilityCenter:
     async def call(self, tool_name: str, tool_args: dict[str, Any], *, state: PipiState) -> ToolResult:
         return ToolResult(ok=True, tool_name=tool_name, data={"hits": []})
+
+
+class SlowAbilityCenter:
+    async def call(self, tool_name: str, tool_args: dict[str, Any], *, state: PipiState) -> ToolResult:
+        await asyncio.sleep(0.2)
+        return ToolResult(ok=True, tool_name=tool_name, data={"late": True})
 
 
 class NoToolAbilityCenter:
@@ -83,6 +100,25 @@ async def test_pipi_loop_feeds_tool_result_back_to_reasoner() -> None:
     assert len(reasoner.seen_states) == 2
     assert reasoner.seen_states[0].tool_results == []
     assert reasoner.seen_states[1].tool_results[0]["tool_result"]["tool_name"] == "search_knowledge"
+
+
+@pytest.mark.asyncio
+async def test_pipi_loop_tool_timeout_returns_failed_tool_result() -> None:
+    result = await PipiLoop(
+        reasoner=TimeoutAwareReasoner(),
+        ability_center=SlowAbilityCenter(),
+        evaluator=Evaluator(),
+        answer_gate=AnswerGate(),
+        tool_timeout_seconds=0.01,
+        max_iters=2,
+    ).run(PipiState(conversation_id="c", turn_id="t", user_message="我在大同吃什么"))
+
+    assert result.finish_reason == "answer"
+    assert result.message == "工具超时了，我先不硬选。"
+    tool_result = next(event for event in result.trace if event["event"] == "tool_result")
+    assert tool_result["data"]["status"] == "unavailable"
+    assert tool_result["data"]["data"]["timeout"] is True
+    assert tool_result["data"]["data"]["timeout_seconds"] == 0.01
 
 
 @pytest.mark.asyncio
@@ -197,6 +233,8 @@ def _datong_tool_result(tool_name: str) -> ToolResult:
                     "verified": True,
                     "displayable": True,
                     "is_ai_generated": False,
+                    "source_url": "https://example.com/datong-noodles",
+                    "source_domain": "example.com",
                 },
                 "item_title": "刀削面 + 肉丸子",
                 "decision_factor": "第一次来大同，地方记忆点最强。",

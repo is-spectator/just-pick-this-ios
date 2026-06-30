@@ -6,6 +6,7 @@ deterministic rules in V0 and keeps persistence behind tool calls.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal, NotRequired, Protocol, TypedDict, runtime_checkable
 
@@ -259,13 +260,32 @@ class PipiFinalizeGraph:
                 },
             }
 
-        evidence_ids = [answer.get("id", "") for answer in answers if answer.get("id")]
+        evidence_selection = _select_unique_evidence_answers(answers)
+        evidence_ids = evidence_selection["selected_ids"]
+        if len(evidence_ids) < min_required:
+            return {
+                **state,
+                "status": "needs_more_answers",
+                "final_answer": {
+                    "kind": "needs_more_answers",
+                    "reason": f"Need {min_required} useful unique answers before finalization.",
+                    "evidence_answer_ids": evidence_ids,
+                    "metadata": {
+                        "human_answer_count": len(answers),
+                        "unique_human_evidence_count": len(evidence_ids),
+                        "excluded_answer_ids": evidence_selection["excluded_ids"],
+                        "excluded_answer_reasons": evidence_selection["excluded_reasons"],
+                    },
+                },
+            }
+
         retrieval_hit_ids = [
             hit.get("source_id", "") for hit in state.get("retrieval_hits", []) if hit.get("source_id")
         ]
         decision = _deterministic_final_decision(
             state=state,
             evidence_ids=evidence_ids,
+            evidence_selection=evidence_selection,
             retrieval_hit_ids=retrieval_hit_ids,
         )
 
@@ -353,7 +373,7 @@ class PipiFinalizeGraph:
         self,
         state: PipiFinalizeGraphState,
     ) -> PipiFinalizeGraphState:
-        """Backward-compatible alias; audit tool_name stays standardized."""
+        """Deprecated alias; audit tool_name stays standardized."""
 
         return self.create_recommendation_card(state)
 
@@ -549,6 +569,8 @@ def create_recommendation_card(
 def create_final_recommendation_card(
     state: PipiFinalizeGraphState,
 ) -> PipiFinalizeGraphState:
+    """Deprecated module-level alias for legacy imports."""
+
     return PipiFinalizeGraph().create_final_recommendation_card(state)
 
 
@@ -568,6 +590,7 @@ def _deterministic_final_decision(
     *,
     state: PipiFinalizeGraphState,
     evidence_ids: list[str],
+    evidence_selection: dict[str, Any],
     retrieval_hit_ids: list[str],
 ) -> FinalAnswerDecision:
     payload = _best_retrieval_payload(state)
@@ -589,12 +612,82 @@ def _deterministic_final_decision(
         "metadata": {
             "composition": "deterministic_help_answers_finalized",
             "decision_factor": decision_factor,
+            "human_answer_count": len(state.get("help_answers", [])),
             "human_evidence_count": len(evidence_ids),
+            "unique_human_evidence_count": len(evidence_ids),
             "human_evidence_only": True,
             "raw_text_role": "human_evidence",
+            "excluded_answer_ids": evidence_selection.get("excluded_ids", []),
+            "excluded_answer_reasons": evidence_selection.get("excluded_reasons", {}),
             "retrieval_hit_ids": retrieval_hit_ids,
         },
     }
+
+
+def _selected_evidence_answer_ids(answers: list[HelpAnswerSnapshot], min_required: int) -> list[str]:
+    selected_ids = _select_unique_evidence_answers(answers)["selected_ids"]
+    return selected_ids if len(selected_ids) >= min_required else []
+
+
+def _select_unique_evidence_answers(answers: list[HelpAnswerSnapshot]) -> dict[str, Any]:
+    selected_ids: list[str] = []
+    excluded_ids: list[str] = []
+    excluded_reasons: dict[str, str] = {}
+    seen_fingerprints: set[str] = set()
+
+    for answer in answers:
+        answer_id = str(answer.get("id") or "").strip()
+        if not answer_id:
+            continue
+
+        if not _is_useful_human_evidence(answer):
+            excluded_ids.append(answer_id)
+            excluded_reasons[answer_id] = "not_useful"
+            continue
+
+        fingerprint = _answer_fingerprint(answer)
+        if not fingerprint:
+            excluded_ids.append(answer_id)
+            excluded_reasons[answer_id] = "empty_fingerprint"
+            continue
+
+        if fingerprint in seen_fingerprints:
+            excluded_ids.append(answer_id)
+            excluded_reasons[answer_id] = "duplicate"
+            continue
+
+        seen_fingerprints.add(fingerprint)
+        selected_ids.append(answer_id)
+
+    return {
+        "selected_ids": selected_ids,
+        "excluded_ids": excluded_ids,
+        "excluded_reasons": excluded_reasons,
+    }
+
+
+def _is_useful_human_evidence(answer: HelpAnswerSnapshot) -> bool:
+    text = str(answer.get("text") or "").strip()
+    compact = "".join(text.split())
+    if len(compact) < 4:
+        return False
+    generic_phrases = {
+        "随便",
+        "都行",
+        "不知道",
+        "不知道呢",
+        "我也不知道",
+        "好吃就行",
+        "都可以",
+    }
+    return compact not in generic_phrases
+
+
+def _answer_fingerprint(answer: HelpAnswerSnapshot) -> str:
+    text = str(answer.get("text") or "").strip().lower()
+    compact = re.sub(r"[\s\W_]+", "", text, flags=re.UNICODE)
+    compact = re.sub(r"\d+", "", compact)
+    return compact
 
 
 def _best_retrieval_payload(state: PipiFinalizeGraphState) -> dict[str, Any]:

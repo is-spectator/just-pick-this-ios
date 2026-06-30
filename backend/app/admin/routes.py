@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -50,17 +51,42 @@ from app.models import (
     ToolCall,
     Turn,
     User,
+    UserBehaviorEvent,
     WebSearchResult,
     WebSearchRun,
 )
+from app.services.abuse_safety_metrics import abuse_safety_summary
 from app.services.ability_config import list_ability_configs, serialize_ability_config, upsert_ability_config
+from app.services.answerer_quality import answerer_quality_summary
+from app.services.card_feedback_metrics import card_feedback_summary
+from app.services.cards import post_experience_review_summary
 from app.services.eval_review_service import (
+    append_case_review,
+    card_contract_summary,
     case_detail as eval_case_detail,
+    evidence_quality_summary,
+    help_card_quality_summary,
     list_eval_runs as list_eval_report_runs,
     low_quality_cases as eval_low_quality_cases,
+    low_quality_queue_summary,
     resolve_reports_root,
     review_payload as build_eval_review_payload,
+    review_alignment_summary,
+    review_workflow_summary,
+    routing_quality_summary,
 )
+from app.services.finalizer_metrics import finalizer_summary
+from app.services.intent_answer_import import (
+    import_intent_answer_drafts,
+    serialize_imported_intent_answer,
+)
+from app.services.intent_answer_metrics import intent_answer_memory_summary
+from app.services.help_feed import help_feed_conversion_summary
+from app.services.image_policy_metrics import image_policy_summary
+from app.services.personalization_metrics import personalization_summary
+from app.services.reward_loop_metrics import reward_loop_summary
+from app.services.runtime_latency import runtime_latency_summary
+from app.services.user_signal_metrics import user_signal_summary
 from app.services.prompt_config import (
     list_prompt_configs,
     list_prompt_versions,
@@ -68,6 +94,14 @@ from app.services.prompt_config import (
     run_prompt_replay,
     serialize_prompt_replay,
     upsert_prompt_config,
+)
+from app.services.seed_patch_workflow import (
+    create_seed_intent_answer_draft,
+    latest_accepted_seed_patch,
+    publish_seed_intent_answer,
+    rollback_seed_intent_answer,
+    seed_workflow_summary,
+    serialize_seed_intent_answer_draft,
 )
 
 
@@ -115,6 +149,24 @@ def _require_admin_role(request: Request, allowed: set[str]) -> None:
         raise HTTPException(status_code=403, detail="admin role is not allowed for this action")
 
 
+def _optional_mapping(value: Any, *, field_name: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise HTTPException(status_code=422, detail=f"{field_name} must be an object")
+    return dict(value)
+
+
+def _optional_mapping_or_text(value: Any, *, field_name: str) -> dict[str, Any] | str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, Mapping):
+        return dict(value)
+    raise HTTPException(status_code=422, detail=f"{field_name} must be an object or string")
+
+
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(_require_admin)])
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -148,6 +200,7 @@ TABLES: dict[str, TableConfig] = {
     "recommendation_cards": TableConfig(RecommendationCard),
     "help_cards": TableConfig(HelpCard),
     "help_answers": TableConfig(HelpAnswer),
+    "user_behavior_events": TableConfig(UserBehaviorEvent, read_only=True),
     "light_events": TableConfig(LightEvent),
     "web_search_runs": TableConfig(WebSearchRun),
     "web_search_results": TableConfig(WebSearchResult),
@@ -264,6 +317,307 @@ def list_admin_sessions(
     }
 
 
+@router.get("/api/runtime-latency")
+def admin_runtime_latency(
+    request: Request,
+    hours: int = Query(default=24, ge=1, le=720),
+    limit: int = Query(default=500, ge=1, le=5000),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = runtime_latency_summary(session, hours=hours, limit=limit)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_runtime_latency",
+        table_name="runtime_latency",
+        target_record_id=None,
+        request_json=_request_json(request, {"hours": hours, "limit": limit}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/help-feed/conversion-summary")
+def admin_help_feed_conversion_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 7, ge=1, le=24 * 90),
+    target_uplift: float = Query(default=0.2, ge=0.0, le=10.0),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = help_feed_conversion_summary(
+        session,
+        since_hours=since_hours,
+        target_uplift=target_uplift,
+    )
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_help_feed_conversion_summary",
+        table_name="help_feed_conversion_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours, "target_uplift": target_uplift}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/post-experience/summary")
+def admin_post_experience_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = post_experience_review_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_post_experience_summary",
+        table_name="post_experience_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/cards/feedback-summary")
+def admin_card_feedback_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = card_feedback_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_card_feedback_summary",
+        table_name="card_feedback_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/images/policy-summary")
+def admin_image_policy_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = image_policy_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_image_policy_summary",
+        table_name="image_policy_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/finalizer/summary")
+def admin_finalizer_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = finalizer_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_finalizer_summary",
+        table_name="finalizer_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/user-signals/summary")
+def admin_user_signals_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = user_signal_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_user_signal_summary",
+        table_name="user_signal_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/personalization/summary")
+def admin_personalization_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = personalization_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_personalization_summary",
+        table_name="personalization_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/answerers/quality-summary")
+def admin_answerer_quality_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = answerer_quality_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_answerer_quality_summary",
+        table_name="answerer_quality_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/safety/abuse-summary")
+def admin_abuse_safety_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = abuse_safety_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_abuse_safety_summary",
+        table_name="abuse_safety_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/rewards/loop-summary")
+def admin_reward_loop_summary(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    summary = reward_loop_summary(session, since_hours=since_hours)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_reward_loop_summary",
+        table_name="reward_loop_summary",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
+@router.get("/api/metrics/north-star")
+def admin_north_star_metrics(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    user_signals = user_signal_summary(session, since_hours=since_hours)
+    reward_loop = reward_loop_summary(session, since_hours=since_hours)
+    user_rates = dict(user_signals.get("rates") or {})
+    reward_rates = dict(reward_loop.get("rates") or {})
+    summary = {
+        "window_start": user_signals.get("window_start") or reward_loop.get("window_start"),
+        "window_hours": since_hours,
+        "rates": {
+            "accepted_card_rate": user_rates.get("accepted_card_rate"),
+            "followup_rate": user_rates.get("followup_rate"),
+            "help_publish_rate": user_rates.get("help_publish_rate"),
+            "one_liner_submit_rate": user_rates.get("one_liner_submit_rate"),
+            "reward_grant_rate": reward_rates.get("reward_grant_rate"),
+        },
+        "sources": {
+            "user_signals": user_signals,
+            "reward_loop": reward_loop,
+        },
+        "metadata": {"version": "north_star_metrics_v1"},
+    }
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_north_star_metrics",
+        table_name="north_star_metrics",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
 @router.get("/api/eval-runs")
 def list_eval_runs(request: Request) -> dict[str, Any]:
     reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
@@ -289,6 +643,56 @@ def list_eval_low_quality_cases(
     }
 
 
+@router.get("/api/eval-runs/{run_id}/low-quality-summary")
+def get_eval_low_quality_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return low_quality_queue_summary(reports_root, run_id, limit=limit)
+
+
+@router.get("/api/eval-runs/{run_id}/card-contract-summary")
+def get_eval_card_contract_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return card_contract_summary(reports_root, run_id, limit=limit)
+
+
+@router.get("/api/eval-runs/{run_id}/help-card-quality-summary")
+def get_eval_help_card_quality_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return help_card_quality_summary(reports_root, run_id, limit=limit)
+
+
+@router.get("/api/eval-runs/{run_id}/routing-summary")
+def get_eval_routing_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return routing_quality_summary(reports_root, run_id, limit=limit)
+
+
+@router.get("/api/eval-runs/{run_id}/evidence-summary")
+def get_eval_evidence_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return evidence_quality_summary(reports_root, run_id, limit=limit)
+
+
 @router.get("/api/eval-runs/{run_id}/cases/{case_id}")
 def get_eval_case_detail(request: Request, run_id: str, case_id: str) -> dict[str, Any]:
     reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
@@ -296,6 +700,38 @@ def get_eval_case_detail(request: Request, run_id: str, case_id: str) -> dict[st
         return eval_case_detail(reports_root, run_id, case_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="eval case not found") from exc
+
+
+@router.get("/api/eval-runs/{run_id}/review-alignment")
+def get_eval_review_alignment(request: Request, run_id: str) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return review_alignment_summary(reports_root, run_id)
+
+
+@router.get("/api/eval-runs/{run_id}/review-workflow-summary")
+def get_eval_review_workflow_summary(
+    request: Request,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return review_workflow_summary(reports_root, run_id, limit=limit)
+
+
+@router.get("/api/eval-runs/{run_id}/seed-workflow-summary")
+def get_eval_seed_workflow_summary(
+    request: Request,
+    run_id: str,
+    top_limit: int = Query(default=50, ge=1, le=500),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    return seed_workflow_summary(
+        session,
+        reports_root=reports_root,
+        run_id=run_id,
+        top_limit=top_limit,
+    )
 
 
 @router.post("/api/eval-runs/{run_id}/cases/{case_id}/review")
@@ -311,6 +747,8 @@ def review_eval_case(
     if action not in {"accept_seed_gap", "mark_agent_bug", "mark_not_issue", "needs_more_data"}:
         raise HTTPException(status_code=422, detail="invalid review action")
     labels = payload.get("labels") if isinstance(payload.get("labels"), list) else []
+    suggested_fix = _optional_mapping_or_text(payload.get("suggested_fix"), field_name="suggested_fix")
+    seed_patch = _optional_mapping(payload.get("seed_patch"), field_name="seed_patch")
     review = build_eval_review_payload(
         run_id=run_id,
         case_id=case_id,
@@ -318,7 +756,11 @@ def review_eval_case(
         reviewer=actor,
         notes=str(payload.get("notes") or ""),
         labels=[str(label) for label in labels],
+        suggested_fix=suggested_fix,
+        seed_patch=seed_patch,
     )
+    reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))
+    append_case_review(reports_root, run_id, review)
     _write_audit(
         session,
         request=request,
@@ -332,6 +774,167 @@ def review_eval_case(
     )
     session.commit()
     return {"ok": True, "review": review}
+
+
+@router.post("/api/eval-runs/{run_id}/cases/{case_id}/seed-intent-answer-draft")
+def create_eval_seed_intent_answer_draft(
+    request: Request,
+    run_id: str,
+    case_id: str,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    body = payload or {}
+    seed_patch = _optional_mapping(body.get("seed_patch"), field_name="seed_patch")
+    if seed_patch is None:
+        seed_patch = latest_accepted_seed_patch(session, run_id=run_id, case_id=case_id)
+    if seed_patch is None:
+        raise HTTPException(status_code=404, detail="accepted seed_patch not found")
+
+    try:
+        answer = create_seed_intent_answer_draft(
+            session,
+            run_id=run_id,
+            case_id=case_id,
+            seed_patch=seed_patch,
+            reviewer=actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    draft = serialize_seed_intent_answer_draft(answer)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="create_seed_intent_answer_draft",
+        table_name="intent_answers",
+        target_record_id=str(answer.id),
+        request_json=_request_json(
+            request,
+            extra={"run_id": run_id, "case_id": case_id, "seed_patch": seed_patch},
+        ),
+        before_json=None,
+        after_json=draft,
+    )
+    session.commit()
+    return {"ok": True, "intent_answer": draft}
+
+
+@router.post("/api/intent-answers/{answer_id}/publish")
+def publish_admin_intent_answer(
+    request: Request,
+    answer_id: str,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    _require_admin_role(request, {"admin", "content_ops"})
+    actor = _admin_actor(request)
+    before = _intent_answer_snapshot(session, answer_id)
+    try:
+        answer = publish_seed_intent_answer(session, answer_id=answer_id, reviewer=actor)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    after = serialize_seed_intent_answer_draft(answer)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="publish_seed_intent_answer",
+        table_name="intent_answers",
+        target_record_id=str(answer.id),
+        request_json=_request_json(request, extra=dict(payload or {})),
+        before_json=before,
+        after_json=after,
+    )
+    session.commit()
+    return {"ok": True, "intent_answer": after}
+
+
+@router.post("/api/intent-answers/{answer_id}/rollback")
+def rollback_admin_intent_answer(
+    request: Request,
+    answer_id: str,
+    payload: dict[str, Any] | None = None,
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    _require_admin_role(request, {"admin", "content_ops"})
+    actor = _admin_actor(request)
+    body = payload or {}
+    before = _intent_answer_snapshot(session, answer_id)
+    try:
+        answer = rollback_seed_intent_answer(
+            session,
+            answer_id=answer_id,
+            reviewer=actor,
+            reason=str(body.get("reason") or "").strip() or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    after = serialize_seed_intent_answer_draft(answer)
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="rollback_seed_intent_answer",
+        table_name="intent_answers",
+        target_record_id=str(answer.id),
+        request_json=_request_json(request, extra=body),
+        before_json=before,
+        after_json=after,
+    )
+    session.commit()
+    return {"ok": True, "intent_answer": after}
+
+
+@router.post("/api/intent-answers/import-drafts")
+def import_admin_intent_answer_drafts(
+    request: Request,
+    payload: dict[str, Any],
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    _require_admin_role(request, {"admin", "content_ops"})
+    actor = _admin_actor(request)
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        raise HTTPException(status_code=422, detail="items must be a non-empty list")
+    for index, item in enumerate(raw_items):
+        if not isinstance(item, Mapping):
+            raise HTTPException(status_code=422, detail=f"items[{index}] must be an object")
+    activate = bool(payload.get("activate", False))
+    try:
+        answers = import_intent_answer_drafts(
+            session,
+            items=raw_items,
+            reviewer=actor,
+            activate=activate,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    imported = [serialize_imported_intent_answer(answer) for answer in answers]
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="import_intent_answer_drafts",
+        table_name="intent_answers",
+        target_record_id=None,
+        request_json=_request_json(request, extra={"item_count": len(raw_items), "activate": activate}),
+        before_json=None,
+        after_json={"items": imported},
+    )
+    session.commit()
+    return {"ok": True, "count": len(imported), "items": imported}
+
+
+@router.get("/api/intent-answers/memory-summary")
+def get_intent_answer_memory_summary(
+    top_limit: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    return intent_answer_memory_summary(session, top_limit=top_limit)
 
 
 @router.get("/api/sessions/{conversation_id}")
@@ -1715,6 +2318,17 @@ def _pagination(*, page: int, page_size: int, total: int) -> dict[str, int | boo
         "total": total,
         "has_next": page * page_size < total,
     }
+
+
+def _intent_answer_snapshot(session: Session, answer_id: str) -> dict[str, Any] | None:
+    try:
+        resolved_id = uuid.UUID(str(answer_id))
+    except ValueError:
+        return None
+    answer = session.get(IntentAnswer, resolved_id)
+    if answer is None:
+        return None
+    return serialize_seed_intent_answer_draft(answer)
 
 
 def _write_audit(

@@ -135,6 +135,21 @@ def run_input_gate(
     stripped = message.strip()
     rewrite = rewrite_result or rewrite_query(stripped)
     slots = dict(rewrite.extracted_slots)
+    client_rewrite = _rewrite_with_client_decision_location(
+        rewrite=rewrite,
+        client_context=client_context,
+    )
+    if client_rewrite is not rewrite:
+        rewrite = client_rewrite
+        slots = dict(rewrite.extracted_slots)
+    inherited_rewrite = _rewrite_with_latest_context(
+        message=stripped,
+        rewrite=rewrite,
+        latest_user_context=latest_user_context,
+    )
+    if inherited_rewrite is not rewrite:
+        rewrite = inherited_rewrite
+        slots = dict(rewrite.extracted_slots)
 
     def make_gate(
         *,
@@ -483,6 +498,167 @@ def _looks_like_standalone_help_context(message: str) -> bool:
             "菜单" in normalized and any(hint in normalized for hint in ("看不懂", "老板", "太多", "整理")),
         )
     )
+
+
+def _rewrite_with_latest_context(
+    *,
+    message: str,
+    rewrite: QueryRewriteResult,
+    latest_user_context: str | None,
+) -> QueryRewriteResult:
+    if not latest_user_context:
+        return rewrite
+    current_slots = dict(rewrite.extracted_slots)
+    context_rewrite = rewrite_query(latest_user_context)
+    context_slots = dict(context_rewrite.extracted_slots)
+    if not _should_inherit_location_slots(message, current_slots, context_slots):
+        return rewrite
+
+    merged = dict(current_slots)
+    for key in ("city", "area", "venue"):
+        if not merged.get(key) and context_slots.get(key):
+            merged[key] = context_slots[key]
+
+    if merged.get("venue"):
+        merged["location_state"] = "in_venue"
+    elif merged.get("area"):
+        merged["location_state"] = "in_area"
+    elif not merged.get("location_state") and context_slots.get("location_state"):
+        merged["location_state"] = context_slots["location_state"]
+
+    if not merged.get("task") and _has_food_preference_slots(merged):
+        merged["task"] = "order_dishes" if merged.get("venue") and _looks_like_ordering_followup(message) else "choose_restaurant"
+
+    return QueryRewriteResult(
+        original_query=rewrite.original_query,
+        canonical_query=_canonical_query_from_slots(rewrite.canonical_query, merged),
+        extracted_slots=merged,
+        confidence=max(rewrite.confidence, min(context_rewrite.confidence + 0.04, 0.95), 0.82),
+        notes=[
+            *rewrite.notes,
+            "Inherited location slots from latest_user_context.",
+        ],
+    )
+
+
+def _rewrite_with_client_decision_location(
+    *,
+    rewrite: QueryRewriteResult,
+    client_context: dict[str, Any] | None,
+) -> QueryRewriteResult:
+    context = dict(client_context or {})
+    decision_location = context.get("decision_location")
+    if not isinstance(decision_location, dict):
+        return rewrite
+
+    current_slots = dict(rewrite.extracted_slots)
+    if current_slots.get("area") or current_slots.get("venue"):
+        return rewrite
+    if not _has_food_preference_slots(current_slots):
+        return rewrite
+
+    city = _clean_client_location_value(decision_location.get("city"))
+    area = _clean_client_location_value(decision_location.get("area"))
+    label = _clean_client_location_value(decision_location.get("label"))
+    if not (city or area or label):
+        return rewrite
+
+    merged = dict(current_slots)
+    if city and not merged.get("city"):
+        merged["city"] = city
+    if area and not merged.get("area"):
+        merged["area"] = area
+    elif label and not merged.get("area"):
+        merged["area"] = label
+
+    if merged.get("area"):
+        merged["location_state"] = "in_area"
+    if not merged.get("task"):
+        merged["task"] = "choose_restaurant"
+
+    return QueryRewriteResult(
+        original_query=rewrite.original_query,
+        canonical_query=_canonical_query_from_slots(rewrite.canonical_query, merged),
+        extracted_slots=merged,
+        confidence=max(rewrite.confidence, 0.84),
+        notes=[
+            *rewrite.notes,
+            "Merged selected client decision_location into query slots.",
+        ],
+    )
+
+
+def _clean_client_location_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _should_inherit_location_slots(
+    message: str,
+    current_slots: dict[str, Any],
+    context_slots: dict[str, Any],
+) -> bool:
+    if current_slots.get("area") or current_slots.get("venue"):
+        return False
+    if not (context_slots.get("area") or context_slots.get("venue")):
+        return False
+    if _has_food_preference_slots(current_slots):
+        return True
+    normalized = "".join(message.strip().lower().split())
+    if not normalized:
+        return False
+    return len(normalized) <= 16 and any(
+        hint in normalized
+        for hint in (
+            "吃",
+            "川菜",
+            "粤菜",
+            "火锅",
+            "烤鸭",
+            "韩餐",
+            "日料",
+            "清淡",
+            "不辣",
+            "喝",
+            "咖啡",
+            "甜品",
+            "小吃",
+        )
+    )
+
+
+def _has_food_preference_slots(slots: dict[str, Any]) -> bool:
+    return bool(
+        slots.get("food_item")
+        or slots.get("cuisine")
+        or slots.get("taste_preference")
+        or slots.get("spice_preference")
+    )
+
+
+def _looks_like_ordering_followup(message: str) -> bool:
+    normalized = "".join(message.strip().lower().split())
+    return any(hint in normalized for hint in ("帮我点", "点菜", "怎么点", "点什么", "点啥"))
+
+
+def _canonical_query_from_slots(fallback: str, slots: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in ("city", "area", "venue", "food_item", "cuisine", "task"):
+        value = slots.get(key)
+        if value:
+            parts.append(str(value))
+    if slots.get("spice_preference"):
+        parts.append(str(slots["spice_preference"]))
+    taste = slots.get("taste_preference")
+    if isinstance(taste, list):
+        parts.extend(str(item) for item in taste)
+    elif taste:
+        parts.append(str(taste))
+    if slots.get("party_size"):
+        parts.append(f"{slots['party_size']}人")
+    return " ".join(parts) if parts else fallback
 
 
 def _slot_location_state(slots: dict[str, Any]) -> LocationState:

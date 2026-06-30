@@ -92,6 +92,28 @@ def test_effect_loop_reports_generate_attribution_seed_and_agent_outputs(tmp_pat
     assert summary["primary_cause_counts"]["seed_gap"] == 1
     assert seed_candidates
     assert seed_candidates[0]["need"] == "approved_answer"
+    assert seed_candidates[0]["intent_key"]
+    assert seed_candidates[0]["slots"]["area"] == "朝阳区"
+    assert seed_candidates[0]["slots"]["food_item"] == "热干面"
+    assert seed_candidates[0]["slots"]["location_state"] == "in_area"
+    assert seed_candidates[0]["source_cases"][0]["case_id"] == "seed-gap-chaoyang-hotdry"
+    assert seed_candidates[0]["source_cases"][0]["trace"]["runtime_path"] == "product"
+    assert seed_candidates[0]["priority_score"] > 0
+    assert seed_candidates[0]["autopromote"] is False
+    assert seed_candidates[0]["review_status"] == "needs_ops_review"
+    seed_patch = seed_candidates[0]["seed_patch"]
+    assert seed_patch["intent_key"] == seed_candidates[0]["intent_key"]
+    assert seed_patch["answer_type"] == "area_intent_answer"
+    assert seed_patch["answer_title"] == "朝阳区热干面首选"
+    assert seed_patch["constraints"]["area"] == "朝阳区"
+    assert seed_patch["constraints"]["food_item"] == "热干面"
+    assert seed_patch["area"] == "朝阳区"
+    assert seed_patch["food_item"] == "热干面"
+    assert seed_patch["decision_factor_count"] == 1
+    assert seed_patch["requires_evidence"] is True
+    assert seed_patch["approved"] is False
+    assert seed_patch["source_case_ids"] == ["seed-gap-chaoyang-hotdry"]
+    assert seed_candidates[0]["suggested_seed"] == seed_patch
     assert agent_issues
     assert agent_issues[0]["primary_cause"] == "agent_bug"
     assert paths["quality_attribution_jsonl"].exists()
@@ -99,3 +121,27 @@ def test_effect_loop_reports_generate_attribution_seed_and_agent_outputs(tmp_pat
     assert paths["agent_fix_issues_json"].exists()
     quality = json.loads((tmp_path / "quality_report.json").read_text(encoding="utf-8"))
     assert quality["effect_attribution_summary"]["total"] == 2
+
+
+def test_seed_candidate_generator_skips_existing_intent_keys() -> None:
+    case = {
+        "id": "seed-gap-chaoyang-hotdry",
+        "category": "area_food",
+        "message": "帮我找一下北京市朝阳区最好吃的热干面",
+        "expected": {
+            "response_kind": "recommendation_card",
+            "location_state": "in_area",
+            "target_type": "restaurant",
+        },
+    }
+    rows = [{"case_id": case["id"], "case": case, "message": case["message"], "response": _help_response()}]
+    attributions = attribute_rows(rows)
+    candidates = generate_seed_candidates(rows, attributions)
+    assert candidates
+
+    skipped = generate_seed_candidates(
+        rows,
+        attributions,
+        existing_intent_keys=[candidates[0]["intent_key"]],
+    )
+    assert skipped == []

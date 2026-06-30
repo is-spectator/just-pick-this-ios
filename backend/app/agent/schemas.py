@@ -8,6 +8,7 @@ HarnessTraceEventName = Literal[
     "input_gate_result",
     "context_pack",
     "reasoner_decision",
+    "reasoner_provider_fallback",
     "shadow_reasoner_result",
     "tool_call",
     "tool_result",

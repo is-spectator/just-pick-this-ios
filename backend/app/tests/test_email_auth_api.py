@@ -134,6 +134,43 @@ async def test_update_me_requires_authorization(async_client: AsyncClient) -> No
 
 
 @pytest.mark.anyio
+async def test_delete_me_soft_deletes_account_and_revokes_sessions(async_client: AsyncClient) -> None:
+    email = _email("delete")
+    code_response = await async_client.post("/v1/auth/request-code", json={"email": email})
+    code = code_response.json()["dev_code"]
+    verify = await async_client.post("/v1/auth/verify-code", json={"email": email, "code": code})
+    assert verify.status_code == 200, verify.text
+    tokens = verify.json()["tokens"]
+
+    delete = await async_client.delete(
+        "/v1/auth/me",
+        headers={"authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert delete.status_code == 200, delete.text
+    assert delete.json()["deleted"] is True
+
+    me = await async_client.get("/v1/auth/me", headers={"authorization": f"Bearer {tokens['access_token']}"})
+    assert me.status_code == 401
+    refresh = await async_client.post("/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+    assert refresh.status_code == 401
+
+    with session_scope() as session:
+        deleted_session = session.scalar(
+            select(AuthSession).where(AuthSession.refresh_token_hash == hash_refresh_token(tokens["refresh_token"]))
+        )
+        assert deleted_session is not None
+        deleted = session.get(User, deleted_session.user_id)
+        assert deleted is not None
+        assert deleted.email is None
+        assert deleted.status == "deleted"
+        assert deleted.auth_provider == "deleted"
+        assert deleted.display_name == "已删除用户"
+        sessions = list(session.scalars(select(AuthSession).where(AuthSession.user_id == deleted.id)))
+        assert sessions
+        assert all(row.status == "revoked" for row in sessions)
+
+
+@pytest.mark.anyio
 async def test_refresh_rotates_and_logout_revokes_session(async_client: AsyncClient) -> None:
     email = _email("refresh")
     code_response = await async_client.post("/v1/auth/request-code", json={"email": email})

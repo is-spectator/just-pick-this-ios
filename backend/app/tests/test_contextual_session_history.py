@@ -92,6 +92,41 @@ async def test_location_only_acknowledges_location_without_repeating_prompt(asyn
 
 
 @pytest.mark.anyio
+async def test_food_preference_followup_inherits_previous_location(async_client) -> None:
+    boot = await bootstrap(async_client, device_id="contextual-food-preference-location")
+    conversation_id = boot["conversation_id"]
+
+    first = await chat_turn(
+        async_client,
+        message="我想吃川菜",
+        conversation_id=conversation_id,
+    )
+    assert first["response_kind"] == "clarification"
+
+    second = await chat_turn(
+        async_client,
+        message="我在上海互联宝地",
+        conversation_id=conversation_id,
+    )
+    assert second["metadata"]["intent"]["name"] == "unknown"
+    assert "上海互联宝地" in second["assistant_message"]
+
+    third = await chat_turn(
+        async_client,
+        message="我想吃川菜啊",
+        conversation_id=conversation_id,
+    )
+
+    assert third["response_kind"] != "clarification"
+    assert third["metadata"]["intent"]["name"] == "decision_request"
+    assert third["metadata"]["input_gate"]["route_priority"] == "area_food"
+    assert third["metadata"]["input_gate"]["location_state"] == "in_area"
+    assert third["metadata"]["input_gate"]["extracted_slots"]["area"] == "互联宝地"
+    assert third["metadata"]["input_gate"]["extracted_slots"]["cuisine"] == "川菜"
+    assert "你现在在哪个位置" not in third["assistant_message"]
+
+
+@pytest.mark.anyio
 async def test_complaint_about_repetition_uses_session_context(async_client) -> None:
     boot = await bootstrap(async_client, device_id="contextual-repeat-complaint")
     conversation_id = boot["conversation_id"]

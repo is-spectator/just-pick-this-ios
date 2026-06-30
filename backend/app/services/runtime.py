@@ -35,6 +35,8 @@ from app.services.seed_service import (
     SEONGSU_IMAGE_ASSET_ID,
     SHOPPING_INTENT_ANSWER_ID,
     SHOPPING_INTENT_ID,
+    SEED_PACK_MIN_ANSWER_COUNT,
+    seed_pack_answer_count,
     seed_initial_data,
 )
 
@@ -69,6 +71,7 @@ def ensure_seed_data(session: Session) -> None:
         or session.get(IntentAnswer, FOOD_INTENT_ANSWER_ID) is None
         or session.get(IntentAnswer, SHOPPING_INTENT_ANSWER_ID) is None
         or session.get(IntentAnswer, SIJIMINFU_INTENT_ANSWER_ID) is None
+        or seed_pack_answer_count(session) < SEED_PACK_MIN_ANSWER_COUNT
     )
     if seed_required:
         seed_initial_data(session)
@@ -237,6 +240,8 @@ def serialize_image(image: ImageAsset | None) -> dict[str, Any] | None:
         "caption": "参考图片",
         "alt_text": image.alt_text,
         "verified": image.verified and image.verification_status == "verified" and image.displayable,
+        "displayable": image.displayable,
+        "verification_status": image.verification_status,
         "is_ai_generated": image.is_ai_generated,
         "source_type": image.source_type,
         "license_note": image.license_note,

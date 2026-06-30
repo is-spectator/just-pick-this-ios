@@ -36,7 +36,14 @@ def test_evaluator_accepts_minimal_recommendation_card_contract() -> None:
             "item": {"title": "海底捞番茄锅 + 菌汤锅"},
             "decision_factor": {"key": "not_spicy", "text": "不吃辣时，番茄锅和菌汤锅最稳。"},
             "evidence_ids": ["menu-hit-1"],
-            "image": {"id": "img-1", "verified": True, "is_ai_generated": False},
+            "image": {
+                "id": "img-1",
+                "verified": True,
+                "displayable": True,
+                "is_ai_generated": False,
+                "source_url": "https://example.com/haidilao-menu",
+                "source_domain": "example.com",
+            },
         }
     )
 

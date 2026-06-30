@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.schemas.chat import ResponseKind
 from app.services.intent_router import (
     ClarificationDecision,
+    detect_app_help,
     detect_chitchat,
     detect_clarification_needed,
 )
@@ -188,6 +189,15 @@ def run_smoke_chat_turn(payload: dict[str, Any]) -> dict[str, Any]:
             include_debug=include_debug,
             assistant_message=chitchat.assistant_message,
             intent_key=chitchat.intent_key,
+        )
+    app_help = detect_app_help(message)
+    if app_help is not None:
+        return _chitchat_response(
+            conversation_id=conversation_id,
+            turn_id=turn_id,
+            include_debug=include_debug,
+            assistant_message=app_help.assistant_message,
+            intent_key=app_help.intent_key,
         )
 
     resolved = _resolve_location_intent(message)

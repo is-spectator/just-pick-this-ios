@@ -17,8 +17,10 @@ from app.eval.quality_scoring import (
     summarize_scores,
 )
 from app.eval.agent_issue_generator import write_agent_fix_issue_reports
+from app.eval.experiment_lift import write_experiment_lift_reports
 from app.eval.quality_attribution import attribute_rows, summarize_attributions
 from app.eval.seed_candidate_generator import write_seed_candidate_reports
+from app.eval.shadow_promotion_generator import write_shadow_promotion_candidate_reports
 from app.eval.shadow_quality import score_shadow_decision
 
 
@@ -190,6 +192,8 @@ def write_quality_reports(
         "shadow_comparison_markdown": output / "shadow_comparison_report.md",
         "shadow_comparison_json": output / "shadow_comparison_report.json",
         "shadow_decisions_jsonl": output / "shadow_decisions.jsonl",
+        "experiment_lift_markdown": output / "experiment_lift_report.md",
+        "experiment_lift_json": output / "experiment_lift_report.json",
         "generated_issues_index": output / "generated" / "index.md",
         "generated_issues_p2_aggregate": output / "generated" / "p2_aggregate.md",
     }
@@ -298,6 +302,8 @@ def write_quality_reports(
         encoding="utf-8",
     )
     write_generated_issue_reports(scores, output / "generated")
+    paths.update(write_experiment_lift_reports(rows, output))
+    paths.update(write_shadow_promotion_candidate_reports(shadow_report, output))
     paths.update(write_seed_candidate_reports(rows, attributions, output))
     paths.update(write_agent_fix_issue_reports(attributions, output))
     return paths
@@ -622,6 +628,14 @@ def build_shadow_comparison_report(rows: Sequence[Mapping[str, Any]]) -> dict[st
         "better_shadow_count": sum(1 for item in decisions if float(item.get("quality_delta") or 0) > 0),
         "worse_shadow_count": sum(1 for item in decisions if float(item.get("quality_delta") or 0) < 0),
         "unsafe_shadow_count": sum(1 for item in decisions if item.get("unsafe")),
+        "shadow_improvement_candidates": sum(
+            1
+            for item in decisions
+            if item.get("schema_valid")
+            and item.get("mismatch")
+            and not item.get("unsafe")
+            and float(item.get("quality_delta") or 0) > 0
+        ),
     }
     top_unsafe = [
         {
@@ -695,6 +709,7 @@ def render_shadow_comparison_markdown(
             f"{int(summary.get('deterministic_vs_shadow_mismatch_count', 0))} |"
         ),
         f"| Better shadow count | {int(summary.get('better_shadow_count', 0))} |",
+        f"| Shadow improvement candidates | {int(summary.get('shadow_improvement_candidates', 0))} |",
         f"| Worse shadow count | {int(summary.get('worse_shadow_count', 0))} |",
         f"| Unsafe shadow count | {int(summary.get('unsafe_shadow_count', 0))} |",
         "",
@@ -837,6 +852,7 @@ def render_generated_issue_markdown(score: CaseQualityScore, *, index: int) -> s
     trace_id = str(score.metadata.get("trace_id") or "")
     agent_run_id = str(score.metadata.get("agent_run_id") or "")
     retrieval_run_id = str(score.metadata.get("retrieval_run_id") or "")
+    admin_trace_api_path = f"/admin/api/traces/{agent_run_id or trace_id}" if (agent_run_id or trace_id) else ""
     title = _generated_issue_title(score)
     lines = [
         f"# issuer_{index:03d}.md",
@@ -856,6 +872,7 @@ def render_generated_issue_markdown(score: CaseQualityScore, *, index: int) -> s
         f"- trace_id: `{trace_id or '-'}`",
         f"- agent_run_id: `{agent_run_id or '-'}`",
         f"- retrieval_run_id: `{retrieval_run_id or '-'}`",
+        f"- admin_trace_api_path: `{admin_trace_api_path or '-'}`",
         "",
         "## 失败证据",
         "",

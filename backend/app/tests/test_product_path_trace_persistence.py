@@ -53,6 +53,13 @@ def _ordered_tool_names(body: dict[str, Any]) -> list[str]:
     return list(body.get("metadata", {}).get("loop", {}).get("tool_calls") or [])
 
 
+def _prompt_versions(body: dict[str, Any]) -> dict[str, Any]:
+    prompt_versions = body.get("metadata", {}).get("prompt_versions")
+    assert isinstance(prompt_versions, dict), body.get("metadata")
+    assert prompt_versions, body.get("metadata")
+    return prompt_versions
+
+
 def _ui_event_types(body: dict[str, Any]) -> set[str]:
     return {str(event.get("type")) for event in body.get("ui_events", []) if isinstance(event, dict)}
 
@@ -111,6 +118,9 @@ def test_chat_turn_persists_full_loop_trace_for_datong(
         _assert_full_loop_trace(body)
         assert _ordered_tool_names(body) == ["search_knowledge", "create_recommendation_card"]
         assert "show_recommendation_card" in _ui_event_types(body)
+        prompt_versions = _prompt_versions(body)
+        assert prompt_versions["reasoner.system"]["version"] >= 1
+        assert "content" not in prompt_versions["reasoner.system"]
 
     run_async(scenario)
 

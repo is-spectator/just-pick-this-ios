@@ -31,6 +31,7 @@ from app.models import (
     RecommendationCard,
     RetrievalHit,
     RetrievalRun,
+    RewardEvent,
 )
 from app.services.help_service import help_answer_text, human_one_liner_evidence
 from app.services.intent_answer_service import (
@@ -46,6 +47,7 @@ from app.services.runtime import (
     session_scope,
     utcnow,
 )
+from app.services.user_events import record_user_behavior_event
 
 
 class FinalizerJobResult(TypedDict):
@@ -453,9 +455,12 @@ class DbFinalizeToolInvoker:
         help_card.final_ready_at = utcnow()
         help_card.question.current_recommendation_card_id = card.id
         help_card.question.status = "final_ready"
-        for answer in help_card.answers:
-            answer.status = "used"
-            answer.reward_status = "granted"
+        _settle_help_answer_rewards(
+            self.session,
+            help_card=help_card,
+            final_card=card,
+            evidence_answer_ids=evidence_answer_ids,
+        )
         self.session.flush()
         return _card_result(card, status="persisted")
 
@@ -721,6 +726,118 @@ def _get_help_card(session: Session, help_card_id: Any) -> HelpCard:
 def _assert_card_image(image: ImageAsset) -> None:
     if not image.displayable or image.verification_status != "verified" or image.is_ai_generated:
         raise ValueError("recommendation card images must be displayable, verified, and non-AI")
+
+
+def _settle_help_answer_rewards(
+    session: Session,
+    *,
+    help_card: HelpCard,
+    final_card: RecommendationCard,
+    evidence_answer_ids: Sequence[str],
+) -> None:
+    granted_ids = {uuid.UUID(str(answer_id)) for answer_id in evidence_answer_ids if str(answer_id).strip()}
+    for answer in help_card.answers:
+        if answer.id in granted_ids:
+            answer.status = "used"
+            answer.reward_status = "granted"
+            _settle_reward_events(
+                session,
+                answer=answer,
+                status="granted",
+                final_card=final_card,
+                reason="used_as_final_evidence",
+            )
+            _record_reward_behavior_event(
+                session,
+                event_type="one_liner_reward_granted",
+                answer=answer,
+                help_card=help_card,
+                final_card=final_card,
+                reason="used_as_final_evidence",
+            )
+        elif answer.reward_status == "pending":
+            answer.status = "rejected"
+            answer.reward_status = "rejected"
+            _settle_reward_events(
+                session,
+                answer=answer,
+                status="rejected",
+                final_card=final_card,
+                reason="not_selected_for_final_answer",
+            )
+            _record_reward_behavior_event(
+                session,
+                event_type="one_liner_reward_rejected",
+                answer=answer,
+                help_card=help_card,
+                final_card=final_card,
+                reason="not_selected_for_final_answer",
+            )
+
+
+def _settle_reward_events(
+    session: Session,
+    *,
+    answer: HelpAnswer,
+    status: str,
+    final_card: RecommendationCard,
+    reason: str,
+) -> None:
+    rows = list(
+        session.scalars(
+            select(RewardEvent).where(RewardEvent.help_answer_id == answer.id)
+        )
+    )
+    reward = dict(answer.evidence_json.get("reward") or {}) if isinstance(answer.evidence_json, dict) else {}
+    if not rows and answer.answer_user_id is not None:
+        rows = [
+            RewardEvent(
+                user_id=answer.answer_user_id,
+                help_card_id=answer.help_card_id,
+                help_answer_id=answer.id,
+                event_type="one_liner_submitted",
+                label=str(reward.get("label") or "+10"),
+                value=int(reward.get("value") or 10),
+                status="pending",
+                payload_json={},
+            )
+        ]
+        session.add_all(rows)
+
+    for event in rows:
+        event.status = status
+        event.payload_json = {
+            **dict(event.payload_json or {}),
+            "final_recommendation_card_id": str(final_card.id),
+            "settlement_reason": reason,
+        }
+
+
+def _record_reward_behavior_event(
+    session: Session,
+    *,
+    event_type: str,
+    answer: HelpAnswer,
+    help_card: HelpCard,
+    final_card: RecommendationCard,
+    reason: str,
+) -> None:
+    if answer.answer_user_id is None:
+        return
+    record_user_behavior_event(
+        session,
+        event_type=event_type,
+        user_id=answer.answer_user_id,
+        conversation_id=help_card.conversation_id,
+        help_card_id=help_card.id,
+        help_answer_id=answer.id,
+        recommendation_card_id=final_card.id,
+        source="pipi_finalize_graph",
+        payload_json={
+            "final_recommendation_card_id": str(final_card.id),
+            "settlement_reason": reason,
+        },
+    )
 
 
 def _card_result(card: RecommendationCard, *, status: str) -> Mapping[str, Any]:

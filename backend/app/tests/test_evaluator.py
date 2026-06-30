@@ -49,6 +49,47 @@ def test_recommendation_card_rejects_untrusted_present_image() -> None:
     assert "recommendation_card_image_asset_not_displayable" in result.issues
 
 
+def test_recommendation_card_rejects_present_image_without_source() -> None:
+    result = Evaluator().evaluate_recommendation_card(
+        {
+            "item": {"title": "朝阳区热干面"},
+            "decision_factor": {"text": "朝阳区想吃热干面，先按明确证据选这一家。"},
+            "evidence_ids": ["hit-hot-dry-noodle"],
+            "image": {
+                "id": "img-no-source",
+                "verification_status": "verified",
+                "displayable": True,
+                "is_ai_generated": False,
+            },
+        }
+    )
+
+    assert result.passed is False
+    assert "recommendation_card_image_asset_missing_source_url" in result.issues
+    assert "recommendation_card_image_asset_missing_source_domain" in result.issues
+
+
+def test_recommendation_card_accepts_verified_displayable_non_ai_image_with_source() -> None:
+    result = Evaluator().evaluate_recommendation_card(
+        {
+            "item": {"title": "朝阳区热干面"},
+            "decision_factor": {"text": "朝阳区想吃热干面，先按明确证据选这一家。"},
+            "evidence_ids": ["hit-hot-dry-noodle"],
+            "image": {
+                "id": "img-trusted",
+                "verification_status": "verified",
+                "displayable": True,
+                "is_ai_generated": False,
+                "source_url": "https://example.com/chaoyang-hot-dry-noodle",
+                "source_domain": "example.com",
+            },
+        }
+    )
+
+    assert result.passed is True
+    assert result.issues == []
+
+
 def test_recommendation_card_rejects_multiple_decision_factors() -> None:
     result = Evaluator().evaluate_recommendation_card(
         {

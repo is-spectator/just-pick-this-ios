@@ -22,7 +22,9 @@ class ImageAsset(ApiModel):
     caption: str | None = None
     alt_text: str | None = None
     verified: bool
+    displayable: bool | None = None
     is_ai_generated: bool
+    verification_status: str | None = None
     source_type: str | None = None
     license_note: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -142,6 +144,47 @@ class HelpFeedResponse(ApiModel):
     next_cursor: str | None = None
 
 
+class HelpAnswerSummary(ApiModel):
+    id: str
+    help_card_id: str
+    raw_text: str
+    status: str
+    reward_status: str
+    question_title: str
+    question_context: str | None = None
+    reward: dict[str, Any] = Field(default_factory=dict)
+    final_recommendation_card_id: str | None = None
+    settlement_reason: str | None = None
+    used_as_final_evidence: bool = False
+    created_at: datetime | None = None
+
+
+class HelpAnswerListResponse(ApiModel):
+    items: list[HelpAnswerSummary] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
+class FavoriteChoiceSummary(ApiModel):
+    id: str
+    query: str
+    status: str = "saved"
+    help_request_id: str | None = None
+    top_pick: dict[str, Any] | None = None
+    created_at: datetime | None = None
+
+
+class FavoriteChoiceListResponse(ApiModel):
+    items: list[FavoriteChoiceSummary] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
+class DrawerHistoryStateResponse(ApiModel):
+    pinned_history_ids: list[str] = Field(default_factory=list)
+    hidden_history_ids: list[str] = Field(default_factory=list)
+    renamed_history_titles: dict[str, str] = Field(default_factory=dict)
+    updated_at: datetime | None = None
+
+
 class HelpCardDetail(HelpCardSummary):
     pass
 
@@ -178,11 +221,53 @@ class HelpCardOneLinerResponse(ApiModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class HelpCardSkipRequest(ApiModel):
+    user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
+    reason: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class HelpCardSkipResponse(ApiModel):
+    ok: bool = True
+    help_card_id: str
+    event: dict[str, Any]
+
+
+class HelpCardFinalAcceptRequest(ApiModel):
+    user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
+    reason: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class HelpCardFinalAcceptResponse(ApiModel):
+    help_card_id: str
+    card_id: str
+    accepted: bool = True
+    feedback: dict[str, Any] = Field(default_factory=dict)
+    event: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class RewardsMeResponse(ApiModel):
     device_uid: str | None = None
     pending_value: int = 0
     granted_value: int = 0
+    rejected_value: int = 0
     items: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AnswererQualityResponse(ApiModel):
+    user: dict[str, Any]
+    quality: dict[str, Any]
+    answers: dict[str, Any]
+    rewards: dict[str, Any]
+    moderation: dict[str, Any]
+    behavior: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class LightEvent(ApiModel):
@@ -206,6 +291,8 @@ class LightEventsResponse(ApiModel):
 
 class CardAcceptRequest(ApiModel):
     user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -213,6 +300,56 @@ class CardAcceptResponse(ApiModel):
     card_id: str
     accepted: bool = True
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CardFeedbackRequest(ApiModel):
+    user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
+    reason: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class CardPostReviewRequest(CardFeedbackRequest):
+    outcome: Literal["went_satisfied", "went_regretted", "not_went", "unknown"] | None = None
+    went: bool | None = None
+    satisfied: bool | None = None
+    notes: str | None = None
+
+
+class CardFeedbackResponse(ApiModel):
+    card_id: str
+    accepted: bool = False
+    feedback: dict[str, Any] = Field(default_factory=dict)
+    event: dict[str, Any] | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class UserBehaviorEventRequest(ApiModel):
+    event_type: str = Field(min_length=1)
+    user_id: str | None = None
+    device_id: str | None = None
+    device_uid: str | None = None
+    conversation_id: str | None = None
+    turn_id: str | None = None
+    card_id: str | None = None
+    recommendation_card_id: str | None = None
+    help_card_id: str | None = None
+    help_answer_id: str | None = None
+    source: str = "ios"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class UserBehaviorEventResponse(ApiModel):
+    event: dict[str, Any]
+    accepted: bool = True
+
+
+class UserPreferencesResponse(ApiModel):
+    user_id: str
+    device_uid: str
+    preference_memory: dict[str, Any] = Field(default_factory=dict)
 
 
 def _extract_evidence_ids(data: dict[str, Any]) -> list[str]:

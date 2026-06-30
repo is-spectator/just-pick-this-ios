@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.services.chat import _area_food_preference, _choose_amap_candidate
+from app.services.chat import _amap_area_decision_text, _area_food_preference, _choose_amap_candidate
 from app.services.prompt_config import DEFAULT_PROMPT_CONFIGS
 
 
@@ -72,3 +72,77 @@ def test_non_spicy_profile_filters_heavy_spicy_and_hotpot() -> None:
     )
 
     assert candidate.name == "清淡杭帮小馆"
+
+
+def _memory_summary(**summary: list[dict[str, object]]) -> dict:
+    return {"version": "user_preference_memory_v1", "summary": summary}
+
+
+def test_same_area_query_uses_cantonese_user_memory() -> None:
+    preference = _area_food_preference(
+        "我在望京SOHO，帮我选一家",
+        _policy_config(),
+        user_preference_memory=_memory_summary(top_cuisines=[{"value": "粤菜", "score": 3}]),
+    )
+
+    assert preference["source"] == "user_memory"
+    assert preference["rule_name"] == "cantonese_profile"
+    assert preference["search_keyword"] == "粤菜"
+    assert "广东人" in preference["decision_prefix"]
+
+
+def test_same_area_query_uses_jiangzhe_user_memory() -> None:
+    preference = _area_food_preference(
+        "我在望京SOHO，帮我选一家",
+        _policy_config(),
+        user_preference_memory=_memory_summary(top_cuisines=[{"value": "杭帮菜", "score": 2}]),
+    )
+
+    assert preference["source"] == "user_memory"
+    assert preference["rule_name"] == "jiangzhe_profile"
+    assert preference["search_keyword"] == "杭帮菜"
+    assert "江浙" in preference["decision_prefix"]
+
+
+def test_same_area_query_uses_non_spicy_user_memory() -> None:
+    preference = _area_food_preference(
+        "我在望京SOHO，帮我选一家",
+        _policy_config(),
+        user_preference_memory=_memory_summary(spice_preferences=[{"value": "not_spicy", "score": 4}]),
+    )
+
+    assert preference["source"] == "user_memory"
+    assert preference["rule_name"] == "non_spicy_profile"
+    assert preference["display_food"] == "清淡口味"
+    assert preference["require_preferred_match"] is True
+
+
+def test_same_area_query_different_memories_produce_different_decision_factors() -> None:
+    query = "我在望京SOHO，帮我选一家"
+    cantonese = _area_food_preference(
+        query,
+        _policy_config(),
+        user_preference_memory=_memory_summary(top_cuisines=[{"value": "粤菜", "score": 3}]),
+    )
+    jiangzhe = _area_food_preference(
+        query,
+        _policy_config(),
+        user_preference_memory=_memory_summary(top_cuisines=[{"value": "杭帮菜", "score": 2}]),
+    )
+
+    cantonese_factor = _amap_area_decision_text(
+        area="望京SOHO",
+        display_food=cantonese["display_food"],
+        route_summary="步行约 8 分钟",
+        decision_prefix=cantonese["decision_prefix"],
+    )
+    jiangzhe_factor = _amap_area_decision_text(
+        area="望京SOHO",
+        display_food=jiangzhe["display_food"],
+        route_summary="步行约 8 分钟",
+        decision_prefix=jiangzhe["decision_prefix"],
+    )
+
+    assert cantonese_factor != jiangzhe_factor
+    assert "广东人" in cantonese_factor
+    assert "江浙" in jiangzhe_factor

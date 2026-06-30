@@ -572,6 +572,16 @@ async def test_admin_metrics_and_content_tasks_are_queryable(admin_client: Async
     assert funnel.status_code == 200
     assert "recommendation_per_question" in funnel.json()["rates"]
 
+    north_star = await admin_client.get("/admin/api/metrics/north-star", headers=_headers(metrics_actor))
+    assert north_star.status_code == 200, north_star.text
+    assert set(north_star.json()["rates"]) == {
+        "accepted_card_rate",
+        "followup_rate",
+        "help_publish_rate",
+        "one_liner_submit_rate",
+        "reward_grant_rate",
+    }
+
     failures = await admin_client.get("/admin/api/metrics/failures", headers=_headers(metrics_actor))
     assert failures.status_code == 200
     assert any(item["key"] == "pending_or_blocked_images" for item in failures.json()["items"])
@@ -589,10 +599,11 @@ async def test_admin_metrics_and_content_tasks_are_queryable(admin_client: Async
                 .order_by(AdminAuditLog.created_at.asc())
             )
         )
-        assert [log.target_table for log in logs][-4:] == [
+        assert [log.target_table for log in logs][-5:] == [
             "ops_metrics_overview",
             "ops_metrics_activity",
             "ops_metrics_funnel",
+            "north_star_metrics",
             "ops_metrics_failures",
         ]
 

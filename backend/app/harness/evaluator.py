@@ -726,13 +726,19 @@ def _image_asset_quality(data: Mapping[str, Any]) -> tuple[list[str], list[str],
     )
     displayable = image_asset.get("displayable")
     is_ai_generated = bool(image_asset.get("is_ai_generated"))
+    source_url = _clean_text(image_asset.get("source_url"))
+    source_domain = _clean_text(image_asset.get("source_domain"))
     if not verified:
         errors.append("recommendation_card_image_asset_not_verified")
-    if displayable is False:
+    if displayable is not True:
         errors.append("recommendation_card_image_asset_not_displayable")
     if is_ai_generated:
         errors.append("recommendation_card_image_asset_ai_generated")
-    if verified and displayable is not False and not is_ai_generated:
+    if not source_url:
+        errors.append("recommendation_card_image_asset_missing_source_url")
+    if not source_domain:
+        errors.append("recommendation_card_image_asset_missing_source_domain")
+    if verified and displayable is True and not is_ai_generated and source_url and source_domain:
         metadata["image_asset_verified_non_ai"] = True
     return errors, warnings, metadata
 
