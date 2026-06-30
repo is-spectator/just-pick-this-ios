@@ -2164,8 +2164,12 @@ struct AnswerScreen: View {
 
     private func reloadAnswerQueue() async {
         isLoading = true
-        await session.loadAnswerQueue()
+        let notice = await session.loadAnswerQueue()
         isLoading = false
+        guard let notice else { return }
+        AppHaptics.warning()
+        toastMessage = notice.detail
+        flashToast()
     }
 
     private func flashToast() {

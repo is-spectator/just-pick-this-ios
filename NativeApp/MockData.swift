@@ -66,6 +66,11 @@ struct MyFavoriteChoicesResult: Sendable {
     let notice: ServiceNotice?
 }
 
+struct AnswerQueueResult: Sendable {
+    let requests: [HelpRequest]
+    let notice: ServiceNotice?
+}
+
 struct QuestionHistory: Identifiable, Hashable, Codable, Sendable {
     let id: UUID
     let query: String
@@ -311,7 +316,7 @@ protocol RecommendationService: Sendable {
     func myHelpRequests(limit: Int) async -> MyHelpRequestsResult
     func mySubmittedAnswers(limit: Int) async -> MySubmittedAnswersResult
     func myFavoriteChoices(limit: Int) async -> MyFavoriteChoicesResult
-    func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest]
+    func answerQueue(excluding sessionId: UUID?) async -> AnswerQueueResult
     func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult
     func skip(_ request: HelpRequest, reason: String) async -> Bool
     func acceptCard(id: UUID?) async -> Bool
@@ -501,7 +506,7 @@ struct BackendRecommendationService: RecommendationService {
         }
     }
 
-    func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest] {
+    func answerQueue(excluding sessionId: UUID?) async -> AnswerQueueResult {
         do {
             var components = URLComponents(url: endpoint("/v1/help-feed"), resolvingAgainstBaseURL: false)!
             let queryItems = [
@@ -510,11 +515,16 @@ struct BackendRecommendationService: RecommendationService {
             ]
             components.queryItems = queryItems
 
-            guard let url = components.url else { return [] }
+            guard let url = components.url else {
+                return AnswerQueueResult(requests: [], notice: MockData.answerQueueUnavailableNotice())
+            }
             let response: V1HelpFeedResponse = try await perform(URLRequest(url: url))
-            return response.items.map { $0.model(fallbackTitle: "求一个") }
+            return AnswerQueueResult(
+                requests: response.items.map { $0.model(fallbackTitle: "求一个") },
+                notice: nil
+            )
         } catch {
-            return []
+            return AnswerQueueResult(requests: [], notice: MockData.answerQueueUnavailableNotice())
         }
     }
 
@@ -2288,8 +2298,8 @@ struct MockCloudRecommendationService: RecommendationService {
         MyFavoriteChoicesResult(choices: [], notice: nil)
     }
 
-    func answerQueue(excluding sessionId: UUID?) async -> [HelpRequest] {
-        [MockData.defaultHelpRequest]
+    func answerQueue(excluding sessionId: UUID?) async -> AnswerQueueResult {
+        AnswerQueueResult(requests: [MockData.defaultHelpRequest], notice: nil)
     }
 
     func answer(_ text: String, for request: HelpRequest) async -> SubmitHelpAnswerResult {
@@ -2758,17 +2768,22 @@ final class AppSession {
         )
     }
 
-    func loadAnswerQueue() async {
+    @discardableResult
+    func loadAnswerQueue() async -> ServiceNotice? {
         #if DEBUG
         if documentationDemo == "answer", !answerQueue.isEmpty {
             answerTarget = answerQueue.first
-            return
+            return nil
         }
         #endif
 
-        let requests = await service.answerQueue(excluding: sessionId)
-        answerQueue = requests
-        answerTarget = requests.first
+        let result = await service.answerQueue(excluding: sessionId)
+        if result.notice == nil || !result.requests.isEmpty {
+            answerQueue = result.requests
+            answerTarget = result.requests.first
+        }
+        serviceNotice = result.notice
+        return result.notice
     }
 
     @discardableResult
@@ -3284,6 +3299,13 @@ enum MockData {
         ServiceNotice(
             title: "同步失败",
             detail: "我的求一个这次没同步完整，下面会先显示本地记录。你可以重试。"
+        )
+    }
+
+    static func answerQueueUnavailableNotice() -> ServiceNotice {
+        ServiceNotice(
+            title: "同步失败",
+            detail: "来一句队列这次没同步成功，当前卡片先保留。你可以重试。"
         )
     }
 
