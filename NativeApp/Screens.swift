@@ -1376,109 +1376,12 @@ private struct ChatRecommendationCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            if imageURL != nil {
-                heroImage
-                    .overlay(alignment: .topTrailing) {
-                        RecommendationOverflowMenu(
-                            feedbackState: feedbackState,
-                            onFavorite: onFavorite,
-                            onShare: onShare,
-                            onChange: markChange,
-                            onReportIssue: markIssue
-                        )
-                            .padding(12)
-                    }
-            }
-
-            ZStack(alignment: .topTrailing) {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let supportingSubtitle {
-                        Text(supportingSubtitle)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .lineLimit(2)
-                    }
-
-                    Text(pick.title)
-                        .font(.system(size: CardTextFitting.recommendationTitleSize(pick.title, hasImage: imageURL != nil, compact: true), weight: .bold))
-                        .lineSpacing(3)
-                        .foregroundStyle(AppTheme.text)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.72)
-
-                    CollapsibleText(
-                        text: decisionReason,
-                        font: .system(size: 18, weight: .medium),
-                        color: AppTheme.textSecondary,
-                        collapsedLineLimit: 3,
-                        lineSpacing: 5,
-                        expandThreshold: 68
-                    )
-                }
-                .padding(.trailing, imageURL == nil ? 44 : 0)
-
-                if imageURL == nil {
-                    RecommendationOverflowMenu(
-                        feedbackState: feedbackState,
-                        onFavorite: onFavorite,
-                        onShare: onShare,
-                        onChange: markChange,
-                        onReportIssue: markIssue
-                    )
-                    .offset(x: 8, y: -8)
-                }
-            }
-
-            HStack(spacing: 12) {
-                Button(action: onAskHuman) {
-                    Text("求一个")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppTheme.text)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(AppTheme.card)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(AppTheme.border, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("求一个")
-                .accessibilityHint("把这个问题发给别人来一句")
-
-                Button {
-                    acceptFeedbackCount += 1
-                    onAccept()
-                } label: {
-                    HStack(spacing: 8) {
-                        if isAccepting {
-                            ProgressView()
-                                .tint(AppTheme.onPrimaryAction)
-                                .scaleEffect(0.76)
-                        }
-
-                        Text(isAccepting ? "确认中" : "就这个")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundStyle(AppTheme.onPrimaryAction)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(AppTheme.primaryAction)
-                    .clipShape(Capsule())
-                    .animation(.spring(response: 0.22, dampingFraction: 0.88), value: isAccepting)
-                }
-                .buttonStyle(.plain)
-                .disabled(isAccepting)
-                .accessibilityLabel("就这个")
-                .accessibilityHint("采纳皮皮给出的这个选择")
-                .sensoryFeedback(.selection, trigger: acceptFeedbackCount)
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            header
+            decisionBlock
+            actionButtons
         }
-        .padding(imageURL == nil ? 22 : 16)
-        .padding(.bottom, 20)
-        .frame(minHeight: imageURL == nil ? 270 : nil, alignment: .topLeading)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.featureCard, style: .continuous))
@@ -1498,6 +1401,118 @@ private struct ChatRecommendationCard: View {
         .accessibilityLabel("推荐卡, \(pick.title), \(decisionReason)")
     }
 
+    private var header: some View {
+        HStack(alignment: .top, spacing: imageURL == nil ? 10 : 14) {
+            if let imageURL {
+                compactImage(imageURL, size: 96)
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 7) {
+                    Label("皮皮选定", systemImage: "sparkles")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppTheme.green)
+                        .labelStyle(.titleAndIcon)
+
+                    if let supportingSubtitle {
+                        Text(supportingSubtitle)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Text(pick.title)
+                    .font(.system(size: CardTextFitting.recommendationTitleSize(pick.title, hasImage: imageURL != nil, compact: true), weight: .bold))
+                    .lineSpacing(2)
+                    .foregroundStyle(AppTheme.text)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.72)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            RecommendationOverflowMenu(
+                feedbackState: feedbackState,
+                onFavorite: onFavorite,
+                onShare: onShare,
+                onChange: markChange,
+                onReportIssue: markIssue
+            )
+            .offset(x: 8, y: -8)
+        }
+    }
+
+    private var decisionBlock: some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(AppTheme.green.opacity(0.75))
+                .frame(width: 4)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("为什么选它")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.textMuted)
+
+                CollapsibleText(
+                    text: decisionReason,
+                    font: .system(size: 15, weight: .medium),
+                    color: AppTheme.textSecondary,
+                    collapsedLineLimit: 3,
+                    lineSpacing: 4,
+                    expandThreshold: 78
+                )
+            }
+        }
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            Button(action: onAskHuman) {
+                Text("求一个")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppTheme.text)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(AppTheme.surface)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(AppTheme.borderSoft, lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("求一个")
+            .accessibilityHint("把这个问题发给别人来一句")
+
+            Button {
+                acceptFeedbackCount += 1
+                onAccept()
+            } label: {
+                HStack(spacing: 8) {
+                    if isAccepting {
+                        ProgressView()
+                            .tint(AppTheme.onPrimaryAction)
+                            .scaleEffect(0.76)
+                    }
+
+                    Text(isAccepting ? "确认中" : "就这个")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundStyle(AppTheme.onPrimaryAction)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(AppTheme.primaryAction)
+                .clipShape(Capsule())
+                .animation(.spring(response: 0.22, dampingFraction: 0.88), value: isAccepting)
+            }
+            .buttonStyle(.plain)
+            .disabled(isAccepting)
+            .accessibilityLabel("就这个")
+            .accessibilityHint("采纳皮皮给出的这个选择")
+            .sensoryFeedback(.selection, trigger: acceptFeedbackCount)
+        }
+    }
+
     private func markChange() {
         feedbackState = .change
         onChange()
@@ -1509,42 +1524,39 @@ private struct ChatRecommendationCard: View {
     }
 
     @ViewBuilder
-    private var heroImage: some View {
-        if let imageURL {
-            AsyncImage(url: imageURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 228)
-                        .background(AppTheme.bubble)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
-                        .accessibilityHidden(true)
-                case .failure:
-                    Color.clear
-                        .frame(height: 0)
-                        .task {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                imageLoadFailed = true
-                            }
+    private func compactImage(_ imageURL: URL, size: CGFloat) -> some View {
+        AsyncImage(url: imageURL) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .background(AppTheme.bubble)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.preview, style: .continuous))
+                    .clipped()
+                    .accessibilityHidden(true)
+            case .failure:
+                Color.clear
+                    .frame(width: 0, height: 0)
+                    .task {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            imageLoadFailed = true
                         }
-                case .empty:
-                    RecommendationImageSkeleton()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 228)
-                        .background(AppTheme.bubble)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.media, style: .continuous))
-                @unknown default:
-                    Color.clear
-                        .frame(height: 0)
-                        .task {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                imageLoadFailed = true
-                            }
+                    }
+            case .empty:
+                RecommendationImageSkeleton()
+                    .frame(width: size, height: size)
+                    .background(AppTheme.bubble)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.preview, style: .continuous))
+            @unknown default:
+                Color.clear
+                    .frame(width: 0, height: 0)
+                    .task {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            imageLoadFailed = true
                         }
-                }
+                    }
             }
         }
     }
