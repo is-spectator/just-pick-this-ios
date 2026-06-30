@@ -656,6 +656,75 @@ struct BackendRecommendationService: RecommendationService {
     }
 }
 
+struct UserBehaviorEventService: Sendable {
+    private let baseURL = AppAPIEnvironment.baseURL
+    private let deviceUid = DeviceIdentity.uid
+
+    func record(eventType: String, metadata: [String: String] = [:]) async {
+        let trimmedType = eventType.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedType.isEmpty else { return }
+
+        do {
+            var request = URLRequest(url: endpoint("/v1/events"))
+            request.httpMethod = "POST"
+            request.timeoutInterval = 10
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if let accessToken = AuthTokenStore.accessToken, !accessToken.isEmpty {
+                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            }
+            request.httpBody = try JSONEncoder().encode(V1UserBehaviorEventRequest(
+                eventType: trimmedType,
+                deviceId: deviceUid,
+                source: "ios",
+                metadata: metadata
+            ))
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                return
+            }
+        } catch {
+            return
+        }
+    }
+
+    private func endpoint(_ path: String) -> URL {
+        URL(string: path, relativeTo: baseURL)!.absoluteURL
+    }
+}
+
+enum UserBehaviorEventMetadata {
+    static func history(_ item: QuestionHistory, extra: [String: String] = [:]) -> [String: String] {
+        var payload: [String: String] = [
+            "history_id": item.id.uuidString,
+            "query": item.query,
+            "status": item.status
+        ]
+        if let helpRequestId = item.helpRequestId {
+            payload["help_request_id"] = helpRequestId.uuidString
+        }
+        if let topPick = item.topPick {
+            payload["title"] = topPick.title
+            if let cardId = topPick.cardId {
+                payload["card_id"] = cardId.uuidString
+            }
+        }
+        extra.forEach { key, value in
+            payload[key] = value
+        }
+        return compact(payload)
+    }
+
+    static func compact(_ raw: [String: String]) -> [String: String] {
+        raw.reduce(into: [:]) { result, item in
+            let value = item.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { return }
+            result[item.key] = String(value.prefix(180))
+        }
+    }
+}
+
 private enum BackendServiceError: LocalizedError {
     case httpStatus(Int, String)
     case decoding(String, String)
@@ -1969,6 +2038,20 @@ private struct V1CardFeedbackResponse: Decodable {
     }
 }
 
+private struct V1UserBehaviorEventRequest: Encodable {
+    let eventType: String
+    let deviceId: String
+    let source: String
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case eventType = "event_type"
+        case deviceId = "device_id"
+        case source
+        case metadata
+    }
+}
+
 struct MockCloudRecommendationService: RecommendationService {
     func submit(query: String, sessionId: UUID?, locationContext: DecisionLocationContext?) async -> RecommendationResult {
         try? await Task.sleep(for: .milliseconds(650))
@@ -2278,6 +2361,12 @@ final class AppSession {
         #endif
     }
 
+    private func recordBehaviorEvent(_ eventType: String, metadata: [String: String]) {
+        Task {
+            await UserBehaviorEventService().record(eventType: eventType, metadata: metadata)
+        }
+    }
+
     var isSubmitting: Bool {
         submitState == .loading
     }
@@ -2568,12 +2657,21 @@ final class AppSession {
         hiddenFavoriteChoiceIds.remove(item.id)
         favoriteChoices.insert(item, at: 0)
         persistFavoriteState()
+        recordBehaviorEvent(
+            "favorite_choice_saved",
+            metadata: UserBehaviorEventMetadata.history(item, extra: ["surface": "favorites"])
+        )
     }
 
     func removeFavoriteChoice(id: UUID) {
+        let existing = favoriteChoices.first { $0.id == id }
         favoriteChoices.removeAll { $0.id == id }
         hiddenFavoriteChoiceIds.insert(id)
         persistFavoriteState()
+        let metadata = existing.map {
+            UserBehaviorEventMetadata.history($0, extra: ["surface": "favorites"])
+        } ?? ["history_id": id.uuidString, "surface": "favorites"]
+        recordBehaviorEvent("favorite_choice_removed", metadata: metadata)
     }
 
     func restoreFavoriteChoice(_ item: QuestionHistory) {
@@ -2581,11 +2679,19 @@ final class AppSession {
         hiddenFavoriteChoiceIds.remove(item.id)
         favoriteChoices.insert(item, at: 0)
         persistFavoriteState()
+        recordBehaviorEvent(
+            "favorite_choice_restored",
+            metadata: UserBehaviorEventMetadata.history(item, extra: ["surface": "favorites"])
+        )
     }
 
     func unhideFavoriteChoice(id: UUID) {
         hiddenFavoriteChoiceIds.remove(id)
         persistFavoriteState()
+        recordBehaviorEvent(
+            "favorite_choice_unhidden",
+            metadata: ["history_id": id.uuidString, "surface": "favorites"]
+        )
     }
 
     func deleteHistoryItem(id: UUID) {

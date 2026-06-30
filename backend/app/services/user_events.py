@@ -29,6 +29,15 @@ CORE_USER_EVENT_TYPES = {
     "recommendation_card_post_review_regretted",
     "recommendation_card_post_review_not_went",
     "recommendation_card_post_review_unknown",
+    "favorite_choice_saved",
+    "favorite_choice_removed",
+    "favorite_choice_restored",
+    "favorite_choice_unhidden",
+    "drawer_history_pinned",
+    "drawer_history_unpinned",
+    "drawer_history_hidden",
+    "drawer_history_restored",
+    "drawer_history_renamed",
 }
 
 

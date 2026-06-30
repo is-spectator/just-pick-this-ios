@@ -167,6 +167,35 @@ def test_generic_behavior_event_endpoint_records_ask_human(
     run_async(scenario)
 
 
+def test_generic_behavior_event_endpoint_records_drawer_core_event(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        device_id = f"pytest-behavior-drawer-{uuid.uuid4()}"
+        boot = await bootstrap(async_client, device_id=device_id)
+        response = await async_client.post(
+            "/v1/events",
+            json={
+                "device_id": device_id,
+                "conversation_id": boot["conversation_id"],
+                "event_type": "drawer_history_pinned",
+                "source": "ios",
+                "metadata": {"surface": "drawer", "history_id": str(uuid.uuid4())},
+            },
+        )
+        body = require_ready_response(response)
+        assert body["accepted"] is True
+        assert body["event"]["event_type"] == "drawer_history_pinned"
+        assert body["event"]["metadata"]["known_core_event"] is True
+        assert _event_count(
+            event_type="drawer_history_pinned",
+            conversation_id=uuid.UUID(boot["conversation_id"]),
+        ) == 1
+
+    run_async(scenario)
+
+
 def test_behavior_event_updates_user_preference_memory(
     run_async: Any,
     async_client: AsyncClient,

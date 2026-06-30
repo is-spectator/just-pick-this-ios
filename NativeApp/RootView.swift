@@ -628,9 +628,11 @@ private struct ChatDrawer: View {
                     if trimmed.isEmpty {
                         renamedHistoryTitles[item.id] = nil
                         showDrawerNotice("已恢复原会话名")
+                        recordDrawerEvent("drawer_history_renamed", item: item, extra: ["title": ""])
                     } else {
                         renamedHistoryTitles[item.id] = trimmed
                         showDrawerNotice("已重命名会话")
+                        recordDrawerEvent("drawer_history_renamed", item: item, extra: ["title": trimmed])
                     }
                     AppHaptics.success()
                 }
@@ -996,9 +998,11 @@ private struct ChatDrawer: View {
         if pinnedHistoryIDs.contains(item.id) {
             pinnedHistoryIDs.remove(item.id)
             showDrawerNotice("已取消置顶")
+            recordDrawerEvent("drawer_history_unpinned", item: item)
         } else {
             pinnedHistoryIDs.insert(item.id)
             showDrawerNotice("已置顶会话")
+            recordDrawerEvent("drawer_history_pinned", item: item)
         }
     }
 
@@ -1019,6 +1023,7 @@ private struct ChatDrawer: View {
         onDeleteHistory(item)
         AppHaptics.success()
         showDrawerNotice("已删除会话")
+        recordDrawerEvent("drawer_history_hidden", item: item)
     }
 
     private func undoDeletedHistory() {
@@ -1035,6 +1040,7 @@ private struct ChatDrawer: View {
         deletedHistorySnapshot = nil
         AppHaptics.success()
         showDrawerNotice("已恢复会话")
+        recordDrawerEvent("drawer_history_restored", item: snapshot.item)
     }
 
     private func showDrawerNotice(_ text: String) {
@@ -1047,6 +1053,17 @@ private struct ChatDrawer: View {
             if text == "已删除会话" {
                 deletedHistorySnapshot = nil
             }
+        }
+    }
+
+    private func recordDrawerEvent(
+        _ eventType: String,
+        item: QuestionHistory,
+        extra: [String: String] = [:]
+    ) {
+        let metadata = UserBehaviorEventMetadata.history(item, extra: ["surface": "drawer"].merging(extra) { _, new in new })
+        Task {
+            await UserBehaviorEventService().record(eventType: eventType, metadata: metadata)
         }
     }
 }
