@@ -2860,6 +2860,7 @@ final class AppSession {
         defaults.removeObject(forKey: "renamed_history_titles")
         defaults.removeObject(forKey: "recent_decision_location_labels")
         defaults.removeObject(forKey: "active_decision_location_context")
+        defaults.removeObject(forKey: "did_attempt_current_location_bootstrap")
     }
 
     func submit(query: String, locationContext: DecisionLocationContext? = nil) async -> RecommendationDecision {

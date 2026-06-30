@@ -68,6 +68,7 @@ struct InputScreen: View {
     @State private var sharePayload: CardSharePayload?
     @AppStorage("recent_decision_location_labels") private var recentDecisionLocationLabelsRaw = ""
     @AppStorage("active_decision_location_context") private var activeDecisionLocationRaw = ""
+    @AppStorage("did_attempt_current_location_bootstrap") private var didAttemptCurrentLocationBootstrap = false
 
     private var recentDecisionLocationLabels: [String] {
         recentDecisionLocationLabelsRaw
@@ -166,6 +167,7 @@ struct InputScreen: View {
         }
         .onAppear {
             restoreDecisionLocation()
+            bootstrapCurrentLocationIfNeeded()
         }
         .sheet(isPresented: $showsLocationPicker) {
             LocationPickerSheet(
@@ -482,6 +484,17 @@ struct InputScreen: View {
             }
             isLocating = false
         }
+    }
+
+    private func bootstrapCurrentLocationIfNeeded() {
+        guard decisionLocation == nil,
+              !didAttemptCurrentLocationBootstrap,
+              !isLocating else {
+            return
+        }
+
+        didAttemptCurrentLocationBootstrap = true
+        useCurrentLocation()
     }
 
     private func saveManualLocation() {
