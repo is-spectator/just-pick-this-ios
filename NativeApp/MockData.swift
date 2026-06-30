@@ -867,9 +867,29 @@ private enum BackendServiceError: LocalizedError {
     }
 }
 
+private enum AuthAccountDeletionError: LocalizedError {
+    case requiresLogin
+    case notConfirmed
+
+    var errorDescription: String? {
+        switch self {
+        case .requiresLogin:
+            "需要重新登录后才能删除账号。"
+        case .notConfirmed:
+            "后端没有确认账号已删除。"
+        }
+    }
+}
+
 struct AuthenticatedAccount: Equatable {
     let email: String?
     let displayName: String
+}
+
+struct AuthLogoutResult: Sendable {
+    let localCleared: Bool
+    let remoteRevoked: Bool
+    let errorDescription: String?
 }
 
 struct AuthAPIService: Sendable {
@@ -940,11 +960,13 @@ struct AuthAPIService: Sendable {
         }
     }
 
-    func logout() async {
+    func logout() async -> AuthLogoutResult {
         guard let refreshToken = AuthTokenStore.refreshToken else {
             AuthTokenStore.clear()
-            return
+            return AuthLogoutResult(localCleared: true, remoteRevoked: false, errorDescription: nil)
         }
+        var remoteRevoked = false
+        var remoteErrorDescription: String?
         do {
             var request = URLRequest(url: endpoint("/v1/auth/logout"))
             request.httpMethod = "POST"
@@ -952,23 +974,31 @@ struct AuthAPIService: Sendable {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(V1AuthRefreshRequest(refreshToken: refreshToken))
             let _: V1AuthLogoutResponse = try await perform(request)
+            remoteRevoked = true
         } catch {
-            // Logout is best-effort on the client; local credentials must still go away.
+            remoteErrorDescription = error.localizedDescription
         }
         AuthTokenStore.clear()
+        return AuthLogoutResult(
+            localCleared: true,
+            remoteRevoked: remoteRevoked,
+            errorDescription: remoteErrorDescription
+        )
     }
 
     func deleteAccount() async throws {
         guard AuthTokenStore.accessToken?.isEmpty == false else {
-            AuthTokenStore.clear()
-            return
+            throw AuthAccountDeletionError.requiresLogin
         }
 
         var request = URLRequest(url: endpoint("/v1/auth/me"))
         request.httpMethod = "DELETE"
         request.timeoutInterval = 12
         request = authorized(request)
-        let _: V1AuthDeleteMeResponse = try await perform(request)
+        let response: V1AuthDeleteMeResponse = try await perform(request)
+        guard response.ok, response.deleted == true else {
+            throw AuthAccountDeletionError.notConfirmed
+        }
         AuthTokenStore.clear()
     }
 

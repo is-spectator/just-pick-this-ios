@@ -1114,13 +1114,13 @@ struct EmailLoginView: View {
     private func logout() {
         isSubmitting = true
         Task { @MainActor in
-            await authService.logout()
+            let result = await authService.logout()
             email = ""
             nickname = ""
             code = ""
             codeSent = false
             isSubmitting = false
-            message = "已退出。"
+            message = result.remoteRevoked ? "已退出。" : "已退出本机，远端会话暂时没撤销。"
         }
     }
 }
@@ -3057,11 +3057,11 @@ struct ProfileScreen: View {
         isAccountActionRunning = true
         accountActionMessage = nil
         Task {
-            await AuthAPIService().logout()
+            let result = await AuthAPIService().logout()
             await MainActor.run {
                 snapshot = .empty
                 isAccountActionRunning = false
-                accountActionMessage = "已退出登录。"
+                accountActionMessage = result.remoteRevoked ? "已退出登录。" : "已退出本机，远端会话撤销失败。"
                 onAuthChanged()
             }
         }
@@ -3093,7 +3093,7 @@ struct ProfileScreen: View {
             } catch {
                 await MainActor.run {
                     isAccountActionRunning = false
-                    accountActionMessage = "删除失败，请稍后再试。"
+                    accountActionMessage = "删除失败：\(error.localizedDescription)"
                 }
             }
         }
