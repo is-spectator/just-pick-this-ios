@@ -1408,19 +1408,10 @@ private struct ChatRecommendationCard: View {
             }
 
             VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 7) {
-                    Label("皮皮选定", systemImage: "sparkles")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.green)
-                        .labelStyle(.titleAndIcon)
-
-                    if let supportingSubtitle {
-                        Text(supportingSubtitle)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .lineLimit(1)
-                    }
-                }
+                Label("皮皮选定", systemImage: "sparkles")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.green)
+                    .labelStyle(.titleAndIcon)
 
                 Text(pick.title)
                     .font(.system(size: CardTextFitting.recommendationTitleSize(pick.title, hasImage: imageURL != nil, compact: true), weight: .bold))
@@ -1428,6 +1419,14 @@ private struct ChatRecommendationCard: View {
                     .foregroundStyle(AppTheme.text)
                     .lineLimit(3)
                     .minimumScaleFactor(0.72)
+
+                if let supportingSubtitle {
+                    Text(supportingSubtitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineSpacing(2)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(2)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1455,7 +1454,7 @@ private struct ChatRecommendationCard: View {
 
                 CollapsibleText(
                     text: decisionReason,
-                    font: .system(size: 15, weight: .medium),
+                    font: .system(size: 14, weight: .medium),
                     color: AppTheme.textSecondary,
                     collapsedLineLimit: 3,
                     lineSpacing: 4,

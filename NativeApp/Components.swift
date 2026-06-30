@@ -371,14 +371,14 @@ enum CardTextFitting {
     static func recommendationTitleSize(_ title: String, hasImage: Bool, compact: Bool = false) -> CGFloat {
         let count = title.count
         if compact {
-            if count > 26 { return 21 }
-            if count > 18 { return 23 }
-            return hasImage ? 25 : 26
+            if count > 26 { return 19 }
+            if count > 18 { return 21 }
+            return hasImage ? 22 : 23
         }
 
-        if count > 28 { return hasImage ? 22 : 24 }
-        if count > 20 { return hasImage ? 24 : 26 }
-        return hasImage ? 27 : 29
+        if count > 28 { return hasImage ? 20 : 21 }
+        if count > 20 { return hasImage ? 22 : 23 }
+        return hasImage ? 24 : 25
     }
 
     static func requestTitleSize(_ title: String, compact: Bool = false) -> CGFloat {
@@ -522,19 +522,10 @@ struct DecisionCard: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Label("皮皮选定", systemImage: "sparkles")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppTheme.green)
-                        .labelStyle(.titleAndIcon)
-
-                    if let supportingSubtitle {
-                        Text(supportingSubtitle)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .lineLimit(1)
-                    }
-                }
+                Label("皮皮选定", systemImage: "sparkles")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppTheme.green)
+                    .labelStyle(.titleAndIcon)
 
                 Text(pick.title)
                     .font(.system(size: CardTextFitting.recommendationTitleSize(pick.title, hasImage: imageURL != nil), weight: .bold))
@@ -542,6 +533,14 @@ struct DecisionCard: View {
                     .foregroundStyle(AppTheme.text)
                     .lineLimit(3)
                     .minimumScaleFactor(0.74)
+
+                if let supportingSubtitle {
+                    Text(supportingSubtitle)
+                        .font(.system(size: 14, weight: .medium))
+                        .lineSpacing(2)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(2)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -569,7 +568,7 @@ struct DecisionCard: View {
 
                 CollapsibleText(
                     text: decisionReason,
-                    font: .system(size: 16, weight: .medium),
+                    font: .system(size: 15, weight: .medium),
                     color: AppTheme.textSecondary,
                     collapsedLineLimit: 3,
                     lineSpacing: 4,
