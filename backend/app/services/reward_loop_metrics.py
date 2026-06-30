@@ -85,6 +85,7 @@ def reward_loop_summary_from_records(
         "rates": {
             "settlement_rate": _rate(settled_count, reward_event_count),
             "grant_rate": _rate(granted_count, reward_event_count),
+            "reward_grant_rate": _rate(granted_count, reward_event_count),
             "rejection_rate": _rate(rejected_count, reward_event_count),
             "answer_binding_rate": _rate(answer_bound_count, reward_event_count),
             "help_card_binding_rate": _rate(help_card_bound_count, reward_event_count),

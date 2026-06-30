@@ -28,6 +28,7 @@ from app.models import (
     LightEvent,
     Question,
     RecommendationCard,
+    RewardEvent,
     RetrievalHit,
     RetrievalRun,
     Turn,
@@ -63,6 +64,7 @@ from app.services.help_service import (
     normalize_one_liner_key,
     one_liner_quality_metadata,
 )
+from app.services.user_events import record_user_behavior_event
 from app.services.experiments import experiment_metadata, resolve_experiment_assignments
 from app.services.intent_router import detect_app_help, detect_chitchat, detect_clarification_needed
 from app.services.query_rewrite import rewrite_query
@@ -1923,6 +1925,16 @@ class DbToolExecutor:
             help_card.status = "published"
             help_card.published_at = utcnow()
             help_card.question.status = "help_published"
+        record_user_behavior_event(
+            self.session,
+            event_type="help_card_published",
+            user_id=self.user_id,
+            conversation_id=help_card.conversation_id,
+            turn_id=self.turn.id,
+            help_card_id=help_card.id,
+            source="pipi_chat_graph",
+            payload_json={"status": help_card.status, "tool_name": "publish_help_card"},
+        )
         self.help_cards.append(help_card)
         self.ui_events.append(build_help_ui_event(help_card, "help_card_published"))
         return {"help_card_id": str(help_card.id), "ui_event": "help_card_published"}
@@ -1980,6 +1992,7 @@ class DbToolExecutor:
                     "tool_call_status": "skipped",
                 }
 
+        reward = _help_reward_payload(help_card)
         answer = HelpAnswer(
             help_card_id=help_card.id,
             answer_user_id=self.user_id,
@@ -1989,11 +2002,39 @@ class DbToolExecutor:
             reward_status="pending",
             evidence_json={
                 "evidence_type": "human_one_liner",
+                "reward": reward,
                 "quality": one_liner_quality_metadata(quality),
                 "normalized_key": quality.normalized_key,
             },
         )
         self.session.add(answer)
+        self.session.flush()
+        self.session.add(
+            RewardEvent(
+                user_id=self.user_id,
+                help_card_id=help_card.id,
+                help_answer_id=answer.id,
+                event_type="one_liner_submitted",
+                label=str(reward["label"]),
+                value=int(reward["value"]),
+                status="pending",
+                payload_json={
+                    "help_card_title": help_card.title,
+                    "source": "pipi_chat_graph",
+                },
+            )
+        )
+        record_user_behavior_event(
+            self.session,
+            event_type="one_liner_submitted",
+            user_id=self.user_id,
+            conversation_id=help_card.conversation_id,
+            turn_id=self.turn.id,
+            help_card_id=help_card.id,
+            help_answer_id=answer.id,
+            source="pipi_chat_graph",
+            payload_json={"reward": reward, "tool_name": "submit_one_liner_answer"},
+        )
         help_card.answer_count += 1
         help_card.status = "collecting"
         help_card.question.status = "collecting_answers"
@@ -3735,6 +3776,17 @@ def _looks_like_sijiminfu_order_query(message: str) -> bool:
     if not has_venue:
         return False
     return any(hint.lower() in normalized for hint in _ORDERING_LANGUAGE_HINTS)
+
+
+def _help_reward_payload(help_card: HelpCard) -> dict[str, Any]:
+    payload = help_card.payload_json or {}
+    reward = dict(payload.get("reward") or {})
+    value = int(reward.get("value") or payload.get("reward_value") or 10)
+    return {
+        "label": str(reward.get("label") or f"+{value}"),
+        "value": value,
+        "status": str(reward.get("status") or "pending"),
+    }
 
 
 def _restaurant_image_query(message: str) -> str:

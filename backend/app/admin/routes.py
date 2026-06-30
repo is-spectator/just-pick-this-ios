@@ -576,6 +576,48 @@ def admin_reward_loop_summary(
     return summary
 
 
+@router.get("/api/metrics/north-star")
+def admin_north_star_metrics(
+    request: Request,
+    since_hours: int = Query(default=24 * 30, ge=1, le=24 * 180),
+    session: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    actor = _admin_actor(request)
+    user_signals = user_signal_summary(session, since_hours=since_hours)
+    reward_loop = reward_loop_summary(session, since_hours=since_hours)
+    user_rates = dict(user_signals.get("rates") or {})
+    reward_rates = dict(reward_loop.get("rates") or {})
+    summary = {
+        "window_start": user_signals.get("window_start") or reward_loop.get("window_start"),
+        "window_hours": since_hours,
+        "rates": {
+            "accepted_card_rate": user_rates.get("accepted_card_rate"),
+            "followup_rate": user_rates.get("followup_rate"),
+            "help_publish_rate": user_rates.get("help_publish_rate"),
+            "one_liner_submit_rate": user_rates.get("one_liner_submit_rate"),
+            "reward_grant_rate": reward_rates.get("reward_grant_rate"),
+        },
+        "sources": {
+            "user_signals": user_signals,
+            "reward_loop": reward_loop,
+        },
+        "metadata": {"version": "north_star_metrics_v1"},
+    }
+    _write_audit(
+        session,
+        request=request,
+        actor=actor,
+        action="view_north_star_metrics",
+        table_name="north_star_metrics",
+        target_record_id=None,
+        request_json=_request_json(request, {"since_hours": since_hours}),
+        before_json=None,
+        after_json=None,
+    )
+    session.commit()
+    return summary
+
+
 @router.get("/api/eval-runs")
 def list_eval_runs(request: Request) -> dict[str, Any]:
     reports_root = resolve_reports_root(getattr(request.app.state, "eval_reports_root", None))

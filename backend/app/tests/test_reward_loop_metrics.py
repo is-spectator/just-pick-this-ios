@@ -54,6 +54,7 @@ def test_reward_loop_summary_tracks_settlement_and_binding_rates() -> None:
     assert summary["rates"] == {
         "settlement_rate": 0.75,
         "grant_rate": 0.5,
+        "reward_grant_rate": 0.5,
         "rejection_rate": 0.25,
         "answer_binding_rate": 0.75,
         "help_card_binding_rate": 0.75,
@@ -68,6 +69,7 @@ def test_reward_loop_summary_handles_empty_denominators() -> None:
     assert summary["help_answer_count"] == 0
     assert summary["rates"]["settlement_rate"] is None
     assert summary["rates"]["grant_rate"] is None
+    assert summary["rates"]["reward_grant_rate"] is None
     assert summary["rates"]["rejection_rate"] is None
     assert summary["rates"]["answer_binding_rate"] is None
     assert summary["rates"]["help_card_binding_rate"] is None

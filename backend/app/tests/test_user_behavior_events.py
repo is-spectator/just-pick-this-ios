@@ -6,7 +6,7 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.models import AgentRun, RecommendationCard, UserBehaviorEvent
+from app.models import AgentRun, RecommendationCard, RewardEvent, UserBehaviorEvent
 from app.services.runtime import session_scope
 
 from .conftest import bootstrap, chat_turn, require_ready_response
@@ -17,6 +17,15 @@ def _event_count(**filters: Any) -> int:
         query = select(func.count()).select_from(UserBehaviorEvent)
         for field, value in filters.items():
             column = getattr(UserBehaviorEvent, field)
+            query = query.where(column == value)
+        return int(session.scalar(query) or 0)
+
+
+def _reward_event_count(**filters: Any) -> int:
+    with session_scope() as session:
+        query = select(func.count()).select_from(RewardEvent)
+        for field, value in filters.items():
+            column = getattr(RewardEvent, field)
             query = query.where(column == value)
         return int(session.scalar(query) or 0)
 
@@ -135,6 +144,57 @@ def test_help_publish_and_one_liner_write_user_behavior_events(
         body = require_ready_response(answer)
         assert body["answer_id"]
         assert _event_count(event_type="one_liner_submitted", help_answer_id=uuid.UUID(body["answer_id"])) == 1
+
+    run_async(scenario)
+
+
+def test_chat_publish_help_writes_user_behavior_event(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        owner_device = f"pytest-chat-publish-owner-{uuid.uuid4()}"
+        conversation_id, help_card_id = await _draft_help_card(async_client, device_id=owner_device)
+
+        body = await chat_turn(
+            async_client,
+            conversation_id=conversation_id,
+            message="发出去",
+            metadata={"help_card_id": help_card_id},
+        )
+
+        assert [event["type"] for event in body["ui_events"]] == ["help_card_published"]
+        assert _event_count(event_type="help_card_published", help_card_id=uuid.UUID(help_card_id)) == 1
+
+    run_async(scenario)
+
+
+def test_chat_one_liner_writes_pending_reward_and_user_behavior_event(
+    run_async: Any,
+    async_client: AsyncClient,
+) -> None:
+    async def scenario() -> None:
+        owner_device = f"pytest-chat-oneliner-owner-{uuid.uuid4()}"
+        owner_conversation_id, help_card_id = await _draft_help_card(async_client, device_id=owner_device)
+        await chat_turn(
+            async_client,
+            conversation_id=owner_conversation_id,
+            message="发出去",
+            metadata={"help_card_id": help_card_id},
+        )
+
+        answer_device = f"pytest-chat-oneliner-answer-{uuid.uuid4()}"
+        answer_boot = await bootstrap(async_client, device_id=answer_device)
+        body = await chat_turn(
+            async_client,
+            conversation_id=answer_boot["conversation_id"],
+            message="来一句：别去明洞，去圣水更小众。",
+            metadata={"help_card_id": help_card_id, "answer_context": True},
+        )
+
+        assert body["metadata"]["loop"]["tool_calls"] == ["submit_one_liner_answer"]
+        assert _event_count(event_type="one_liner_submitted", help_card_id=uuid.UUID(help_card_id)) == 1
+        assert _reward_event_count(help_card_id=uuid.UUID(help_card_id), status="pending") == 1
 
     run_async(scenario)
 
