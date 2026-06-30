@@ -190,6 +190,19 @@ struct BottomComposer: View {
         dynamicTypeSize.isAccessibilitySize ? 1...4 : 1...3
     }
 
+    private var composerHeight: CGFloat {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return 56 }
+
+        let hardLineCount = max(1, text.components(separatedBy: .newlines).count)
+        let wrapThreshold = dynamicTypeSize.isAccessibilitySize ? 12 : 18
+        let estimatedWrappedLineCount = max(1, Int(ceil(Double(text.count) / Double(wrapThreshold))))
+        let maxLineCount = inputLineLimit.upperBound
+        let lineCount = min(maxLineCount, max(hardLineCount, estimatedWrappedLineCount))
+        let extraLineHeight: CGFloat = dynamicTypeSize.isAccessibilitySize ? 24 : 22
+        return min(120, 56 + CGFloat(lineCount - 1) * extraLineHeight)
+    }
+
     private func send() {
         guard canSend else { return }
         sendFeedbackCount += 1
@@ -252,7 +265,7 @@ struct BottomComposer: View {
         .padding(.leading, AppTheme.Spacing.lg)
         .padding(.trailing, AppTheme.Spacing.xs)
         .padding(.vertical, AppTheme.Spacing.xs)
-        .frame(minHeight: 56, maxHeight: 120)
+        .frame(height: composerHeight)
         .background(AppTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.composer, style: .continuous))
         .overlay(

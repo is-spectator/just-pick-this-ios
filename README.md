@@ -526,3 +526,4 @@ xcodebuild \
 - `STATE-005`/`DS-002`: 产品页刷新按钮补充轻触感反馈，产品内联空态文案也改用语义 Typography token。
 - `HELP-001`/`HELP-006`/`DS-002`: 来一句 Deck 标题、奖励、说明和空状态操作接入语义 Typography token，空 Deck 的刷新/回聊天操作补充轻触感反馈。
 - `CARD-005`/`CARD-006`/`DS-002`/`STATE-005`: 求一个卡、状态摘要、结构化信息和来一句方卡接入语义 Typography token，主按钮补充轻触感反馈。
+- `UI-005`/`STATE-006`: Composer 空态固定回 56pt，只有输入变多时才逐步增长到 120pt，避免聊天首页被空输入框占掉大块空间。
